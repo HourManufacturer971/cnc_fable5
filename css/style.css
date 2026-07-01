@@ -1,0 +1,95 @@
+html, body {
+  margin: 0; padding: 0;
+  background: #000;
+  height: 100%;
+  overflow: hidden;
+  font-family: "Lucida Console", Monaco, monospace;
+}
+
+#wrap {
+  position: relative;
+  width: 100vw; height: 100vh;
+  display: flex; align-items: center; justify-content: center;
+}
+
+#screen {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  cursor: none;
+  /* keep 16:10 of 640x400, integer-ish scale to fit */
+  width: min(100vw, 160vh);
+  height: min(62.5vw, 100vh);
+  background: #000;
+}
+
+.overlay {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, 0.82);
+  z-index: 10;
+}
+.overlay.hidden { display: none; }
+
+.panel {
+  background: #3a3a32;
+  border: 3px solid #6a6a60;
+  border-radius: 4px;
+  box-shadow: 0 0 40px #000, inset 0 0 0 1px #23231e;
+  padding: 28px 44px;
+  text-align: center;
+  color: #d8d0a8;
+  max-width: 560px;
+}
+.panel.small { padding: 20px 32px; }
+
+h1 {
+  margin: 0 0 4px;
+  font-size: 34px;
+  letter-spacing: 6px;
+  color: #e0b840;
+  text-shadow: 2px 2px 0 #000;
+}
+h2 { margin: 0 0 14px; letter-spacing: 4px; color: #e0b840; text-shadow: 2px 2px 0 #000; }
+.sub { margin: 0 0 22px; font-size: 11px; color: #9a9280; }
+.hint { margin: 18px 0 0; font-size: 10px; color: #9a9280; }
+
+#factionRow { display: flex; gap: 28px; justify-content: center; }
+.faction { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.logoSlot { width: 120px; height: 90px; image-rendering: pixelated; }
+.logoSlot canvas { width: 120px; height: 90px; image-rendering: pixelated; }
+
+button {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 9px 18px;
+  margin: 5px 0;
+  background: #4a4a42;
+  color: #d8d0a8;
+  border: 2px solid #6a6a60;
+  border-bottom-color: #2e2e28;
+  border-right-color: #2e2e28;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  letter-spacing: 1px;
+}
+button:hover { background: #5a5a50; color: #fff; }
+button:active { border-color: #2e2e28; border-top-color: #6a6a60; border-left-color: #6a6a60; }
+
+#pickGdi button:hover { color: #e0b840; }
+#pickNod button:hover { color: #e05038; }
+
+#speedRow {
+  display: block; font-size: 11px; margin: 8px 0; color: #b8b09a;
+}
+#speedRow input { width: 100%; }
+
+#scoreLines {
+  text-align: left;
+  font-size: 13px;
+  margin: 6px 0 18px;
+  line-height: 1.9;
+  min-width: 320px;
+}
+#scoreLines .row { display: flex; justify-content: space-between; gap: 40px; }
+#scoreLines .val { color: #e0b840; }

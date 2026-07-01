@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tiberian Dawn Clone</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="wrap">
+  <canvas id="screen" width="640" height="400"></canvas>
+
+  <div id="menu" class="overlay">
+    <div class="panel">
+      <h1>TIBERIAN DAWN</h1>
+      <p class="sub">A fan-made clone of the 1995 classic &mdash; original code &amp; art</p>
+      <div id="factionRow">
+        <div class="faction" id="pickGdi">
+          <div class="logoSlot" id="logoGdi"></div>
+          <button data-side="gdi">Global Defense Initiative</button>
+        </div>
+        <div class="faction" id="pickNod">
+          <div class="logoSlot" id="logoNod"></div>
+          <button data-side="nod">Brotherhood of Nod</button>
+        </div>
+      </div>
+      <p class="hint">Classic controls: left-click selects and orders &middot; right-click deselects</p>
+    </div>
+  </div>
+
+  <div id="pause" class="overlay hidden">
+    <div class="panel small">
+      <h2>OPTIONS</h2>
+      <button id="btnResume">Resume Mission</button>
+      <button id="btnSound">Sound: ON</button>
+      <label id="speedRow">Game Speed <input type="range" id="speedSlider" min="50" max="200" value="100"></label>
+      <button id="btnRestart">Restart Mission</button>
+      <button id="btnAbort">Abort Mission</button>
+    </div>
+  </div>
+
+  <div id="score" class="overlay hidden">
+    <div class="panel">
+      <h2 id="scoreTitle">MISSION ACCOMPLISHED</h2>
+      <div id="scoreLines"></div>
+      <button id="btnAgain">Continue</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/data.js"></script>
+<script src="js/sprites_terrain.js"></script>
+<script src="js/sprites_units.js"></script>
+<script src="js/sprites_infantry.js"></script>
+<script src="js/sprites_buildings.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/map.js"></script>
+<script src="js/path.js"></script>
+<script src="js/fog.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/production.js"></script>
+<script src="js/ai.js"></script>
+<script src="js/input.js"></script>
+<script src="js/render.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
