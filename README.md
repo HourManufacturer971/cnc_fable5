@@ -7,6 +7,14 @@ WebAudio (EVA and unit voices use the browser's speech synthesis). The game
 mechanics, unit roster, prices, and presentation follow the original as closely
 as possible.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Title screen](promo/01_title.png) | ![Armored battle in a tiberium field](promo/02_battle.png) |
+| ![Obelisk of Light firing](promo/03_obelisk.png) | ![Nuclear strike](promo/04_nuke.png) |
+| ![Ion cannon strike](promo/05_ion.png) | ![A thriving GDI base](promo/06_base.png) |
+
 ## Running it
 
 No build step, no dependencies. Serve the folder and open it:
