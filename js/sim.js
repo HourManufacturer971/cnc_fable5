@@ -491,7 +491,7 @@ function _harvester(u, d) {
       return;
     }
     // find more tiberium nearby
-    for (const r of [3, 6, 10, 14]) {
+    for (const r of [3, 6, 10, 16, 24, 40]) {
       const c = _findTibCell(u, r);
       if (c) {
         u.path = findPath(u, c.cx, c.cy);
@@ -500,7 +500,7 @@ function _harvester(u, d) {
       }
     }
     if (u.tib > 0) { u.state = 'return'; u.path = []; }
-    else u.state = 'idle';
+    else { u.state = 'idle'; _clearDock(u); }
     return;
   }
   if (u.state === 'return') {
@@ -544,10 +544,37 @@ function _harvester(u, d) {
     }
     return;
   }
-  // idle: auto-seek
+  // idle: auto-seek (whole-map radius, staggered)
   if ((g.tick + u.id) % 30 === 0) {
-    const c = _findTibCell(u, 14);
+    const c = _findTibCell(u, 40);
     if (c) orderHarvest(u, c.cx, c.cy);
+    else _clearDock(u);
+  }
+}
+
+// an idle harvester must never squat on a refinery dock cell
+function _clearDock(u) {
+  const g = game;
+  const cx = worldToCell(u.x), cy = worldToCell(u.y);
+  for (const b of g.buildings.values()) {
+    if (b.type !== 'proc') continue;
+    const dock = _procDock(b);
+    if (Math.abs(cx - dock.cx) <= 0 && Math.abs(cy - dock.cy) <= 0) {
+      // step aside to any nearby free cell
+      for (let r = 1; r <= 3; r++) {
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+            const nx = dock.cx + dx, ny = dock.cy + dy;
+            if (isPassable(nx, ny, u)) {
+              orderMove(u, nx, ny);
+              return;
+            }
+          }
+        }
+      }
+      return;
+    }
   }
 }
 

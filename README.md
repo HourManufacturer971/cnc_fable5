@@ -1,0 +1,82 @@
+# Tiberian Dawn Clone
+
+A from-scratch, browser-based clone of the 1995 RTS classic *Command & Conquer*
+(Tiberian Dawn). All code, pixel art, and sound are **original** — the art is
+drawn procedurally on canvases at load time and the audio is synthesized with
+WebAudio (EVA and unit voices use the browser's speech synthesis). The game
+mechanics, unit roster, prices, and presentation follow the original as closely
+as possible.
+
+## Running it
+
+No build step, no dependencies. Serve the folder and open it:
+
+```sh
+cd cnc_fable5
+python3 -m http.server 8000
+# then open http://localhost:8000
+```
+
+(Opening `index.html` directly with `file://` also works in most browsers.)
+
+Pick your side — Global Defense Initiative or Brotherhood of Nod — and destroy
+the enemy base. You start with an MCV: click it twice to deploy your
+Construction Yard.
+
+Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1`.
+
+## Controls (classic 1995 scheme)
+
+| Input | Action |
+|---|---|
+| Left-click | Select unit/building; with units selected: click ground = move, click enemy = attack, click tiberium with a harvester = harvest |
+| Left-drag | Band-box select units |
+| **Right-click** | **Deselect / cancel mode** (no right-click orders — just like the original) |
+| Shift+click | Add/remove from selection |
+| Double-click | Select all visible units of that type |
+| Click selected MCV (or `D`) | Deploy into Construction Yard |
+| Ctrl+1..9 / 1..9 | Assign / recall control group (double-tap to center) |
+| `H` | Center on Construction Yard |
+| `S` / `G` | Stop / guard |
+| `T` | Select same type on screen |
+| Arrow keys / screen edges | Scroll the map |
+| `Esc` | Options menu / cancel placement, sell, repair, targeting |
+
+Sidebar: left icon strip is structures, right strip is units. Click an icon to
+start building (cost drains as it builds); click a finished structure icon to
+place it; left-click an in-progress icon to pause, right-click to cancel and
+refund. REPAIR and SELL buttons toggle wrench/sell cursor modes. The radar
+comes online with a powered Communications Center.
+
+## What's simulated
+
+- **Tiberium economy** — harvesters (700 credits a load), refineries with
+  docking, silos, storage caps, spreading tiberium fields seeded by blossom
+  trees, infantry take damage crossing fields
+- **Power** — low power halves production speed, kills the radar, and disables
+  the Obelisk, Advanced Guard Tower, and SAM sites
+- **Construction** — the classic sidebar with clock-wipe cameos, adjacency
+  placement rules, incremental payment, hold/cancel with refund
+- **Full roster** — Minigunner, Grenadier, Rocket Soldier, Flamethrower, Chem
+  Warrior, Engineer (captures buildings), Commando; Hum-Vee, Buggy, Recon Bike,
+  APC, Light/Medium/Mammoth/Flame/Stealth Tanks, Artillery, Rocket Launcher,
+  Harvester, MCV; Orca and Apache with helipad rearming; Nod vehicles arrive by
+  cargo plane at the Airstrip
+- **Defenses** — Guard Tower, Advanced Guard Tower, Gun Turret, SAM Site, and
+  the Obelisk of Light with its charge-up laser
+- **Superweapons** — GDI Ion Cannon (Advanced Comm. Center) and the Nod nuclear
+  strike (Temple of Nod)
+- **Combat details** — warhead vs. armor tables, turret rotation, homing
+  rockets, artillery arcs, splash damage with friendly fire, tanks crush
+  infantry, stealth tank cloaking, Mammoth self-repair
+- **Fog of war** — permanent-reveal black shroud, jagged edges, radar minimap
+- **Skirmish AI** — builds a base, harvests, expands, repairs, places defenses
+  toward you, sends attack waves, and fires its superweapon at your base
+- **EVA** — "Construction complete", "Unit ready", "Low power", "Base under
+  attack", "Silos needed"… spoken via speech synthesis, plus synthesized
+  weapon/explosion sound effects
+
+## Not included (yet)
+
+Campaign missions and FMV, multiplayer, walls/sandbags, naval units, save/load,
+difficulty levels.
