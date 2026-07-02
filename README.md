@@ -102,8 +102,8 @@ a powered Communications Center.
 
 ## Not included (yet)
 
-Campaign missions and FMV, multiplayer, walls/sandbags, naval units, save/load,
-difficulty levels.
+Campaign missions and FMV, multiplayer, naval units, save/load, difficulty
+levels.
 
 ## Pre-rendered 3D sprite pipeline (optional)
 
