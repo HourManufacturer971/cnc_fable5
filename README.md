@@ -107,7 +107,7 @@ defined in code, rendered headlessly by Blender/Cycles from a fixed tilted
 orthographic camera (one NW sun, shadow-catcher ground), then post-processed
 into palette-quantized sprite sheets under `assets/`. When
 `assets/manifest.json` is present, `js/assets.js` swaps those sheets in over
-the procedural art at load (disable with `?noassets=1`); when absent, the game
+the procedural art at load (opt in with `?assets=1`); otherwise the game
 falls back to the built-in procedural sprites.
 
 ```sh

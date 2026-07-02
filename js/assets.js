@@ -7,9 +7,11 @@
 
 (function () {
   if (typeof document === 'undefined' || typeof fetch === 'undefined') return;
+  // The pre-rendered sheets are OPT-IN (?assets=1) while the pipeline matures:
+  // at 24px/cell the hand-authored procedural art still reads crisper.
   try {
-    if (new URLSearchParams(location.search).get('noassets')) return;
-  } catch (e) { /* no location in odd embeddings */ }
+    if (!new URLSearchParams(location.search).get('assets')) return;
+  } catch (e) { return; }
 
   function loadImg(src) {
     return new Promise((res, rej) => {
