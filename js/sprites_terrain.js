@@ -215,27 +215,38 @@
     return t.c;
   }
 
-  // boulder with cast shadow, 3-shade rounding, top glint and cracks
+  // boulder in 3/4 view: foreshortened dome (wider than tall), bright NW cap,
+  // shaded SE flank, dark SE under-rim and a cast shadow offset SE so it reads
+  // as a raised mass under the tilted camera (light from the NW).
   function boulder(g, cx, cy, r) {
-    // soft cast shadow to the bottom-right (light source top-left)
-    ell(g, cx + 2, cy + r - 1, r, Math.max(2, r >> 1), 'rgba(16,16,8,0.35)');
-    disk(g, cx, cy, r + 1, PAL.outline);
-    disk(g, cx, cy, r, PAL.rock1);
-    // bottom-right core shadow
+    const ry = Math.max(2, Math.round(r * 0.8));   // foreshortened height
+    // cast shadow hugging the ground, pushed SE
+    ell(g, cx + 2, cy + Math.max(1, ry - 1) + 1, r, Math.max(2, (ry >> 1) + 1), 'rgba(16,16,8,0.4)');
+    ell(g, cx, cy, r + 1, ry + 1, PAL.outline);
+    ell(g, cx, cy, r, ry, PAL.rock1);
+    // SE flank in mid shade
     g.fillStyle = PAL.rock3;
-    for (let y = Math.max(1, Math.floor(r * 0.25)); y <= r; y++) {
-      const w = Math.floor(Math.sqrt(r * r - y * y + 0.25));
-      g.fillRect(cx - w + Math.max(1, y >> 1), cy + y, w * 2, 1);
+    for (let y = 1; y <= ry; y++) {
+      const w = Math.floor(r * Math.sqrt(Math.max(0, 1 - (y * y) / (ry * ry))) + 0.5);
+      const inset = Math.max(1, y);
+      if (w * 2 + 1 - inset > 0) g.fillRect(cx - w + inset, cy + y, w * 2 + 1 - inset, 1);
     }
-    // top-left mid tone + highlight
-    disk(g, cx - Math.max(1, r >> 2), cy - Math.max(1, r >> 2), Math.max(1, r - 2), PAL.rock2);
-    disk(g, cx - Math.max(1, r >> 1), cy - Math.max(1, r >> 1), Math.max(1, r - 4), ROCK_HI);
-    if (r >= 5) { g.fillStyle = '#c0c0b4'; g.fillRect(cx - (r >> 1), cy - (r >> 1), 2, 1); }
+    // darkest under-rim along the SE base (the shadowed underside)
+    g.fillStyle = '#3c3c36';
+    for (let y = Math.max(1, ry - 1); y <= ry; y++) {
+      const w = Math.floor(r * Math.sqrt(Math.max(0, 1 - (y * y) / (ry * ry))) + 0.5);
+      const inset = Math.min(w * 2, y + 2);
+      if (w * 2 + 1 - inset > 0) g.fillRect(cx - w + inset, cy + y, w * 2 + 1 - inset, 1);
+    }
+    // NW mid tone + bright top cap
+    ell(g, cx - Math.max(1, r >> 2), cy - Math.max(1, ry >> 2), Math.max(1, r - 2), Math.max(1, ry - 2), PAL.rock2);
+    if (r >= 4) ell(g, cx - (r >> 2) - 1, cy - (ry >> 2) - 1, Math.max(1, r - 4), Math.max(1, ry - 3), ROCK_HI);
+    if (r >= 5) { g.fillStyle = '#c0c0b4'; g.fillRect(cx - (r >> 1), cy - (ry >> 1), 2, 1); }
     // one crack toward the lower-right + moss fleck
     g.fillStyle = PAL.rock3;
-    g.fillRect(cx + 1 + ri(2), cy + 1, 1, 2);
-    g.fillRect(cx + 2 + ri(2), cy + 3, 1, 1);
-    if (r >= 5) { g.fillStyle = ROCK_MOSS; g.fillRect(cx - r + 1, cy + (r >> 1), 2, 1); }
+    g.fillRect(cx + 1 + ri(2), cy, 1, 2);
+    g.fillRect(cx + 2 + ri(2), cy + 2, 1, 1);
+    if (r >= 5) { g.fillStyle = ROCK_MOSS; g.fillRect(cx - r + 1, cy + (ry >> 1), 2, 1); }
   }
 
   function rockTile(v) {
@@ -287,52 +298,63 @@
 
   const grassVariants = [grassTile(0), grassTile(1), grassTile(2), grassTile(3)];
 
-  // layered tree canopy: dark under-mass, mid lumps, light dapples
-  function canopy(g, cx, cy, r, dark, mid, light, hi) {
-    const lumps = [[0, 0, r], [-3, 1, r - 2], [3, 1, r - 2], [0, -3, r - 2], [-2, -2, r - 3]];
-    for (const l of lumps) if (l[2] > 0) disk(g, cx + l[0], cy + l[1], l[2] + 1, PAL.outline);
-    for (const l of lumps) if (l[2] > 0) disk(g, cx + l[0], cy + l[1], l[2], dark);
-    for (const l of lumps) if (l[2] > 1) disk(g, cx + l[0] - 1, cy + l[1] - 1, l[2] - 2, mid);
-    // clustered light dapples toward the top-left
+  // 3/4-view tree canopy: foreshortened lumpy ellipse (wider than tall), lit
+  // NW top, mid body, dark shaded SOUTH under-edge facing the camera.
+  function canopy(g, cx, cy, rx, ry, dark, mid, light, hi) {
+    const lumps = [[0, 0, rx, ry], [-4, 1, rx - 3, ry - 1], [4, 1, rx - 3, ry - 1],
+                   [-1, -2, rx - 2, ry - 1], [3, -2, 3, 2], [-5, -1, 3, 2]];
+    for (const l of lumps) if (l[2] > 0 && l[3] > 0) ell(g, cx + l[0], cy + l[1], l[2] + 1, l[3] + 1, PAL.outline);
+    for (const l of lumps) if (l[2] > 0 && l[3] > 0) ell(g, cx + l[0], cy + l[1], l[2], l[3], dark);
+    // mid mass shifted toward the light (NW) so the south rim stays dark
+    for (const l of lumps) if (l[2] > 1 && l[3] > 1) ell(g, cx + l[0] - 1, cy + l[1] - 1, l[2] - 1, l[3] - 1, mid);
+    // bright NW top surface
+    ell(g, cx - 2, cy - 2, Math.max(2, rx - 2), Math.max(1, ry - 2), light);
+    ell(g, cx - 3, cy - 2, Math.max(1, rx - 5), Math.max(1, ry - 3), GRASS_HI);
+    // clustered light dapples on the top face
     g.fillStyle = light;
-    for (let i = 0; i < 9; i++) {
-      const a = R() * Math.PI * 2, d = R() * (r - 2);
-      const x = Math.round(cx - 1 + Math.cos(a) * d * 0.9), y = Math.round(cy - 1 + Math.sin(a) * d * 0.9);
+    for (let i = 0; i < 8; i++) {
+      const a = R() * Math.PI * 2, d = R() * (rx - 3);
+      const x = Math.round(cx - 1 + Math.cos(a) * d), y = Math.round(cy - 2 + Math.sin(a) * d * 0.5);
       g.fillRect(x, y, 1 + ri(2), 1);
     }
     g.fillStyle = hi || GRASS_HI;
-    g.fillRect(cx - 3, cy - r + 1, 2, 1); g.fillRect(cx - r + 2, cy - 2, 1, 1);
-    // dark leaf holes for texture
+    g.fillRect(cx - 3, cy - ry - 1, 3, 1); g.fillRect(cx - rx + 2, cy - 2, 1, 1);
+    // dark leaf holes low on the shaded south side
     g.fillStyle = PAL.treeDark;
-    g.fillRect(cx + 2, cy + 1, 1, 1); g.fillRect(cx - 2, cy + 3, 2, 1);
+    g.fillRect(cx + 2, cy + ry - 2, 2, 1); g.fillRect(cx - 3, cy + ry - 1, 2, 1);
   }
 
-  function treeBase(cx, cy, r) {
+  // grass base + SE cast shadow + trunk visible below the canopy's south edge
+  function treeBase(cx, cy, ry) {
     const t = mk(24, 24);
     t.g.drawImage(grassVariants[ri(4)], 0, 0);
-    // soft ground shadow (offset bottom-right of the trunk)
-    ell(t.g, cx + 3, cy + r + 2, r - 1, 3, 'rgba(10,14,6,0.42)');
-    // trunk with lit left edge and root flare
-    t.g.fillStyle = PAL.outline; t.g.fillRect(cx - 2, cy + r - 3, 5, 8);
-    t.g.fillStyle = '#4a3820'; t.g.fillRect(cx - 1, cy + r - 3, 3, 7);
-    t.g.fillStyle = '#6a5230'; t.g.fillRect(cx - 1, cy + r - 3, 1, 6);
-    t.g.fillStyle = '#2e2214'; t.g.fillRect(cx + 1, cy + r - 2, 1, 6);
+    // cast shadow ellipse offset SE under the canopy (NW light)
+    ell(t.g, cx + 5, 20, 7, 2, 'rgba(10,14,6,0.5)');
+    // trunk from canopy underside down to the ground, lit on the west edge
+    const ty = cy + ry - 1;
+    t.g.fillStyle = PAL.outline; t.g.fillRect(cx - 2, ty, 5, 20 - ty);
+    t.g.fillStyle = '#4a3820'; t.g.fillRect(cx - 1, ty, 3, 19 - ty);
+    t.g.fillStyle = '#6a5230'; t.g.fillRect(cx - 1, ty, 1, 18 - ty);
+    t.g.fillStyle = '#2e2214'; t.g.fillRect(cx + 1, ty + 1, 1, 18 - ty);
+    // root flare
     t.g.fillStyle = '#4a3820';
-    t.g.fillRect(cx - 2, cy + r + 3, 1, 1); t.g.fillRect(cx + 2, cy + r + 3, 1, 1);
+    t.g.fillRect(cx - 2, 18, 1, 1); t.g.fillRect(cx + 2, 18, 1, 1);
     return t;
   }
 
   function treeTile(v) {
-    const cx = 11 + (v % 2), cy = 10, r = 6 + (v === 1 ? 1 : 0);
-    const t = treeBase(cx, cy, r);
-    canopy(t.g, cx, cy, r, PAL.treeDark, PAL.tree, PAL.treeLight);
+    const cx = 11 + (v % 2), cy = 8;
+    const rx = 7 + (v === 1 ? 1 : 0), ry = 4 + (v === 1 ? 1 : 0);
+    const t = treeBase(cx, cy, ry);
+    canopy(t.g, cx, cy, rx, ry, PAL.treeDark, PAL.tree, PAL.treeLight);
     return t.c;
   }
 
-  // blossom tree: big pulsing pale-pink spore pod on a gnarled trunk
+  // blossom tree: pulsing pale-pink spore pod (foreshortened ellipsoid) on a
+  // gnarled trunk, tiberium-tainted soil, SE cast shadow
   function blossomFrames() {
     const out = [];
-    const cx = 12, cy = 10;
+    const cx = 12, cy = 8;
     for (let f = 0; f < 2; f++) {
       const t = mk(24, 24); const g = t.g;
       g.drawImage(grassVariants[1], 0, 0);
@@ -341,29 +363,31 @@
       for (let i = 0; i < 8; i++) g.fillRect(4 + ri(16), 17 + ri(6), 1 + ri(2), 1);
       g.fillStyle = PAL.tib1;
       g.fillRect(6, 20, 1, 1); g.fillRect(17, 19, 1, 1); g.fillRect(11, 22, 1, 1);
-      ell(g, cx + 2, 19, 6, 2, 'rgba(10,14,6,0.42)');
-      // trunk
-      g.fillStyle = PAL.outline; g.fillRect(cx - 2, 12, 5, 8);
-      g.fillStyle = '#4a3820'; g.fillRect(cx - 1, 12, 3, 7);
-      g.fillStyle = '#6a5230'; g.fillRect(cx - 1, 12, 1, 6);
-      // pod: dark magenta under-sphere, pale pulsing crown
-      const r = 6 + f;                       // swells on frame 1
-      disk(g, cx, cy, r + 1, PAL.outline);
-      disk(g, cx, cy, r, '#6e3050');
-      disk(g, cx, cy - 1, r - 1, '#a05878');
-      disk(g, cx - 1, cy - 2, r - 3, f === 0 ? '#d898b4' : '#f0d0dc');
-      // vein lines
+      // cast shadow offset SE
+      ell(g, cx + 5, 20, 7, 2, 'rgba(10,14,6,0.5)');
+      // trunk below the pod's south edge
+      g.fillStyle = PAL.outline; g.fillRect(cx - 2, 11, 5, 9);
+      g.fillStyle = '#4a3820'; g.fillRect(cx - 1, 11, 3, 8);
+      g.fillStyle = '#6a5230'; g.fillRect(cx - 1, 11, 1, 7);
+      g.fillStyle = '#2e2214'; g.fillRect(cx + 1, 12, 1, 7);
+      // pod: wider than tall, dark magenta south rim, pale crown toward the NW
+      const rx = 6 + f, ry = 4 + f;          // swells on frame 1
+      ell(g, cx, cy, rx + 1, ry + 1, PAL.outline);
+      ell(g, cx, cy, rx, ry, '#6e3050');
+      ell(g, cx, cy - 1, rx - 1, ry - 1, '#a05878');
+      ell(g, cx - 1, cy - 2, rx - 3, Math.max(1, ry - 3), f === 0 ? '#d898b4' : '#f0d0dc');
+      // vein lines wrapping the pod
       g.fillStyle = '#5a2440';
-      g.fillRect(cx, cy - r + 2, 1, r); g.fillRect(cx - 3, cy - 1, 2, 1); g.fillRect(cx + 2, cy, 2, 1);
-      // glossy highlight
+      g.fillRect(cx, cy - ry + 1, 1, ry + 2); g.fillRect(cx - 4, cy, 2, 1); g.fillRect(cx + 3, cy + 1, 2, 1);
+      // glossy NW highlight
       g.fillStyle = f === 0 ? '#f0d0dc' : '#fdf2f6';
-      g.fillRect(cx - 3, cy - 4, 2, 1); g.fillRect(cx - 4, cy - 3, 1, 1);
+      g.fillRect(cx - 3, cy - 3, 2, 1); g.fillRect(cx - 4, cy - 2, 1, 1);
       if (f === 1) {
         // released spores drifting up
         g.fillStyle = '#f4d8e2';
-        g.fillRect(cx - 5, 2, 1, 1); g.fillRect(cx + 4, 1, 1, 1); g.fillRect(cx + 7, 4, 1, 1);
+        g.fillRect(cx - 5, 1, 1, 1); g.fillRect(cx + 4, 0, 1, 1); g.fillRect(cx + 7, 3, 1, 1);
         g.fillStyle = '#e8c0d0';
-        g.fillRect(cx - 2, 1, 1, 1); g.fillRect(cx + 6, 7, 1, 1);
+        g.fillRect(cx - 2, 0, 1, 1); g.fillRect(cx + 6, 6, 1, 1);
       }
       out.push(t.c);
     }
@@ -402,6 +426,38 @@
     g.fillRect(cx, cy - s, 1, 1);
   }
 
+  // tall standing shard for field tiles: rises h px from its base row, west
+  // face lit, east face shaded, base darker than the sparkling tip, with a
+  // tiny SE ground shadow — reads as an upright crystal under the 3/4 camera.
+  function tibShard(g, cx, cy, s, lean) {
+    const h = s * 2 + 2;
+    // tiny SE cast shadow at the base
+    ell(g, cx + 1, cy + 1, s + 1, 1, 'rgba(10,14,6,0.35)');
+    // dark silhouette pass (1px edging)
+    g.fillStyle = PAL.tibDark;
+    for (let j = 0; j <= h; j++) {
+      const w = Math.min(j, s);
+      const dx = lean ? Math.round(lean * (h - j) / h) : 0;
+      g.fillRect(cx + dx - w - 1, cy - h + j, w * 2 + 3, 1);
+    }
+    // vertical facets (base row tapers 1px in, like a cut gem)
+    for (let j = 0; j <= h; j++) {
+      const y = cy - h + j;
+      const w = Math.min(j, s) - (j === h ? 1 : 0);
+      const dx = lean ? Math.round(lean * (h - j) / h) : 0;
+      const nearBase = j >= h - 2;
+      g.fillStyle = j === 0 ? '#e0ffe4' : nearBase ? PAL.tib1 : PAL.tib2; // west, lit
+      g.fillRect(cx + dx - w, y, w + 1, 1);
+      g.fillStyle = nearBase ? PAL.tibDark : PAL.tib1;                    // east, shaded
+      g.fillRect(cx + dx + 1, y, w, 1);
+      if (j > 0 && j < h - 1) { g.fillStyle = PAL.tib3; g.fillRect(cx + dx, y, 1, 1); } // seam
+    }
+    // tip sparkle
+    g.fillStyle = '#e0ffe4';
+    g.fillRect(cx + (lean || 0), cy - h, 1, 1);
+    if (s >= 3) g.fillRect(cx + (lean || 0) - 1, cy - h + 2, 1, 1);
+  }
+
   function tibCanvas(n, maxS, carpet) {
     const t = mk(24, 24); const g = t.g;
     // green under-glow soaked into the soil (stronger with density)
@@ -414,15 +470,23 @@
       g.fillStyle = PAL.tib1;
       for (let i = 0; i < 8; i++) g.fillRect(2 + ri(20), 2 + ri(20), 1, 1);
     }
+    // place shards, then paint north-to-south so southern crystals overlap
+    const shards = [];
     for (let i = 0; i < n; i++) {
       const s = 2 + ri(maxS - 1);
-      const x = clamp(3 + ri(18), s + 2, 21 - s);
-      const y = clamp(4 + ri(16), s + 2, 21 - s);
-      crystal(g, x, y, s);
+      const h = s * 2 + 2;
+      shards.push({
+        s,
+        x: clamp(3 + ri(18), s + 3, 20 - s),
+        y: clamp(6 + ri(16), h + 2, 21),
+        lean: ri(3) - 1,
+      });
     }
+    shards.sort((a, b) => a.y - b.y);
+    for (const sh of shards) tibShard(g, sh.x, sh.y, sh.s, sh.lean);
     // loose shard sparkles between crystals
-    const shards = carpet ? 5 : n >= 6 ? 3 : 2;
-    for (let i = 0; i < shards; i++) {
+    const nSpark = carpet ? 5 : n >= 6 ? 3 : 2;
+    for (let i = 0; i < nSpark; i++) {
       const x = 2 + ri(20), y = 3 + ri(18);
       g.fillStyle = PAL.tib2; g.fillRect(x, y, 1, 2);
       g.fillStyle = PAL.tib3; g.fillRect(x, y, 1, 1);

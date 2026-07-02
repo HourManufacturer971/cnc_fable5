@@ -16,7 +16,7 @@
 
   // ---- local shade ramps (PAL-adjacent extra hex shades) ---------------------
   const SKIN_HI = '#f2c894', SKIN = '#d8a878', SKIN_SH = '#a87652', SKIN_DK = '#6e4830';
-  const BOOT = '#16160e', BOOT_HI = '#34342a';
+  const BOOT = '#0e0e08', BOOT_HI = '#26261e';
   const GUN = '#54544c', GUN_HI = '#8a8a80', GUN_WOOD = '#6e5230';
   const TUBE = '#5a6446', TUBE_HI = '#84906a', TUBE_DK = '#333a26';
   const GRN = '#3c4c2c', GRN_HI = '#5a7042';
@@ -32,6 +32,13 @@
     return [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
   }
   const OUTLINE_RGB = hexRgb(PAL.outline);
+
+  // Darken a hex color by factor f (0..1) — used to sink legs/boots into the ground.
+  function darken(hex, f) {
+    const [r, g, b] = hexRgb(hex);
+    const h = v => ('0' + Math.max(0, Math.round(v * f)).toString(16)).slice(-2);
+    return '#' + h(r) + h(g) + h(b);
+  }
 
   // Trace a 1px dark outline around every opaque region of `src` (4-neighbour).
   function outlined(src) {
@@ -148,6 +155,9 @@
         cfg.bigFlash = true;
         break;
     }
+    // legs sit one shade darker than the torso so figures ground into the terrain
+    cfg.pants = darken(cfg.pants, 0.78);
+    cfg.pantsDk = darken(cfg.pantsDk, 0.78);
     return cfg;
   }
 
@@ -310,7 +320,9 @@
     }
 
     // -- head: dome, helmet band, face/visor, neck --------------------------------
-    const hy = 8 + bob;
+    // 3/4 camera: south-ish facings tip the head down 1px (face + chest read),
+    // north-ish facings tip it up 1px and show extra helmet-top/nape instead.
+    const hy = 8 + bob + (dy > 0 ? 1 : dy < 0 ? -1 : 0);
     if (cfg.hairTop) {
       R(11, hy, 2, 1, cfg.hairTop);
       R(11, hy + 1, 3, 1, cfg.helmet); px(11, hy + 1, cfg.helmetHi); // headband
@@ -330,7 +342,9 @@
     } else {
       R(11, hy + 2, 3, 1, cfg.helmetDk); // back of the helmet
       px(11, hy + 2, cfg.helmet);
-      px(12, hy + 3, cfg.uniformDk);
+      R(11, hy + 3, 3, 1, cfg.helmetDk); // nape row: more head/shoulders from behind
+      px(11, hy + 3, cfg.hairTop ? cfg.hairTop : cfg.helmet);
+      px(12, hy + 4, cfg.uniformDk);
     }
 
     if (!gunBehind) drawGun();
@@ -451,14 +465,23 @@
 
   // ---- frame composition --------------------------------------------------------
 
+  // Soft 2px-tall cast-shadow ellipse just SOUTH of the feet, nudged 1px east
+  // (NW light source → shadow falls SE). Darker core stacked over a lighter rim.
   function shadow(ctx, wide) {
-    ctx.fillStyle = 'rgba(8,8,4,0.35)';
     if (wide) {
-      ctx.fillRect(7, 20, 11, 1);
-      ctx.fillRect(6, 21, 13, 2);
+      ctx.fillStyle = 'rgba(8,8,4,0.30)';
+      ctx.fillRect(7, 22, 12, 1);
+      ctx.fillRect(9, 23, 8, 1);
+      ctx.fillStyle = 'rgba(8,8,4,0.30)';
+      ctx.fillRect(9, 22, 8, 1);
+      ctx.fillRect(11, 23, 4, 1);
     } else {
-      ctx.fillRect(9, 21, 6, 1);
-      ctx.fillRect(10, 22, 4, 1);
+      ctx.fillStyle = 'rgba(8,8,4,0.30)';
+      ctx.fillRect(8, 22, 9, 1);
+      ctx.fillRect(10, 23, 5, 1);
+      ctx.fillStyle = 'rgba(8,8,4,0.30)';
+      ctx.fillRect(10, 22, 5, 1);
+      ctx.fillRect(11, 23, 3, 1);
     }
   }
 

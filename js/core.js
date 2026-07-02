@@ -137,6 +137,62 @@ function rotFrames(src, n) {
   return out;
 }
 
+// Pseudo-3D rotation frames, for the tilted 3/4 camera of mid-90s RTS games.
+// The top-face sprite is rotated per facing, then composited over a SCREEN-SPACE
+// extrusion (the vehicle's dark sides, offset downward) and a soft ground
+// shadow — so depth cues stay consistent for all facings instead of spinning
+// with the hull. opts: {height: px of extrusion (default 2), squash: y-scale of
+// the top face (default 0.86), shadow: alpha (default 0.30)}.
+function rot3D(src, n, opts) {
+  opts = opts || {};
+  const height = opts.height !== undefined ? opts.height : 2;
+  const squash = opts.squash !== undefined ? opts.squash : 0.86;
+  const shadow = opts.shadow !== undefined ? opts.shadow : 0.30;
+  const w = src.width, h = src.height;
+
+  // dark-side plate: the sprite's silhouette filled with a darkened version
+  const side = mkCanvas(w, h);
+  {
+    const sctx = side.getContext('2d');
+    sctx.drawImage(src, 0, 0);
+    sctx.globalCompositeOperation = 'source-atop';
+    sctx.fillStyle = 'rgba(8,8,12,0.72)';
+    sctx.fillRect(0, 0, w, h);
+  }
+  const sil = mkCanvas(w, h);
+  {
+    const sctx = sil.getContext('2d');
+    sctx.drawImage(src, 0, 0);
+    sctx.globalCompositeOperation = 'source-atop';
+    sctx.fillStyle = '#000';
+    sctx.fillRect(0, 0, w, h);
+  }
+
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const c = mkCanvas(w, h);
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    const a = angleOf16(i * (16 / n));
+    const sy = squash;
+    // squashed, rotated draw at a vertical offset
+    const put = (img, dy, alpha) => {
+      ctx.save();
+      ctx.globalAlpha = alpha !== undefined ? alpha : 1;
+      ctx.translate(w / 2, h / 2 + dy);
+      ctx.scale(1, sy);
+      ctx.rotate(a);
+      ctx.drawImage(img, -w / 2, -h / 2);
+      ctx.restore();
+    };
+    if (shadow > 0) put(sil, height + 2, shadow); // ground shadow
+    for (let d = height; d >= 1; d--) put(side, d); // extruded sides
+    put(src, 0);                                    // top face
+    out.push(c);
+  }
+  return out;
+}
+
 // ---- event bus -------------------------------------------------------------
 
 const EV = {

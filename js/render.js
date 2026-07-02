@@ -240,14 +240,25 @@ const Render = (function () {
         ctx.lineTo(e.x2 - ox, e.y2 - oy);
         ctx.stroke();
         return;
-      case 'laserBeam':
-        ctx.strokeStyle = PAL.laser;
-        ctx.lineWidth = 2;
+      case 'laserBeam': {
+        // layered beam: dark red glow, bright red body, white-hot core
         ctx.beginPath();
         ctx.moveTo(e.x1 - ox, e.y1 - oy);
         ctx.lineTo(e.x2 - ox, e.y2 - oy);
+        ctx.strokeStyle = 'rgba(160,24,16,0.55)';
+        ctx.lineWidth = 5;
         ctx.stroke();
+        ctx.strokeStyle = PAL.laser;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+        ctx.strokeStyle = '#ffd8c8';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        // impact flare
+        ctx.fillStyle = '#fff0e0';
+        ctx.fillRect(e.x2 - ox - 2, e.y2 - oy - 2, 4, 4);
         return;
+      }
       case 'ionBeam': {
         const x = e.x - ox;
         ctx.fillStyle = 'rgba(168,216,248,0.75)';

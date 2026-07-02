@@ -1,14 +1,20 @@
 'use strict';
 // sprites_buildings.js — procedurally drawn building sprites + cameos.
 // Fills, for every key in DATA.buildings and BOTH sides:
-//   SPRITES.buildings[key][side] = { normal:[frames], damaged:[frames] }
+//   SPRITES.buildings[key][side] = { normal:[frames], damaged:[frames], yOff? }
 //   (+ gun turret rotation frames, obelisk charge frames, SAM open frames)
 // and SPRITES.cameo[key] for every building, plus SPRITES.cameo.ionStrike and
 // SPRITES.cameo.nukeStrike superweapon cameos. Defines no globals (IIFE).
 //
-// Canvas size per building: w*24 x (h*24 + 8). The bottom 8 rows are the
-// concrete bib apron; render anchors the canvas top-left to the footprint
-// top-left cell, so the bib hangs just below the footprint.
+// PERSPECTIVE: classic mid-90s RTS tilted top-down (camera ~60deg from the
+// south). Every structure shows a foreshortened ROOF (bright, NW key light)
+// above a SOUTH FACADE wall (mid-shade, doors/windows/vents), with a 1px
+// bright parapet where they meet, a darkest line at the facade base, and a
+// soft cast shadow falling SE. Tall structures rise ABOVE their footprint by
+// yOff pixels; render anchors the canvas yOff px above the footprint top.
+//
+// Canvas size per building: w*24 x (yOff + h*24 + 8). The bottom 8 rows are
+// the concrete bib apron (defenses skip it and sit on round pads instead).
 
 (function () {
   if (typeof document === 'undefined' || typeof SPRITES === 'undefined' ||
@@ -22,6 +28,7 @@
   const STEEL = '#9a9a92', STEEL_L = '#c4c4bc', STEEL_D = '#6e6e68', STEEL_D2 = '#4b4b46';
   const IRON = '#3c3c42', IRON_L = '#5b5b64', IRON_D = '#26262b';
   const GLASS = '#1c2c3a', GLASS_L = '#4e7290', GLASS_HI = '#a6d2ec';
+  const WIN_LIT = '#ffd870', WIN_LIT_HI = '#fff4c0';
   const DOOR = '#33332e', DOOR_D = '#22221e';
   const OLV = '#5c6634', OLV_L = '#79844a', OLV_D = '#3f4722', OLV_D2 = '#2c3218';
   const ASPH = '#3a3a34', ASPH_L = '#51514a', ASPH_D = '#2a2a26';
@@ -39,6 +46,14 @@
           blackA: '#25252d', blackB: '#32323c', blackC: '#41414d' };
   }
 
+  // faction material set for the 3/4 box helpers: bright roof, mid facade
+  function mats(pal) {
+    return { roof: pal.base, roofL: pal.light, roofD: pal.dark, para: pal.light,
+             face: pal.dark, faceL: pal.base, faceD: pal.shadow };
+  }
+  const CMAT = { roof: CONC, roofL: CONC_L, roofD: CONC_D, para: CONC_L,
+                 face: CONC_D, faceL: CONC, faceD: CONC_D2 };
+
   // ---- tiny drawing helpers -------------------------------------------------
 
   function P(ctx, x, y, w, h, col) { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); }
@@ -47,16 +62,6 @@
     col = col || OUT;
     P(ctx, x, y, w, 1, col); P(ctx, x, y + h - 1, w, 1, col);
     P(ctx, x, y, 1, h, col); P(ctx, x + w - 1, y, 1, h, col);
-  }
-
-  // beveled building block: base fill, light top/left, dark bottom/right, outline
-  function panel(ctx, x, y, w, h, base, light, dark) {
-    P(ctx, x, y, w, h, base);
-    P(ctx, x + 1, y + 1, w - 2, 1, light);
-    P(ctx, x + 1, y + 1, 1, h - 2, light);
-    P(ctx, x + 1, y + h - 2, w - 2, 1, dark);
-    P(ctx, x + w - 2, y + 1, 1, h - 2, dark);
-    outlineRect(ctx, x, y, w, h);
   }
 
   function circleFill(ctx, cx, cy, r, col) {
@@ -72,72 +77,6 @@
       if (t < 0) continue;
       const hw = Math.floor(rx * Math.sqrt(t) + 0.5);
       P(ctx, cx - hw, cy + dy, hw * 2 + 1, 1, col);
-    }
-  }
-
-  // half-dome sitting on baseY (rows above baseY), 4-shade, outlined
-  function dome(ctx, cx, baseY, r, mid, light, dark) {
-    const rr = r + 1;
-    for (let dy = 0; dy <= rr; dy++) {
-      const hw = Math.floor(Math.sqrt(Math.max(0, rr * rr - dy * dy)) + 0.5);
-      P(ctx, cx - hw, baseY - dy, hw * 2 + 1, 1, OUT);
-    }
-    for (let dy = 0; dy <= r; dy++) {
-      const hw = Math.floor(Math.sqrt(r * r - dy * dy) + 0.5);
-      P(ctx, cx - hw, baseY - dy, hw * 2 + 1, 1, mid);
-      if (hw > 2) P(ctx, cx + hw - 2, baseY - dy, 2, 1, dark);
-    }
-    for (let dy = Math.floor(r * 0.35); dy < r; dy++) {
-      const hw = Math.floor(Math.sqrt(r * r - dy * dy) + 0.5);
-      if (hw > 2) P(ctx, cx - hw + 1, baseY - dy, Math.max(2, Math.floor(hw * 0.5)), 1, light);
-    }
-  }
-
-  // full shaded sphere (eye dome ball)
-  function ball(ctx, cx, cy, r, mid, light, dark) {
-    circleFill(ctx, cx, cy, r + 1, OUT);
-    circleFill(ctx, cx, cy, r, mid);
-    for (let dy = -r; dy <= r; dy++) {
-      const hw = Math.floor(Math.sqrt(r * r - dy * dy) + 0.5);
-      const w = dy > 0 ? 3 : 2;
-      if (hw > w) P(ctx, cx + hw - w, cy + dy, w, 1, dark);
-    }
-    circleFill(ctx, cx - Math.round(r * 0.35), cy - Math.round(r * 0.35),
-               Math.max(2, Math.round(r * 0.35)), light);
-  }
-
-  // top-down cooling stack; hot = bright glowing core
-  function stack(ctx, cx, cy, r, hot) {
-    circleFill(ctx, cx + 2, cy + 2, r, SH);            // cast shadow SE
-    circleFill(ctx, cx, cy, r + 1, OUT);
-    circleFill(ctx, cx, cy, r, '#9b9b93');
-    circleFill(ctx, cx - 2, cy - 2, Math.max(2, r - 2), '#bcbcb2');
-    circleFill(ctx, cx - 3, cy - 3, Math.max(1, r - 5), '#d4d4c8');
-    // rim tick marks
-    for (let i = 0; i < 8; i++) {
-      const a = i / 8 * Math.PI * 2 + 0.39;
-      P(ctx, Math.round(cx + Math.cos(a) * (r - 1)), Math.round(cy + Math.sin(a) * (r - 1)), 1, 1, '#5e5e58');
-    }
-    circleFill(ctx, cx, cy, Math.max(2, r - 3), '#33332e');
-    circleFill(ctx, cx, cy, Math.max(1, r - 5), hot ? '#f0e060' : '#22221e');
-    if (hot && r - 7 >= 1) circleFill(ctx, cx, cy, r - 7, '#fff8c0');
-    if (!hot) P(ctx, cx - 1, cy - 1, 1, 1, '#3c3c36'); // faint inner reflection
-  }
-
-  // three-phase steam wisp rising from (cx, topY); p = 0..2
-  function steam3(ctx, cx, topY, p) {
-    const ph = [
-      [[0, 0, 4, 0.95], [-3, -3, 3, 0.7], [2, -6, 2, 0.45]],
-      [[-1, -2, 4, 0.85], [2, -5, 3, 0.6], [-3, -9, 2, 0.4]],
-      [[1, -3, 3, 0.7], [-2, -7, 3, 0.5], [3, -11, 2, 0.3]],
-    ][p];
-    for (const [dx, dy, s, a] of ph) {
-      ctx.fillStyle = 'rgba(240,244,240,' + a + ')';
-      ctx.fillRect(cx + dx, topY + dy, s, s);
-      ctx.fillStyle = 'rgba(255,255,255,' + (a * 0.7).toFixed(2) + ')';
-      ctx.fillRect(cx + dx, topY + dy, s, 1);
-      ctx.fillStyle = 'rgba(200,206,200,' + (a * 0.5).toFixed(2) + ')';
-      ctx.fillRect(cx + dx - 1, topY + dy + s, s + 2, 1);
     }
   }
 
@@ -166,17 +105,6 @@
     }
   }
 
-  // row of dark window slits, one lit
-  function winRow(ctx, x, y, n, gap, lit) {
-    for (let i = 0; i < n; i++) {
-      const wx = x + i * gap;
-      P(ctx, wx - 1, y - 1, 5, 6, OUT);
-      P(ctx, wx, y, 3, 4, GLASS);
-      P(ctx, wx, y, 3, 1, GLASS_L);
-      if (i === lit) P(ctx, wx + 1, y + 2, 1, 1, GLASS_HI);
-    }
-  }
-
   // thick beam segment from (x0,y0) to (x1,y1) — crane booms etc.
   function beam(ctx, x0, y0, x1, y1, top, bot) {
     const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0), 1);
@@ -189,6 +117,199 @@
       P(ctx, x, y + 1, 2, 1, OUT);
     }
   }
+
+  // ---- 3/4 perspective toolkit ----------------------------------------------
+
+  // cast shadow for a box at x..x+w, y..y+h: east strip + SE spill (L-shape)
+  function castE(ctx, x, y, w, h, d) {
+    d = d || 3;
+    ctx.fillStyle = SH;
+    ctx.fillRect(x + w, y + d, d, h);
+    ctx.fillRect(x + d, y + h, w - d, d);
+  }
+
+  // south facade wall: rows y..y+fh; mid-shade, darker at the bottom, darkest
+  // 1px base line, east end darkest
+  function facade(ctx, x, y, w, fh, m) {
+    P(ctx, x, y, w, fh, m.face);
+    P(ctx, x + w - 2, y, 2, fh, m.faceD);
+    P(ctx, x, y + fh - 3, w, 2, m.faceD);
+    P(ctx, x, y + fh - 1, w, 1, OUT);
+  }
+
+  // full 3/4 box: bright roof rows y..y+rh, facade y+rh..y+rh+fh, parapet
+  // line at the junction, outline, SE cast shadow
+  function box3(ctx, x, y, w, rh, fh, m) {
+    castE(ctx, x, y, w, rh + fh);
+    outlineRect(ctx, x - 1, y - 1, w + 2, rh + fh + 2);
+    P(ctx, x, y, w, rh, m.roof);
+    P(ctx, x, y, w, 1, m.roofL);
+    P(ctx, x, y, 1, rh, m.roofL);
+    P(ctx, x + w - 2, y + 1, 2, rh - 1, m.roofD);
+    P(ctx, x, y + rh - 1, w, 1, m.para);
+    facade(ctx, x, y + rh, w, fh, m);
+  }
+
+  // small rooftop structure with its own south face + shadow so it pops up
+  function roofBox(ctx, x, y, w, rh, fh, m) {
+    ctx.fillStyle = SH;
+    ctx.fillRect(x + w, y + 1, 2, rh + fh);
+    ctx.fillRect(x + 1, y + rh + fh, w + 1, 2);
+    outlineRect(ctx, x - 1, y - 1, w + 2, rh + fh + 2);
+    P(ctx, x, y, w, rh, m.roof);
+    P(ctx, x, y, w, 1, m.roofL);
+    P(ctx, x, y + rh - 1, w, 1, m.para);
+    P(ctx, x, y + rh, w, fh, m.face);
+    P(ctx, x, y + rh + fh - 1, w, 1, m.faceD);
+  }
+
+  // roll-up door on a facade
+  function rollDoor(ctx, x, y, w, h) {
+    P(ctx, x - 1, y - 1, w + 2, h + 2, OUT);
+    P(ctx, x, y, w, h, '#87877f');
+    P(ctx, x, y, w, 1, '#b5b5ac');
+    for (let yy = y + 2; yy < y + h - 1; yy += 2) P(ctx, x, yy, w, 1, '#5f5f58');
+    P(ctx, x + w - 2, y, 2, h, '#6b6b64');
+  }
+
+  // personnel door on a facade
+  function pDoor(ctx, x, y, w, h) {
+    P(ctx, x - 1, y - 1, w + 2, h + 1, OUT);
+    P(ctx, x, y, w, h, DOOR);
+    P(ctx, x, y, w, 1, '#4a4a42');
+    P(ctx, x + 1, y + 2, w - 2, 1, DOOR_D);
+  }
+
+  // row of window slits on a facade, one lit warm
+  function faceWin(ctx, x, y, n, gap, lit) {
+    for (let i = 0; i < n; i++) {
+      const wx = x + i * gap;
+      P(ctx, wx - 1, y - 1, 4, 5, OUT);
+      P(ctx, wx, y, 2, 3, i === lit ? WIN_LIT : GLASS);
+      P(ctx, wx, y, 2, 1, i === lit ? WIN_LIT_HI : GLASS_L);
+    }
+  }
+
+  // vertical cylinder: top ellipse center (cx, ty), radii rx/ry, wall height
+  // bh. wc = wall colors [westLight, mid, dark, eastDark]; cc = cap colors
+  // [top, topL, innerRimSE]. Curved south wall + bright cap + SE shadow.
+  function cyl3(ctx, cx, ty, rx, ry, bh, wc, cc) {
+    ctx.fillStyle = SH;
+    ctx.fillRect(cx + rx + 2, ty + ry + 2, 2, bh);
+    for (let dx = -rx; dx <= rx; dx++) {
+      const e = Math.round(ry * Math.sqrt(Math.max(0, 1 - (dx * dx) / ((rx * rx) || 1))));
+      const t = (dx + rx) / ((2 * rx) || 1);
+      const col = t < 0.26 ? wc[0] : t < 0.58 ? wc[1] : t < 0.84 ? wc[2] : wc[3];
+      P(ctx, cx + dx, ty + e, 1, bh, col);
+      P(ctx, cx + dx, ty + e + bh, 1, 1, OUT);
+    }
+    P(ctx, cx - rx - 1, ty, 1, bh + 1, OUT);
+    P(ctx, cx + rx + 1, ty, 1, bh + 1, OUT);
+    ellipseFill(ctx, cx, ty, rx + 1, ry + 1, OUT);
+    ellipseFill(ctx, cx, ty, rx, ry, cc[0]);
+    ellipseFill(ctx, cx - 1, ty - 1, Math.max(1, rx - 2), Math.max(1, ry - 1), cc[1]);
+    for (let dx = 0; dx <= rx; dx++) {
+      const e = Math.round(ry * Math.sqrt(Math.max(0, 1 - dx * dx / ((rx * rx) || 1))));
+      if (e > 0) P(ctx, cx + dx, ty + e - 1, 1, 1, cc[2]);
+    }
+  }
+
+  // 3/4 dome: base center (cx, by), radius r. Bright crown, mid south face,
+  // dark east rim, NW glint. m = {top, topL, face, dark}
+  function dome3(ctx, cx, by, r, m) {
+    const rh = Math.max(3, Math.round(r * 0.8));
+    ellipseFill(ctx, cx + 2, by + 1, r, 2, SH); // ground shadow SE
+    for (let dy = 0; dy <= rh + 1; dy++) {
+      const hw = Math.floor((r + 1) * Math.sqrt(Math.max(0, 1 - (dy * dy) / ((rh + 1) * (rh + 1)))) + 0.5);
+      P(ctx, cx - hw, by - dy, hw * 2 + 1, 1, OUT);
+    }
+    for (let dy = 0; dy <= rh; dy++) {
+      const hw = Math.floor(r * Math.sqrt(Math.max(0, 1 - (dy * dy) / (rh * rh))) + 0.5);
+      const y = by - dy;
+      P(ctx, cx - hw, y, hw * 2 + 1, 1, dy < rh * 0.45 ? m.face : m.top);
+      const dw = Math.max(1, Math.round(hw * 0.28));
+      P(ctx, cx + hw - dw, y, dw, 1, m.dark);
+    }
+    ellipseFill(ctx, cx - Math.round(r * 0.3), by - Math.round(rh * 0.6),
+                Math.max(2, Math.round(r * 0.32)), Math.max(1, Math.round(rh * 0.24)), m.topL);
+    P(ctx, cx - r, by, r * 2 + 1, 1, OUT);
+  }
+
+  // quonset hut / hangar with N-S ridge: curved roof surface (west-lit) that
+  // rolls down to the ground at the sides, and a south arch face with a
+  // bright curved parapet edge. cols = {hi, mid, dk, dk2, face, faceD}
+  function hut3(ctx, x, y, w, len, cols) {
+    const half = (w - 1) / 2;
+    const ah = Math.round(w * 0.42);
+    ctx.fillStyle = SH;
+    ctx.fillRect(x + w, y + 3, 2, len + ah - 3);
+    ctx.fillRect(x + 3, y + len + ah + 1, w - 3, 2);
+    for (let dx = 0; dx < w; dx++) {
+      const t = Math.abs(dx - half) / half;
+      const e = Math.round(ah * Math.sqrt(Math.max(0, 1 - t * t)));
+      const st = dx / (w - 1);
+      const col = st < 0.14 ? cols.mid : st < 0.4 ? cols.hi : st < 0.68 ? cols.mid : st < 0.88 ? cols.dk : cols.dk2;
+      const rlen = len + (ah - e);
+      P(ctx, x + dx, y, 1, rlen, col);              // roof (curves down at S)
+      if (e > 0) {
+        P(ctx, x + dx, y + rlen - 1, 1, 1, cols.hi); // curved parapet edge
+        P(ctx, x + dx, y + rlen, 1, e, st > 0.8 ? cols.faceD : cols.face);
+        P(ctx, x + dx, y + len + ah - 2, 1, 2, cols.faceD);
+      }
+      P(ctx, x + dx, y + len + ah, 1, 1, OUT);      // ground line
+    }
+    // corrugation ribs across the roof
+    for (let yy = y + 2; yy < y + len - 1; yy += 3)
+      P(ctx, x + 1, yy, w - 2, 1, 'rgba(16,20,10,0.28)');
+    P(ctx, x - 1, y - 1, w + 2, 1, OUT);
+    P(ctx, x - 1, y, 1, len + ah + 1, OUT);
+    P(ctx, x + w, y, 1, len + ah + 1, OUT);
+  }
+
+  // quonset hut with E-W ridge: bright rounded roof strip, curved south wall
+  // falling to the ground, dark east end, corrugation ribs. Reads as a long
+  // half-cylinder under the NW light.
+  function hutEW(ctx, x, y, w, rh, fh, hi) {
+    const hh = rh + fh;
+    castE(ctx, x, y, w, hh, 2);
+    for (let dy = 0; dy < hh; dy++) {
+      const t = dy / (hh - 1);
+      const ins = dy === 0 ? 3 : dy === 1 ? 1 : dy >= hh - 2 ? 1 : 0;
+      let col;
+      if (dy < 2) col = hi;                  // lit ridge north
+      else if (dy < rh) col = OLV_L;         // roof slope
+      else if (dy === rh) col = hi;          // parapet curve
+      else if (t < 0.72) col = OLV;          // upper wall
+      else if (t < 0.9) col = OLV_D;         // lower wall
+      else col = OLV_D2;
+      P(ctx, x + ins, y + dy, w - ins * 2, 1, col);
+    }
+    // east end cap shading + west edge light
+    P(ctx, x + w - 3, y + 2, 3, hh - 3, 'rgba(20,26,12,0.45)');
+    P(ctx, x + 1, y + 2, 1, hh - 3, 'rgba(210,225,150,0.30)');
+    // corrugation ribs
+    for (let rx = x + 4; rx < x + w - 4; rx += 3)
+      P(ctx, rx, y + 1, 1, hh - 2, 'rgba(18,22,10,0.22)');
+    P(ctx, x, y + hh - 1, w, 1, OUT);
+    outlineRect(ctx, x - 1, y - 1, w + 2, hh + 2);
+  }
+
+  // compact steam wisp above (cx, topY); p = 0..2, stays within ~6px above
+  function steamUp(ctx, cx, topY, p) {
+    const ph = [
+      [[0, -2, 4, 0.9], [-3, -4, 3, 0.6], [3, -6, 2, 0.4]],
+      [[-1, -3, 4, 0.8], [2, -5, 3, 0.55], [-3, -6, 2, 0.35]],
+      [[1, -2, 3, 0.65], [-2, -5, 3, 0.45], [3, -4, 2, 0.3]],
+    ][p];
+    for (const [dx, dy, s, a] of ph) {
+      ctx.fillStyle = 'rgba(240,244,240,' + a + ')';
+      ctx.fillRect(cx + dx, topY + dy, s, s);
+      ctx.fillStyle = 'rgba(255,255,255,' + (a * 0.7).toFixed(2) + ')';
+      ctx.fillRect(cx + dx, topY + dy, s, 1);
+    }
+  }
+
+  // ---- ground helpers ---------------------------------------------------------
 
   // ground plate filling the whole footprint (buildings must fill their cells)
   function baseSlab(ctx, W, H, base, light, dark) {
@@ -281,166 +402,176 @@
   }
 
   // ---- building drawers -------------------------------------------------------
-  // signature: (ctx, W, H, pal, f, side, rnd); W/H = footprint px (bib excluded)
+  // signature: (ctx, W, H, pal, f, side, rnd) with the origin at the FOOTPRINT
+  // top-left. W/H = footprint px. Structures may draw up into negative y
+  // (the yOff headroom) and down into the bib rows H..H+8.
 
-  function drawFact(ctx, W, H, pal, f, side, rnd) { // 72x48 — pad + swinging crane
+  function drawFact(ctx, W, H, pal, f, side, rnd) { // 72x48 +6 — hall + crane
     baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
-    // --- recessed construction pit (left) ---
-    P(ctx, 3, 7, 42, 38, '#54544d');
-    outlineRect(ctx, 2, 6, 44, 40);
-    P(ctx, 5, 10, 38, 33, '#454540');
-    P(ctx, 5, 10, 38, 1, '#31312c');           // recess: dark top/left
-    P(ctx, 5, 10, 1, 33, '#31312c');
-    P(ctx, 42, 11, 1, 32, '#60605a');          // lit bottom/right lip
-    P(ctx, 6, 42, 37, 1, '#60605a');
-    for (let x = 12; x < 42; x += 8) P(ctx, x, 11, 1, 31, '#3a3a35');
-    for (let y = 18; y < 42; y += 8) P(ctx, 6, y, 36, 1, '#3a3a35');
-    hazardH(ctx, 4, 7, 40, pal.haz);
-    // half-poured foundation slab with rebar stubs
-    P(ctx, 11, 17, 22, 12, CONC_D);
-    P(ctx, 11, 17, 22, 2, CONC);
-    P(ctx, 11, 17, 1, 12, CONC);
-    P(ctx, 31, 18, 2, 11, CONC_D2);
-    outlineRect(ctx, 10, 16, 24, 14);
-    P(ctx, 14, 21, 16, 1, '#3a3a35');
-    P(ctx, 22, 18, 1, 10, '#3a3a35');
-    for (let x = 14; x < 32; x += 5) { P(ctx, x, 15, 1, 3, '#5a4a1e'); P(ctx, x, 15, 1, 1, '#8a7130'); }
-    // girder pallet at south of pit
-    P(ctx, 10, 35, 14, 5, '#6a5a20');
-    P(ctx, 10, 35, 14, 1, '#8f7c30');
-    P(ctx, 10, 36, 14, 1, '#544716');
-    P(ctx, 10, 38, 14, 1, '#8f7c30');
-    outlineRect(ctx, 9, 34, 16, 7);
-    // --- HQ structure (right) ---
-    P(ctx, 48, 6, 23, 41, SH);
-    panel(ctx, 46, 3, 23, 42, pal.base, pal.light, pal.dark);
-    P(ctx, 48, 5, 19, 1, pal.light);
-    for (let y = 8; y < 16; y += 4) P(ctx, 48, y, 19, 1, pal.dark);
-    P(ctx, 47, 16, 21, 2, pal.trim);
-    P(ctx, 47, 18, 21, 1, pal.shadow);
-    winRow(ctx, 49, 22, 3, 6, f % 3);
-    // door with hazard lintel
-    hazardH(ctx, 51, 31, 12, pal.haz);
-    P(ctx, 52, 34, 10, 11, DOOR);
-    P(ctx, 52, 34, 10, 1, '#4a4a42');
-    for (let y = 37; y < 44; y += 3) P(ctx, 53, y, 8, 1, DOOR_D);
-    outlineRect(ctx, 51, 33, 12, 13);
-    // rooftop vent + aerial
-    P(ctx, 62, 7, 5, 4, pal.dark); outlineRect(ctx, 61, 6, 7, 6);
-    P(ctx, 63, 8, 3, 1, pal.shadow);
-    // --- crane mast + swinging boom ---
-    P(ctx, 41, 5, 4, 28, '#caa22a');
-    P(ctx, 41, 5, 1, 28, '#f0d060');
-    P(ctx, 44, 5, 1, 28, '#8a6e18');
-    for (let y = 9; y < 31; y += 5) P(ctx, 41, y, 4, 1, '#6e5814');
-    outlineRect(ctx, 40, 4, 6, 30);
-    const ends = [[12, 8], [16, 15], [21, 22], [16, 15]];
+    const m = mats(pal);
+    // --- open construction pit (ground level, west) ---
+    P(ctx, 3, 10, 22, 34, '#45453f');
+    P(ctx, 3, 10, 22, 1, '#2c2c27'); P(ctx, 3, 10, 1, 34, '#2c2c27');
+    P(ctx, 24, 11, 1, 33, '#5f5f57'); P(ctx, 4, 43, 21, 1, '#5f5f57');
+    outlineRect(ctx, 2, 9, 24, 36);
+    for (let y = 18; y < 43; y += 8) P(ctx, 4, y, 20, 1, '#3a3a35');
+    for (let x = 10; x < 24; x += 7) P(ctx, x, 11, 1, 32, '#3a3a35');
+    hazardH(ctx, 3, 6, 22, pal.haz);
+    // half-poured foundation + rebar stubs
+    P(ctx, 7, 17, 14, 9, CONC_D);
+    P(ctx, 7, 17, 14, 2, CONC);
+    outlineRect(ctx, 6, 16, 16, 11);
+    for (let x = 9; x < 20; x += 4) { P(ctx, x, 14, 1, 3, '#5a4a1e'); P(ctx, x, 14, 1, 1, '#8a7130'); }
+    // girder pallet
+    P(ctx, 8, 34, 13, 4, '#6a5a20'); P(ctx, 8, 34, 13, 1, '#8f7c30');
+    outlineRect(ctx, 7, 33, 15, 6);
+    // --- main hall (east): roof + south facade ---
+    box3(ctx, 28, -4, 41, 32, 14, m);
+    for (let y = 2; y < 26; y += 6) P(ctx, 30, y, 37, 1, pal.dark);
+    P(ctx, 32, 4, 10, 5, GLASS); P(ctx, 32, 4, 10, 1, GLASS_L);
+    P(ctx, 36, 5, 1, 4, '#101c26');
+    outlineRect(ctx, 31, 3, 12, 7);
+    roofBox(ctx, 56, 8, 8, 3, 3, m);              // roof vent housing
+    P(ctx, 57, 9, 6, 1, pal.shadow);
+    P(ctx, 47, 14, 4, 4, pal.dark); outlineRect(ctx, 46, 13, 6, 6); // hatch
+    // facade: big roll-up door + hazard lintel + windows + lamp
+    hazardH(ctx, 39, 29, 22, pal.haz);
+    rollDoor(ctx, 41, 32, 18, 9);
+    faceWin(ctx, 31, 31, 2, 5, f % 2);
+    pDoor(ctx, 62, 34, 5, 7);
+    P(ctx, 49, 30, 2, 1, (f % 2) ? PAL.uiGreen : '#1e4a22');
+    // --- crane mast (west of the hall, standing at the pit rim) ---
+    ctx.fillStyle = SH; ctx.fillRect(29, -3, 2, 19);
+    P(ctx, 25, -6, 4, 22, '#caa22a');
+    P(ctx, 25, -6, 1, 22, '#f0d060');
+    P(ctx, 28, -6, 1, 22, '#8a6e18');
+    for (let y = -3; y < 15; y += 4) P(ctx, 25, y, 4, 1, '#6e5814');
+    outlineRect(ctx, 24, -7, 6, 24);
+    // mast base plate on the pit rim
+    P(ctx, 23, 15, 8, 3, CONC_D); P(ctx, 23, 15, 8, 1, CONC);
+    outlineRect(ctx, 22, 14, 10, 5);
+    // swinging boom + cable + hook (4 frames)
+    const ends = [[7, -2], [11, 6], [15, 14], [11, 6]];
     const e = ends[f % 4];
-    beam(ctx, e[0], e[1], 41, 7, '#e8c040', '#8a6e18');
-    // cable + hook + carried girder
-    const cl = [9, 12, 15, 12][f % 4];
+    beam(ctx, e[0], e[1], 26, -5, '#e8c040', '#8a6e18');
+    const cl = [11, 13, 16, 13][f % 4];
     P(ctx, e[0] + 1, e[1] + 2, 1, cl, '#151512');
     P(ctx, e[0] - 1, e[1] + 2 + cl, 5, 3, '#8a8a90');
     P(ctx, e[0] - 1, e[1] + 2 + cl, 5, 1, '#b8b8c0');
     outlineRect(ctx, e[0] - 2, e[1] + 1 + cl, 7, 5);
     if ((f % 4) === 2) { P(ctx, e[0] - 4, e[1] + 7 + cl, 11, 2, IRON_L); outlineRect(ctx, e[0] - 5, e[1] + 6 + cl, 13, 4); }
     // blinking warning light on mast top
-    P(ctx, 42, 2, 2, 2, (f % 2) ? '#ff5030' : '#571b12');
-    if (f % 2) { ctx.fillStyle = 'rgba(255,80,48,0.25)'; ctx.fillRect(40, 0, 6, 5); }
+    P(ctx, 26, -8, 2, 2, (f % 2) ? '#ff5030' : '#571b12');
+    if (f % 2) { ctx.fillStyle = 'rgba(255,80,48,0.25)'; ctx.fillRect(24, -10, 6, 5); }
   }
 
-  function drawNukePlant(ctx, W, H, pal, f, side, rnd, adv) { // 48x48 — cooling stacks
+  function drawNukePlant(ctx, W, H, pal, f, side, rnd, adv) { // 48x48 +10 — stacks
     baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
-    // turbine hall (south)
-    P(ctx, 6, 32, 40, 14, SH);
-    panel(ctx, 4, 29, 40, 15, pal.base, pal.light, pal.dark);
-    for (let y = 32; y < 36; y += 3) P(ctx, 6, y, 36, 1, pal.dark);
-    P(ctx, 5, 36, 38, 2, pal.trim);
-    P(ctx, 5, 38, 38, 1, pal.shadow);
-    // door + hazard
-    hazardH(ctx, 19, 38, 10, pal.haz);
-    P(ctx, 20, 40, 8, 4, DOOR);
-    outlineRect(ctx, 19, 39, 10, 5);
-    // transformer coil (left corner) + cables to stacks
-    P(ctx, 6, 40, 6, 4, IRON); P(ctx, 6, 40, 6, 1, IRON_L);
-    outlineRect(ctx, 5, 39, 8, 6);
-    P(ctx, 7, 41, 1, 2, adv ? '#f0e060' : pal.trim2); P(ctx, 10, 41, 1, 2, adv ? '#f0e060' : pal.trim2);
-    P(ctx, 13, 25, 1, 5, '#22221e'); P(ctx, 34, 25, 1, 5, '#22221e');
-    // cooling stacks
-    stack(ctx, 14, 15, 9, adv);
-    stack(ctx, 34, 15, 9, adv);
-    if (adv) stack(ctx, 24, 23, 5, true);
-    // steam (3-phase wisps)
-    steam3(ctx, 14, 10, f % 3);
-    steam3(ctx, 34, 10, (f + 1) % 3);
-    if (adv) steam3(ctx, 24, 19, (f + 2) % 3);
-    // status light
-    P(ctx, 40, 33, 2, 2, (f % 3 === 0) ? PAL.uiGreen : '#1e4a22');
-  }
-
-  function drawProc(ctx, W, H, pal, f, side, rnd) { // 72x48 — tank + cycling dock arm
-    baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
-    // --- processing hall (right) ---
-    P(ctx, 46, 7, 25, 27, SH);
-    panel(ctx, 44, 4, 25, 27, pal.base, pal.light, pal.dark);
-    P(ctx, 46, 6, 21, 1, pal.light);
-    for (let y = 9; y < 16; y += 3) P(ctx, 46, y, 21, 1, pal.dark);
-    P(ctx, 45, 16, 23, 2, pal.trim);
-    P(ctx, 45, 18, 23, 1, pal.shadow);
-    winRow(ctx, 48, 21, 3, 7, f % 3);
-    // rooftop vent
-    P(ctx, 60, 8, 6, 5, pal.dark); outlineRect(ctx, 59, 7, 8, 7);
-    P(ctx, 61, 9, 4, 1, pal.shadow);
-    // --- pipe gantry hall -> tank ---
-    P(ctx, 31, 10, 14, 1, OUT);
-    P(ctx, 31, 11, 14, 2, STEEL); P(ctx, 31, 11, 14, 1, STEEL_L);
-    P(ctx, 31, 13, 14, 1, STEEL_D);
-    P(ctx, 31, 14, 14, 1, OUT);
-    P(ctx, 34, 10, 1, 6, IRON_D); P(ctx, 41, 10, 1, 6, IRON_D);
-    // --- tiberium storage tank (left, top-down) ---
-    circleFill(ctx, 20, 19, 14, SH);
-    circleFill(ctx, 18, 17, 14, OUT);
-    circleFill(ctx, 18, 17, 13, pal.dark);
-    circleFill(ctx, 17, 16, 12, pal.base);
-    circleFill(ctx, 15, 14, 7, pal.light);
-    circleFill(ctx, 18, 17, 8, pal.dark);
-    circleFill(ctx, 18, 17, 6, '#0e2010');
-    circleFill(ctx, 17, 16, 5, PAL.tibDark);
-    circleFill(ctx, 17, 16, 3, PAL.tib1);
-    P(ctx, 16, 15, 3, 2, PAL.tib2);
-    if (f === 1 || f === 3) { P(ctx, 16, 15, 2, 1, PAL.tib3); ctx.fillStyle = 'rgba(72,216,88,0.18)'; ctx.fillRect(11, 10, 14, 14); }
-    for (let i = 0; i < 8; i++) {
-      const a = i / 8 * Math.PI * 2 + 0.39;
-      P(ctx, Math.round(18 + Math.cos(a) * 11), Math.round(17 + Math.sin(a) * 11), 1, 1, pal.shadow);
+    const m = mats(pal);
+    // cooling stacks (north, rising above the footprint) — cylinders
+    const wc = ['#d0d0c4', '#a8a89e', '#83837b', '#66665f'];
+    const cc = ['#b6b6ab', '#d4d4c8', '#7d7d74'];
+    cyl3(ctx, 13, -3, 8, 3, 16, wc, cc);
+    cyl3(ctx, 34, -3, 8, 3, 16, wc, cc);
+    // stack mouths
+    for (const cx of [13, 34]) {
+      ellipseFill(ctx, cx, -3, 5, 2, '#33332e');
+      ellipseFill(ctx, cx, -3, 3, 1, adv ? '#f0e060' : '#22221e');
+      if (adv) P(ctx, cx - 1, -3, 2, 1, '#fff8c0');
+      // trim ring on the wall
+      P(ctx, cx - 8, 4, 17, 1, adv ? pal.trim : '#8a8a80');
     }
-    // tank hatch
-    P(ctx, 23, 8, 4, 3, pal.light); outlineRect(ctx, 22, 7, 6, 5);
-    // --- dock pit (south-center cell) ---
+    if (adv) { // third small stack between
+      cyl3(ctx, 24, 5, 4, 2, 8, wc, cc);
+      ellipseFill(ctx, 24, 5, 2, 1, '#f0e060');
+    }
+    // steam wisps
+    steamUp(ctx, 13, -6, f % 3);
+    steamUp(ctx, 34, -6, (f + 1) % 3);
+    if (adv) steamUp(ctx, 24, 2, (f + 2) % 3);
+    // turbine hall (south): roof + facade
+    box3(ctx, 3, 16, 42, 14, 13, m);
+    for (let y = 19; y < 28; y += 4) P(ctx, 5, y, 38, 1, pal.dark);
+    P(ctx, 22, 17, 1, 12, pal.shadow);
+    roofBox(ctx, 36, 19, 6, 3, 2, m);            // roof machinery
+    // feed pipes stacks -> hall roof
+    for (const cx of [11, 32]) {
+      P(ctx, cx, 12, 3, 5, STEEL); P(ctx, cx, 12, 1, 5, STEEL_L);
+      P(ctx, cx + 3, 12, 1, 5, STEEL_D2);
+    }
+    // facade details: door + hazard, vent grilles, transformer, status light
+    hazardH(ctx, 18, 31, 12, pal.haz);
+    pDoor(ctx, 20, 34, 8, 8);
+    for (const vx of [8, 34]) {
+      P(ctx, vx - 1, 33, 8, 6, OUT);
+      P(ctx, vx, 34, 6, 4, pal.shadow);
+      P(ctx, vx, 34, 6, 1, '#2a2a24'); P(ctx, vx, 36, 6, 1, '#2a2a24');
+    }
+    P(ctx, 30, 33, 2, 2, (f % 3 === 0) ? PAL.uiGreen : '#1e4a22');
+    P(ctx, 39, 34, 1, 2, adv ? '#f0e060' : pal.trim2);
+    P(ctx, 41, 34, 1, 2, adv ? '#f0e060' : pal.trim2);
+  }
+
+  function drawProc(ctx, W, H, pal, f, side, rnd) { // 72x48 +6 — tank + dock
+    baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
+    const m = mats(pal);
+    // --- tiberium storage tank (west): big cylinder ---
+    const wc = [pal.light, pal.base, pal.dark, pal.shadow];
+    cyl3(ctx, 17, 1, 13, 5, 14, wc, [pal.base, pal.light, pal.shadow]);
+    // cap: glass viewport into the tiberium
+    ellipseFill(ctx, 17, 1, 8, 3, pal.shadow);
+    ellipseFill(ctx, 17, 1, 7, 2, '#0e2010');
+    ellipseFill(ctx, 16, 1, 5, 2, PAL.tibDark);
+    ellipseFill(ctx, 16, 0, 3, 1, PAL.tib1);
+    P(ctx, 15, 0, 2, 1, PAL.tib2);
+    if (f === 1 || f === 3) { P(ctx, 15, 0, 2, 1, PAL.tib3); ctx.fillStyle = 'rgba(72,216,88,0.16)'; ctx.fillRect(10, -3, 14, 8); }
+    // hatch on the cap + green drip stains down the south wall
+    P(ctx, 22, -3, 4, 2, pal.light); outlineRect(ctx, 21, -4, 6, 4);
+    ctx.fillStyle = 'rgba(24,120,36,0.4)';
+    ctx.fillRect(11, 8, 1, 7); ctx.fillRect(20, 9, 1, 6); ctx.fillRect(24, 8, 1, 5);
+    // --- processing hall (east): roof + facade ---
+    box3(ctx, 44, -4, 25, 22, 13, m);
+    for (let y = 0; y < 16; y += 5) P(ctx, 46, y, 21, 1, pal.dark);
+    P(ctx, 47, 2, 8, 4, GLASS); P(ctx, 47, 2, 8, 1, GLASS_L);
+    outlineRect(ctx, 46, 1, 10, 6);
+    roofBox(ctx, 60, 8, 6, 3, 2, m);
+    // facade: windows + vent + lamp
+    faceWin(ctx, 47, 21, 3, 7, f % 3);
+    P(ctx, 46, 26, 8, 3, pal.shadow); P(ctx, 46, 26, 8, 1, '#2a2a24');
+    outlineRect(ctx, 45, 25, 10, 5);
+    P(ctx, 64, 26, 2, 2, (f % 2) ? PAL.uiGreen : '#1e4a22');
+    // --- elevated pipe gantry tank -> hall ---
+    P(ctx, 31, 4, 14, 1, OUT);
+    P(ctx, 31, 5, 14, 2, STEEL); P(ctx, 31, 5, 14, 1, STEEL_L);
+    P(ctx, 31, 7, 14, 1, OUT);
+    P(ctx, 34, 8, 1, 6, IRON_D); P(ctx, 41, 8, 1, 6, IRON_D);
+    ctx.fillStyle = SH; ctx.fillRect(33, 14, 10, 2);
+    // --- dock pit (south-center cell, ground level) ---
     P(ctx, 26, 32, 20, 13, '#38382f');
     P(ctx, 26, 32, 20, 1, '#26261f');
     P(ctx, 26, 32, 1, 13, '#26261f');
     P(ctx, 45, 33, 1, 12, '#4c4c40');
     outlineRect(ctx, 25, 31, 22, 15);
     P(ctx, 29, 33, 1, 11, '#57574f'); P(ctx, 42, 33, 1, 11, '#57574f');
-    // guide chevron
     P(ctx, 34, 41, 4, 1, pal.haz); P(ctx, 33, 42, 2, 1, pal.haz); P(ctx, 37, 42, 2, 1, pal.haz);
-    // tiberium glow spill (pulses)
     ctx.fillStyle = 'rgba(72,216,88,' + [0.10, 0.18, 0.26, 0.18][f % 4] + ')';
     ctx.fillRect(27, 33, 18, 11);
-    // --- intake canopy arm (cycles down into the pit) ---
-    const ay = 23 + [0, 2, 4, 2][f % 4];
-    P(ctx, 30, ay + 9, 14, 2, SH);
-    P(ctx, 28, ay, 16, 8, pal.base);
-    P(ctx, 28, ay, 16, 1, pal.light);
-    P(ctx, 28, ay + 6, 16, 2, pal.dark);
-    outlineRect(ctx, 27, ay - 1, 18, 10);
-    hazardH(ctx, 29, ay + 1, 14, pal.haz);
+    // --- intake canopy arm (cycles down over the pit): tiny roof + face ---
+    const ay = 20 + [0, 2, 4, 2][f % 4];
+    ctx.fillStyle = SH; ctx.fillRect(30, ay + 10, 14, 2);
+    outlineRect(ctx, 26, ay - 1, 20, 10);
+    P(ctx, 27, ay, 18, 4, pal.base);
+    P(ctx, 27, ay, 18, 1, pal.light);
+    P(ctx, 27, ay + 3, 18, 1, pal.light);          // parapet
+    P(ctx, 27, ay + 4, 18, 4, pal.dark);           // canopy south face
+    P(ctx, 27, ay + 7, 18, 1, pal.shadow);
+    hazardH(ctx, 28, ay + 1, 16, pal.haz);
     for (let i = 0; i < 3; i++) {
       const ph = (i + f) % 3;
-      P(ctx, 30 + i * 5, ay + 4, 2, 2, ph === 0 ? PAL.tib3 : ph === 1 ? PAL.tib1 : '#1e4a22');
+      P(ctx, 29 + i * 6, ay + 5, 2, 2, ph === 0 ? PAL.tib3 : ph === 1 ? PAL.tib1 : '#1e4a22');
     }
     // tiberium spill crystals around the dock
-    const spill = [[27, 44], [30, 46], [34, 43], [38, 46], [42, 44], [45, 46], [32, 50], [40, 51], [25, 49], [36, 49]];
+    const spill = [[27, 46], [30, 49], [34, 46], [38, 50], [42, 47], [45, 49], [32, 52], [25, 51]];
     const tibCols = [PAL.tib1, PAL.tib2, PAL.tib3];
     for (let i = 0; i < spill.length; i++) {
       P(ctx, spill[i][0], spill[i][1], 2, 2, tibCols[i % 3]);
@@ -448,81 +579,69 @@
     }
   }
 
-  function drawSilo(ctx, W, H, pal, f, side, rnd) { // 48x24 — twin silver domes
+  function drawSilo(ctx, W, H, pal, f, side, rnd) { // 48x24 +6 — twin tank domes
     baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
-    P(ctx, 3, 14, 42, 8, pal.dark);
-    P(ctx, 3, 14, 42, 1, pal.base);
     // connecting pipe behind console
-    P(ctx, 19, 12, 10, 1, OUT); P(ctx, 19, 13, 10, 2, STEEL); P(ctx, 19, 13, 10, 1, STEEL_L);
-    P(ctx, 19, 15, 10, 1, OUT);
-    dome(ctx, 12, 21, 9, '#b4b4bc', '#e2e2e8', '#74747c');
-    dome(ctx, 35, 21, 9, '#b4b4bc', '#e2e2e8', '#74747c');
-    // fill-level stripe + moving gleam
-    siloStripe(ctx, 12, 21, 9);
-    siloStripe(ctx, 35, 21, 9);
-    P(ctx, 8 - f, 15, 2, 1, '#f6f6fa');
-    P(ctx, 31 - f, 15, 2, 1, '#f6f6fa');
-    // rivet seam down each dome
-    P(ctx, 12, 13, 1, 3, '#8e8e96'); P(ctx, 35, 13, 1, 3, '#8e8e96');
-    // console between domes
-    P(ctx, 21, 16, 6, 6, pal.base);
-    P(ctx, 21, 16, 6, 1, pal.light);
-    outlineRect(ctx, 20, 15, 8, 8);
+    P(ctx, 19, 9, 10, 1, OUT); P(ctx, 19, 10, 10, 2, STEEL); P(ctx, 19, 10, 10, 1, STEEL_L);
+    P(ctx, 19, 12, 10, 1, OUT);
+    const wc = ['#e0e0e6', '#b4b4bc', '#8e8e96', '#6e6e76'];
+    for (const cx of [12, 35]) {
+      // drum wall + silver dome cap
+      cyl3(ctx, cx, 2, 9, 3, 12, wc, ['#b4b4bc', '#d8d8de', '#74747c']);
+      dome3(ctx, cx, 2, 9, { top: '#c6c6ce', topL: '#eef0f4', face: '#9a9aa4', dark: '#6e6e76' });
+      // fill-level gauge band on the south wall (+ moving gleam)
+      P(ctx, cx - 6, 8, 13, 1, PAL.tibDark);
+      P(ctx, cx - 6, 9, 9, 1, PAL.tib2);
+      P(ctx, cx - 6 + (f ? 5 : 2), 9, 2, 1, PAL.tib3);
+      // seam rivets down the wall
+      P(ctx, cx, 11, 1, 4, '#8e8e96');
+    }
+    // console between domes: mini roof + face
+    outlineRect(ctx, 20, 12, 8, 10);
+    P(ctx, 21, 13, 6, 3, pal.base); P(ctx, 21, 13, 6, 1, pal.light);
+    P(ctx, 21, 15, 6, 1, pal.light);
+    P(ctx, 21, 16, 6, 5, pal.dark);
+    P(ctx, 21, 20, 6, 1, pal.shadow);
     P(ctx, 22, 17, 2, 2, f ? PAL.uiGreen : '#1e4a22');
     P(ctx, 25, 17, 1, 2, PAL.tib1);
   }
-  function siloStripe(ctx, cx, baseY, r) { // fill-level gauge band
-    for (let k = 0; k < 2; k++) {
-      const dy = 4 + k;
-      const hw = Math.floor(Math.sqrt(r * r - dy * dy));
-      P(ctx, cx - hw, baseY - dy, hw * 2 + 1, 1, k ? PAL.tib2 : PAL.tibDark);
-    }
-  }
 
-  function hut(ctx, x, y, w, h, pal, f) { // olive quonset hut, corrugated
-    P(ctx, x + 2, y + 2, w, h, SH);
-    outlineRect(ctx, x - 1, y - 1, w + 2, h + 2);
-    P(ctx, x, y, w, h, OLV);
-    P(ctx, x, y, w, 2, OLV_L);
-    P(ctx, x, y + 2, w, 1, '#8a955a');
-    P(ctx, x, y + h - 4, w, 4, OLV_D);
-    P(ctx, x, y + h - 1, w, 1, OLV_D2);
-    for (let i = x + 4; i < x + w - 8; i += 4) {
-      P(ctx, i, y, 1, h, 'rgba(18,22,10,0.4)');
-      P(ctx, i + 1, y + 1, 1, h - 2, 'rgba(160,180,110,0.25)');
-    }
-    // end door with hazard lintel
-    hazardH(ctx, x + w - 8, y + 1, 7, pal.haz);
-    P(ctx, x + w - 7, y + 3, 6, h - 5, OLV_D);
-    P(ctx, x + w - 6, y + 4, 4, h - 7, '#20250f');
-    P(ctx, x + w - 6, y + 4, 4, 1, '#31371a');
-    // window slit
-    P(ctx, x + 2, y + Math.floor(h / 2), 3, 2, GLASS);
-    P(ctx, x + 2, y + Math.floor(h / 2), 3, 1, GLASS_L);
-  }
-
-  function drawPyle(ctx, W, H, pal, f, side, rnd) { // 48x48 — barracks huts + flag
+  function drawPyle(ctx, W, H, pal, f, side, rnd) { // 48x48 +4 — barracks huts
     baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
-    hut(ctx, 4, 5, 38, 15, pal, f);
-    hut(ctx, 4, 26, 31, 15, pal, f);
-    // sandbag arc by lower hut door
+    const HI = '#98a562';
+    // rear hut (long) — south wall with door + windows
+    hutEW(ctx, 5, -3, 40, 7, 10, HI);
+    hazardH(ctx, 10, 5, 8, pal.haz);
+    pDoor(ctx, 12, 8, 5, 5);
+    P(ctx, 22, 8, 3, 3, GLASS); P(ctx, 22, 8, 3, 1, GLASS_L);
+    P(ctx, 30, 8, 3, 3, f ? WIN_LIT : GLASS); P(ctx, 30, 8, 3, 1, f ? WIN_LIT_HI : GLASS_L);
+    P(ctx, 37, 8, 3, 3, GLASS); P(ctx, 37, 8, 3, 1, GLASS_L);
+    // front hut — bigger door, hazard lintel, windows
+    hutEW(ctx, 3, 23, 42, 8, 11, HI);
+    hazardH(ctx, 18, 32, 12, pal.haz);
+    pDoor(ctx, 21, 35, 7, 6);
+    faceWin(ctx, 9, 35, 2, 5, f % 2);
+    faceWin(ctx, 33, 35, 2, 5, (f + 1) % 2);
+    // roof vent stacks on both ridges
+    for (const [vx, vy] of [[13, -1], [33, -1], [11, 25], [35, 25]]) {
+      P(ctx, vx, vy, 3, 2, OLV_D); P(ctx, vx, vy, 3, 1, HI);
+      outlineRect(ctx, vx - 1, vy - 1, 5, 4);
+    }
+    // flag pole in the yard between the huts (flutter anim)
+    P(ctx, 40, 9, 1, 13, '#d8d8d0');
+    P(ctx, 40, 8, 1, 1, '#ffffff');
+    if (f) { P(ctx, 41, 9, 5, 3, pal.trim); P(ctx, 41, 12, 3, 1, pal.trim); P(ctx, 45, 10, 1, 1, pal.trim2); }
+    else { P(ctx, 41, 10, 4, 3, pal.trim); P(ctx, 44, 11, 2, 1, pal.trim2); }
+    ctx.fillStyle = SH; ctx.fillRect(41, 21, 3, 1);
+    // sandbags + crates in the yard
     const SB = '#b3a06a', SBD = '#7e6f45';
-    P(ctx, 25, 43, 10, 2, SB); P(ctx, 25, 43, 10, 1, '#cbbc85');
-    P(ctx, 28, 42, 4, 1, SB);
-    P(ctx, 27, 44, 1, 1, SBD); P(ctx, 31, 43, 1, 2, SBD);
-    outlineRect(ctx, 24, 42, 12, 4);
-    // flag pole (flutter anim)
-    P(ctx, 41, 23, 1, 17, '#d8d8d0');
-    P(ctx, 41, 22, 1, 1, '#ffffff');
-    if (f) { P(ctx, 42, 23, 5, 3, pal.trim); P(ctx, 42, 26, 3, 1, pal.trim); P(ctx, 46, 24, 1, 1, pal.trim2); }
-    else { P(ctx, 42, 24, 4, 3, pal.trim); P(ctx, 45, 25, 2, 1, pal.trim2); }
-    // crates
-    P(ctx, 38, 34, 7, 7, '#8a7444');
-    outlineRect(ctx, 38, 34, 7, 7);
-    P(ctx, 39, 35, 5, 1, '#a89058');
-    P(ctx, 41, 35, 1, 5, '#6e5c30');
-    P(ctx, 37, 39, 5, 4, '#7c6838');
-    outlineRect(ctx, 37, 39, 5, 4);
+    P(ctx, 4, 17, 10, 2, SB); P(ctx, 4, 17, 10, 1, '#cbbc85');
+    P(ctx, 7, 16, 4, 1, SB);
+    P(ctx, 6, 18, 1, 1, SBD); P(ctx, 10, 17, 1, 2, SBD);
+    outlineRect(ctx, 3, 16, 12, 4);
+    P(ctx, 25, 15, 6, 5, '#8a7444'); outlineRect(ctx, 25, 15, 6, 5);
+    P(ctx, 26, 16, 4, 1, '#a89058'); P(ctx, 28, 16, 1, 3, '#6e5c30');
+    P(ctx, 32, 17, 4, 3, '#7c6838'); outlineRect(ctx, 32, 17, 4, 3);
   }
 
   const HAND_EMBLEM = [
@@ -537,140 +656,131 @@
     '..rrr..',
   ];
 
-  function drawHand(ctx, W, H, pal, f, side, rnd) { // 48x48 — dark sloped monolith
+  function drawHand(ctx, W, H, pal, f, side, rnd) { // 48x48 +6 — black block
     baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
-    P(ctx, 9, 24, 38, 22, SH);
-    for (let x = 6; x < 42; x++) {
-      const top = 24 - Math.floor((x - 6) * 0.45);
-      P(ctx, x, top - 1, 1, 1, OUT);
-      P(ctx, x, top, 1, 44 - top, pal.blackB);
-      P(ctx, x, top, 1, 1, '#4e4e5c');           // lit ridge
-      P(ctx, x, top + 1, 1, 1, pal.blackC);
-      if ((x & 3) === 0) P(ctx, x, top + 3, 1, 40 - top, 'rgba(10,10,14,0.30)');
+    const dm = { roof: pal.blackC, roofL: '#5a5a68', roofD: pal.blackA, para: '#6a6a7c',
+                 face: pal.blackB, faceL: pal.blackC, faceD: '#1a1a20' };
+    box3(ctx, 4, -6, 40, 26, 22, dm);
+    // roof: red chevron stripe + panel seams + intake
+    for (let y = -2; y < 18; y += 5) P(ctx, 6, y, 36, 1, pal.blackA);
+    for (let i = 0; i < 7; i++) P(ctx, 12 + i * 3, 6 - (i % 2), 2, 2, pal.trim);
+    roofBox(ctx, 32, 10, 8, 3, 3, dm);
+    P(ctx, 33, 11, 6, 1, '#15151a');
+    // roof edge pylon fins (north corners)
+    for (const px of [6, 38]) {
+      P(ctx, px, -9, 3, 5, pal.blackB);
+      P(ctx, px, -9, 1, 5, '#50505e');
+      outlineRect(ctx, px - 1, -10, 5, 7);
+      P(ctx, px + 1, -11, 1, 1, pal.trim2);
     }
-    P(ctx, 5, 22, 1, 23, OUT);
-    P(ctx, 42, 7, 1, 38, OUT);
-    P(ctx, 6, 44, 36, 1, OUT);
-    // red trim chevron along the slope
-    for (let x = 8; x < 40; x += 4) {
-      const top = 24 - Math.floor((x - 6) * 0.45);
-      P(ctx, x, top + 3, 2, 1, pal.trim);
-    }
-    // base band
-    P(ctx, 6, 35, 36, 9, pal.blackA);
-    P(ctx, 6, 35, 36, 1, '#15151b');
-    // emblem panel + hand
-    P(ctx, 21, 18, 15, 18, '#121217');
-    outlineRect(ctx, 20, 17, 17, 20, '#000000');
-    P(ctx, 21, 18, 15, 1, '#2a2a34');
-    blit(ctx, 25, 22, HAND_EMBLEM, { r: pal.trim2, R: '#ff8a70' });
-    // door with red hazard
-    hazardH(ctx, 7, 34, 10, pal.haz);
-    P(ctx, 8, 36, 8, 8, '#101014');
-    P(ctx, 8, 36, 8, 1, '#26262e');
-    outlineRect(ctx, 7, 35, 10, 9);
-    // beacon at apex
-    P(ctx, 40, 5, 2, 2, f ? pal.trim2 : '#401410');
-    if (f) { ctx.fillStyle = 'rgba(224,80,56,0.22)'; ctx.fillRect(38, 3, 6, 6); }
+    // facade: red trim band under the parapet + emblem panel + door
+    P(ctx, 5, 21, 38, 2, pal.trim);
+    P(ctx, 5, 23, 38, 1, '#601812');
+    P(ctx, 17, 25, 15, 14, '#121217');
+    outlineRect(ctx, 16, 24, 17, 16, '#000000');
+    P(ctx, 17, 25, 15, 1, '#2a2a34');
+    blit(ctx, 21, 27, HAND_EMBLEM, { r: pal.trim2, R: '#ff8a70' });
+    // buttress grooves
+    for (const bx of [10, 38]) P(ctx, bx, 24, 1, 16, '#1c1c22');
+    // door with red hazard + slit windows
+    hazardH(ctx, 6, 31, 9, pal.haz);
+    pDoor(ctx, 7, 34, 7, 8);
+    P(ctx, 36, 30, 2, 3, f ? '#c83422' : '#5c1812');
+    P(ctx, 40, 30, 2, 3, f ? '#5c1812' : '#c83422');
+    // beacon at the roof's south edge
+    P(ctx, 23, 16, 2, 2, f ? pal.trim2 : '#401410');
+    if (f) { ctx.fillStyle = 'rgba(224,80,56,0.22)'; ctx.fillRect(21, 14, 6, 6); }
   }
 
-  function drawWeap(ctx, W, H, pal, f, side, rnd) { // 72x48 — hall + welding door
+  function drawWeap(ctx, W, H, pal, f, side, rnd) { // 72x48 +6 — high-bay hall
     baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
-    P(ctx, 6, 8, 66, 39, SH);
-    panel(ctx, 3, 4, 66, 41, pal.base, pal.light, pal.dark);
-    // roof: three big panels with seams + skylight
-    P(ctx, 5, 6, 62, 1, pal.light);
-    for (let y = 9, i = 0; y < 21; y += 4, i++) P(ctx, 5, y, 62, 1, pal.dark);
-    P(ctx, 25, 7, 1, 15, pal.shadow); P(ctx, 47, 7, 1, 15, pal.shadow);
-    P(ctx, 8, 9, 12, 4, GLASS); P(ctx, 8, 9, 12, 1, GLASS_L);
-    P(ctx, 12, 10, 1, 3, '#101c26'); P(ctx, 16, 10, 1, 3, '#101c26');
-    outlineRect(ctx, 7, 8, 14, 6);
-    // roof vents
-    P(ctx, 52, 9, 8, 5, pal.dark); outlineRect(ctx, 51, 8, 10, 7);
-    P(ctx, 53, 10, 6, 1, pal.shadow); P(ctx, 53, 12, 6, 1, pal.shadow);
-    // trim band
-    P(ctx, 4, 22, 64, 2, pal.trim);
-    P(ctx, 4, 24, 64, 1, pal.shadow);
-    // face + roller door
-    hazardV(ctx, 21, 27, 17, pal.haz);
-    hazardV(ctx, 49, 27, 17, pal.haz);
-    P(ctx, 24, 26, 24, 15, '#9a9a92');
-    P(ctx, 24, 26, 24, 1, '#c0c0b8');
-    for (let y = 29; y < 40; y += 3) P(ctx, 24, y, 24, 1, '#6e6e68');
-    P(ctx, 46, 27, 2, 13, '#7c7c74');
-    outlineRect(ctx, 23, 25, 26, 19);
-    // door raised: dark interior gap with welding flashes
-    P(ctx, 24, 40, 24, 3, '#141418');
-    if (f === 1) { P(ctx, 30, 40, 2, 2, '#e8f6ff'); P(ctx, 29, 41, 4, 1, '#8ec8f0'); ctx.fillStyle = 'rgba(160,220,255,0.35)'; ctx.fillRect(27, 38, 8, 5); }
-    if (f === 3) { P(ctx, 41, 41, 2, 2, '#e8f6ff'); P(ctx, 40, 41, 4, 1, '#8ec8f0'); ctx.fillStyle = 'rgba(160,220,255,0.35)'; ctx.fillRect(38, 39, 8, 5); }
-    // door status lamp
-    P(ctx, 35, 27, 2, 1, (f % 2) ? PAL.uiGreen : '#1e4a22');
-    // face windows
-    winRow(ctx, 8, 30, 2, 7, f % 2);
-    winRow(ctx, 55, 30, 2, 7, (f + 1) % 2);
-    // service door right
-    P(ctx, 58, 37, 6, 7, DOOR); outlineRect(ctx, 57, 36, 8, 9);
-    // roof beacon (blink)
-    P(ctx, 62, 8, 3, 3, (f % 2) ? PAL.fire1 : '#5c2014');
-    outlineRect(ctx, 61, 7, 5, 5);
+    const m = mats(pal);
+    box3(ctx, 3, -6, 66, 30, 18, m);
+    // roof: three big panels + skylight + vents + beacon
+    P(ctx, 25, -5, 1, 28, pal.shadow); P(ctx, 47, -5, 1, 28, pal.shadow);
+    for (let y = -2, i = 0; y < 20; y += 5, i++) P(ctx, 5, y, 62, 1, pal.dark);
+    P(ctx, 8, 0, 12, 4, GLASS); P(ctx, 8, 0, 12, 1, GLASS_L);
+    P(ctx, 12, 1, 1, 3, '#101c26'); P(ctx, 16, 1, 1, 3, '#101c26');
+    outlineRect(ctx, 7, -1, 14, 6);
+    roofBox(ctx, 52, 0, 10, 4, 3, m);
+    P(ctx, 53, 1, 8, 1, pal.shadow); P(ctx, 53, 3, 8, 1, pal.shadow);
+    P(ctx, 30, 0, 10, 4, GLASS); P(ctx, 30, 0, 10, 1, GLASS_L);
+    P(ctx, 34, 1, 1, 3, '#101c26');
+    outlineRect(ctx, 29, -1, 12, 6);
+    roofBox(ctx, 31, 10, 7, 3, 3, m);
+    P(ctx, 64, -4, 3, 3, (f % 2) ? PAL.fire1 : '#5c2014');
+    outlineRect(ctx, 63, -5, 5, 5);
+    // facade: giant roller door with raised gap + welding flashes
+    hazardV(ctx, 20, 26, 15, pal.haz);
+    hazardV(ctx, 50, 26, 15, pal.haz);
+    rollDoor(ctx, 24, 26, 24, 12);
+    P(ctx, 24, 38, 24, 3, '#141418');                       // raised-door gap
+    P(ctx, 23, 37, 26, 1, OUT);
+    P(ctx, 24, 41, 24, 1, OUT);
+    if (f === 1) { P(ctx, 30, 38, 2, 2, '#e8f6ff'); P(ctx, 29, 39, 4, 1, '#8ec8f0'); ctx.fillStyle = 'rgba(160,220,255,0.35)'; ctx.fillRect(27, 36, 8, 5); }
+    if (f === 3) { P(ctx, 41, 39, 2, 2, '#e8f6ff'); P(ctx, 40, 39, 4, 1, '#8ec8f0'); ctx.fillStyle = 'rgba(160,220,255,0.35)'; ctx.fillRect(38, 37, 8, 5); }
+    P(ctx, 35, 27, 2, 1, (f % 2) ? PAL.uiGreen : '#1e4a22'); // door status lamp
+    // facade windows + service door
+    faceWin(ctx, 7, 28, 2, 6, f % 2);
+    faceWin(ctx, 55, 28, 2, 6, (f + 1) % 2);
+    pDoor(ctx, 58, 35, 6, 7);
   }
 
-  function drawAfld(ctx, W, H, pal, f, side, rnd) { // 96x48 — runway, chase lights
+  function drawAfld(ctx, W, H, pal, f, side, rnd) { // 96x48 +6 — runway
     baseSlab(ctx, W, H, '#5a5a53', '#6b6b62', '#484841'); slabNoise(ctx, W, H, rnd);
-    // runway strip
-    P(ctx, 2, 19, 92, 24, ASPH);
-    P(ctx, 3, 20, 90, 1, ASPH_L);
+    const m = mats(pal);
+    // runway strip (flat ground)
+    P(ctx, 2, 20, 92, 23, ASPH);
+    P(ctx, 3, 21, 90, 1, ASPH_L);
     P(ctx, 3, 41, 90, 1, ASPH_D);
-    outlineRect(ctx, 1, 18, 94, 26);
-    // threshold bars
-    for (let i = 0; i < 5; i++) { P(ctx, 5, 22 + i * 4, 5, 2, '#c9c9c0'); P(ctx, 86, 22 + i * 4, 5, 2, '#c9c9c0'); }
-    // centerline dashes + tire marks
+    outlineRect(ctx, 1, 19, 94, 25);
+    for (let i = 0; i < 5; i++) { P(ctx, 5, 23 + i * 4, 5, 2, '#c9c9c0'); P(ctx, 86, 23 + i * 4, 5, 2, '#c9c9c0'); }
     for (let x = 15; x < 82; x += 10) P(ctx, x, 30, 6, 2, '#b9b9b0');
     ctx.fillStyle = 'rgba(12,12,10,0.35)';
-    for (let i = 0; i < 6; i++) ctx.fillRect((16 + rnd() * 60) | 0, (23 + rnd() * 15) | 0, 5, 1);
+    for (let i = 0; i < 6; i++) ctx.fillRect((16 + rnd() * 60) | 0, (24 + rnd() * 14) | 0, 5, 1);
     // landing lights (4-frame chase)
     for (let i = 0; i < 8; i++) {
       const on = (i + f) % 4 === 0;
       const gx = 14 + i * 10;
-      P(ctx, gx, 15, 2, 2, on ? '#ffd860' : '#4a3a14');
+      P(ctx, gx, 16, 2, 2, on ? '#ffd860' : '#4a3a14');
       P(ctx, gx, 45, 2, 2, ((i + f + 2) % 4 === 0) ? '#ffd860' : '#4a3a14');
-      if (on) { ctx.fillStyle = 'rgba(255,216,96,0.30)'; ctx.fillRect(gx - 1, 14, 4, 4); }
+      if (on) { ctx.fillStyle = 'rgba(255,216,96,0.30)'; ctx.fillRect(gx - 1, 15, 4, 4); }
     }
-    // control tower (top-left)
-    P(ctx, 6, 4, 18, 15, SH);
-    panel(ctx, 4, 1, 18, 16, pal.base, pal.light, pal.dark);
-    P(ctx, 6, 4, 14, 4, GLASS);
-    P(ctx, 6, 4, 14, 1, GLASS_L);
-    P(ctx, 9 + (f % 4), 6, 1, 1, GLASS_HI);
-    P(ctx, 5, 10, 16, 2, pal.trim);
-    P(ctx, 8, 13, 4, 3, DOOR);
-    P(ctx, 8, 0, 1, 2, '#2a2a26');
-    P(ctx, 19, 1, 2, 2, (f % 2) ? pal.trim2 : '#401410');
-    // fuel drums by the tower
+    // control tower (NW): roof + glassed cab facade
+    box3(ctx, 4, -6, 20, 9, 12, m);
+    P(ctx, 6, -4, 6, 5, pal.dark); outlineRect(ctx, 5, -5, 8, 7); // radar shed
+    P(ctx, 20, -6, 1, 3, '#2a2a26');
+    P(ctx, 19, -8, 3, 2, (f % 2) ? pal.trim2 : '#401410');
+    P(ctx, 6, 4, 16, 4, GLASS);                    // cab band on the facade
+    P(ctx, 6, 4, 16, 1, GLASS_L);
+    P(ctx, 9 + (f % 4) * 3, 6, 2, 1, GLASS_HI);
+    P(ctx, 11, 8, 1, 4, pal.shadow);
+    pDoor(ctx, 8, 10, 4, 4);
+    // fuel drums (small cylinders)
     for (let i = 0; i < 3; i++) {
-      circleFill(ctx, 28 + i * 6, 8, 2, OUT);
-      circleFill(ctx, 28 + i * 6, 8, 1, i === 1 ? pal.haz : STEEL_L);
+      cyl3(ctx, 30 + i * 7, 6, 2, 1, 5, ['#d8d8ce', STEEL, STEEL_D, STEEL_D2],
+           [i === 1 ? pal.haz : STEEL_L, '#e6e6dc', STEEL_D]);
     }
-    // hangar (top-right), arched corrugated roof
-    P(ctx, 64, 4, 30, 14, SH);
-    outlineRect(ctx, 61, 1, 32, 16);
-    P(ctx, 62, 2, 30, 14, pal.base);
-    P(ctx, 62, 2, 30, 2, pal.light);
-    P(ctx, 62, 4, 30, 1, pal.base);
-    P(ctx, 62, 12, 30, 4, pal.dark);
-    for (let x = 65; x < 90; x += 4) P(ctx, x, 2, 1, 14, 'rgba(20,20,16,0.35)');
-    P(ctx, 62, 6, 30, 1, pal.trim);
-    // hangar mouth
-    P(ctx, 66, 8, 22, 8, '#1c1c18');
-    P(ctx, 66, 8, 22, 1, '#3a3a32');
-    outlineRect(ctx, 65, 7, 24, 10);
     // windsock (4-position flutter)
-    P(ctx, 47, 2, 1, 14, '#3a3a34');
-    P(ctx, 47, 1, 1, 1, '#5c5c54');
-    const sock = [[48, 3, 7, 3], [48, 4, 6, 3], [48, 5, 5, 3], [48, 4, 6, 3]][f % 4];
+    P(ctx, 52, 0, 1, 15, '#3a3a34');
+    P(ctx, 52, -1, 1, 1, '#5c5c54');
+    const sock = [[53, 1, 7, 3], [53, 2, 6, 3], [53, 3, 5, 3], [53, 2, 6, 3]][f % 4];
     P(ctx, sock[0], sock[1], sock[2], sock[3], '#e07820');
     P(ctx, sock[0], sock[1], sock[2], 1, '#f8a850');
     P(ctx, sock[0] + sock[2] - 2, sock[1] + 1, 2, 1, '#f8f0e0');
+    // hangar (NE): arched roof with a dark south mouth
+    hut3(ctx, 61, -6, 31, 10, { hi: pal.light, mid: pal.base, dk: pal.dark, dk2: pal.shadow,
+                                face: pal.dark, faceD: pal.shadow });
+    P(ctx, 62, -3, 29, 1, pal.trim);
+    // mouth opening in the arch face
+    for (let dx = -9; dx <= 9; dx++) {
+      const e = Math.round(9 * Math.sqrt(Math.max(0, 1 - (dx * dx) / 81)));
+      if (e > 1) {
+        P(ctx, 76 + dx, 17 - e, 1, e, '#1c1c18');
+        P(ctx, 76 + dx, 17 - e, 1, 1, '#3a3a32');
+      }
+    }
+    P(ctx, 66, 16, 20, 1, OUT);
   }
 
   // radar dish, 8 rotation frames (N, NE, E, SE, S, SW, W, NW)
@@ -724,337 +834,386 @@
     }
   }
 
-  function drawHq(ctx, W, H, pal, f, side, rnd) { // 48x48 — bunker + rotating dish
+  function drawHq(ctx, W, H, pal, f, side, rnd) { // 48x48 +8 — bunker + dish
     baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
-    P(ctx, 6, 21, 40, 26, SH);
-    panel(ctx, 4, 18, 40, 27, pal.base, pal.light, pal.dark);
-    P(ctx, 6, 20, 36, 1, pal.light);
-    for (let y = 23; y < 27; y += 3) P(ctx, 6, y, 36, 1, pal.dark);
-    P(ctx, 5, 27, 38, 2, pal.trim);
-    P(ctx, 5, 29, 38, 1, pal.shadow);
-    winRow(ctx, 26, 32, 3, 6, f % 3);
-    // door with hazard
-    hazardH(ctx, 8, 32, 12, pal.haz);
-    P(ctx, 10, 34, 8, 10, DOOR);
-    P(ctx, 10, 34, 8, 1, '#4a4a42');
-    for (let y = 37; y < 43; y += 3) P(ctx, 11, y, 6, 1, DOOR_D);
-    outlineRect(ctx, 9, 33, 10, 11);
-    // antenna mast + blink
-    P(ctx, 40, 7, 1, 11, '#262622');
-    P(ctx, 38, 10, 5, 1, '#262622');
-    P(ctx, 39, 5, 3, 2, (f % 2) ? PAL.nodRedLight : '#5c2014');
-    // dish pedestal + rotating dish (8 frames)
-    P(ctx, 15, 14, 8, 6, SH);
-    P(ctx, 13, 12, 8, 7, pal.dark);
-    P(ctx, 13, 12, 8, 1, pal.base);
-    outlineRect(ctx, 12, 11, 10, 9);
-    P(ctx, 14, 13, 2, 2, pal.light);
-    drawDish(ctx, 17, 7, f % 8);
-    // cable dish -> bunker
-    P(ctx, 21, 18, 1, 2, '#22221e');
+    const m = mats(pal);
+    box3(ctx, 3, 4, 42, 24, 14, m);
+    // roof: seams + skylight + hatch
+    for (let y = 8; y < 26; y += 5) P(ctx, 5, y, 38, 1, pal.dark);
+    P(ctx, 28, 8, 9, 4, GLASS); P(ctx, 28, 8, 9, 1, GLASS_L);
+    outlineRect(ctx, 27, 7, 11, 6);
+    P(ctx, 30, 20, 5, 4, pal.dark); outlineRect(ctx, 29, 19, 7, 6);
+    // dish pedestal on the roof (own face + shadow) + rotating dish above
+    roofBox(ctx, 10, 8, 12, 6, 5, m);
+    P(ctx, 12, 15, 2, 2, pal.light);
+    ellipseFill(ctx, 19, 9, 7, 2, SH);                       // dish shadow
+    P(ctx, 15, 4, 2, 4, IRON); P(ctx, 15, 4, 1, 4, IRON_L); // mast
+    drawDish(ctx, 16, 0, f % 8);
+    // antenna mast (east roof) + blink
+    P(ctx, 39, -4, 1, 11, '#262622');
+    P(ctx, 37, -1, 5, 1, '#262622');
+    P(ctx, 38, -6, 3, 2, (f % 2) ? PAL.nodRedLight : '#5c2014');
+    // facade: hazard door + windows + comms panel
+    hazardH(ctx, 7, 30, 12, pal.haz);
+    pDoor(ctx, 9, 33, 8, 9);
+    faceWin(ctx, 25, 32, 3, 6, f % 3);
+    P(ctx, 38, 32, 4, 6, IRON); P(ctx, 38, 32, 4, 1, IRON_L);
+    outlineRect(ctx, 37, 31, 6, 8);
+    P(ctx, 39, 34, 2, 1, (f % 2) ? PAL.uiGreen : '#1e4a22');
   }
 
-  function drawEye(ctx, W, H, pal, f, side, rnd) { // 48x48 — dome + scanner glint
+  function drawEye(ctx, W, H, pal, f, side, rnd) { // 48x48 +8 — dome tower
     baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
-    // bunker
-    P(ctx, 6, 29, 40, 18, SH);
-    panel(ctx, 4, 26, 40, 19, pal.base, pal.light, pal.dark);
-    P(ctx, 5, 30, 38, 2, pal.trim);
-    P(ctx, 5, 32, 38, 1, pal.shadow);
-    winRow(ctx, 8, 36, 2, 7, f % 2);
-    hazardH(ctx, 30, 32, 12, pal.haz);
-    P(ctx, 32, 34, 8, 10, DOOR);
-    P(ctx, 32, 34, 8, 1, '#4a4a42');
-    outlineRect(ctx, 31, 33, 10, 11);
-    // geodesic ball
-    circleFill(ctx, 20, 18, 12, SH);
-    ball(ctx, 18, 15, 12, '#dededa', '#f4f4f0', '#a2a29c');
+    const m = mats(pal);
+    box3(ctx, 3, 14, 42, 14, 14, m);
+    // roof seams + machinery
+    for (let y = 18; y < 26; y += 4) P(ctx, 5, y, 38, 1, pal.dark);
+    roofBox(ctx, 34, 17, 7, 3, 3, m);
+    // support drum + geodesic ball rising over the roof
+    cyl3(ctx, 18, 12, 8, 3, 4, [pal.light, pal.base, pal.dark, pal.shadow],
+         [pal.base, pal.light, pal.shadow]);
+    ellipseFill(ctx, 21, 16, 10, 3, SH);            // ball shadow on the roof
+    circleFill(ctx, 18, 3, 11, OUT);
+    circleFill(ctx, 18, 3, 10, '#dededa');
+    for (let dy = -10; dy <= 10; dy++) {            // east shade
+      const hw = Math.floor(Math.sqrt(100 - dy * dy) + 0.5);
+      const w = dy > 0 ? 3 : 2;
+      if (hw > w) P(ctx, 18 + hw - w, 3 + dy, w, 1, '#a2a29c');
+    }
+    for (let dy = 5; dy <= 10; dy++) {              // south face mid-shade
+      const hw = Math.floor(Math.sqrt(100 - dy * dy) + 0.5);
+      P(ctx, 18 - hw, 3 + dy, hw * 2 - 2, 1, '#c2c2bc');
+    }
+    circleFill(ctx, 14, -1, 3, '#f4f4f0');          // NW glint
+    // geodesic lines
     ctx.fillStyle = 'rgba(88,88,84,0.5)';
-    ctx.fillRect(8, 11, 21, 1); ctx.fillRect(6, 15, 25, 1); ctx.fillRect(8, 19, 21, 1);
-    for (let x = 9; x < 28; x += 4) { ctx.fillRect(x, 13, 1, 1); ctx.fillRect(x + 2, 17, 1, 1); ctx.fillRect(x, 21, 1, 1); }
-    // equator sensor slit with a slow scanner glint running along it
-    P(ctx, 9, 14, 19, 2, '#2e3e4a');
-    P(ctx, 9, 14, 19, 1, '#22303a');
-    const sx = 10 + (f % 4) * 5;
-    P(ctx, sx, 14, 3, 2, GLASS_HI);
-    P(ctx, sx + 1, 14, 1, 2, '#ffffff');
+    ctx.fillRect(10, -1, 17, 1); ctx.fillRect(8, 3, 21, 1); ctx.fillRect(10, 7, 17, 1);
+    for (let x = 10; x < 27; x += 4) { ctx.fillRect(x, 1, 1, 1); ctx.fillRect(x + 2, 5, 1, 1); }
+    // equator sensor slit + scanner glint
+    P(ctx, 10, 2, 17, 2, '#2e3e4a');
+    P(ctx, 10, 2, 17, 1, '#22303a');
+    const sx = 11 + (f % 4) * 4;
+    P(ctx, sx, 2, 3, 2, GLASS_HI);
+    P(ctx, sx + 1, 2, 1, 2, '#ffffff');
     ctx.fillStyle = 'rgba(166,210,236,0.30)';
-    ctx.fillRect(sx - 1, 13, 5, 4);
+    ctx.fillRect(sx - 1, 1, 5, 4);
     // ion uplink antenna
-    P(ctx, 41, 10, 1, 16, '#2a2a26');
-    P(ctx, 39, 13, 5, 1, '#2a2a26');
-    P(ctx, 40, 8, 3, 2, (f % 2) ? PAL.ion : '#28506c');
-    if (f % 2) { ctx.fillStyle = 'rgba(168,216,248,0.25)'; ctx.fillRect(38, 6, 7, 5); }
+    P(ctx, 40, -2, 1, 16, '#2a2a26');
+    P(ctx, 38, 1, 5, 1, '#2a2a26');
+    P(ctx, 39, -4, 3, 2, (f % 2) ? PAL.ion : '#28506c');
+    if (f % 2) { ctx.fillStyle = 'rgba(168,216,248,0.25)'; ctx.fillRect(37, -6, 7, 5); }
+    // facade: door + hazard + windows
+    hazardH(ctx, 28, 30, 12, pal.haz);
+    pDoor(ctx, 30, 33, 8, 8);
+    faceWin(ctx, 7, 32, 2, 7, f % 2);
+    P(ctx, 20, 33, 2, 2, (f % 2) ? PAL.ion : '#28506c');
   }
 
-  function tstep(ctx, x, y, w, h, pal) { // one pyramid step, red-trimmed
-    P(ctx, x, y, w, h, pal.blackB);
-    P(ctx, x, y, w, 2, pal.blackC);
-    P(ctx, x, y, 1, 1, '#50505e');
-    P(ctx, x, y, 2, h, pal.blackC);
-    P(ctx, x + w - 3, y, 3, h, pal.blackA);
-    P(ctx, x, y + h - 2, w, 2, pal.blackA);
-    for (let i = x + 3; i < x + w - 4; i += 2) P(ctx, i, y + 2 + ((i >> 1) & 1), 1, 1, 'rgba(90,90,106,0.30)');
-    outlineRect(ctx, x, y, w, h);
-    P(ctx, x + 2, y + 3, w - 4, 1, pal.trim);
-  }
-  function pylon(ctx, x, y, pal) { // squat obsidian spike
-    P(ctx, x - 1, y + 8, 6, 3, SH);
-    P(ctx, x - 1, y + 6, 5, 4, pal.blackA);
-    P(ctx, x, y + 2, 3, 5, pal.blackB);
-    P(ctx, x + 1, y - 1, 1, 4, pal.blackB);
-    P(ctx, x, y + 2, 1, 5, pal.blackC);
-    outlineRect(ctx, x - 2, y + 5, 7, 6);
-    P(ctx, x - 1, y + 1, 5, 1, OUT);
-    P(ctx, x, y - 2, 3, 1, OUT);
-    P(ctx, x + 1, y - 2, 1, 1, pal.trim2);
-    P(ctx, x + 1, y - 1, 1, 2, pal.trim);
+  // one temple tier: foreshortened top platform + south face with red trim
+  function tier(ctx, x, w, topY, topH, fh, pal, rnd) {
+    ctx.fillStyle = SH;
+    ctx.fillRect(x + w, topY + 3, 3, topH + fh);
+    P(ctx, x, topY, w, topH, pal.blackC);
+    P(ctx, x, topY, w, 1, '#5a5a68');
+    P(ctx, x, topY, 1, topH, '#4c4c58');
+    P(ctx, x + w - 2, topY, 2, topH, pal.blackA);
+    for (let i = 0; i < w / 4; i++)
+      P(ctx, (x + 2 + rnd() * (w - 5)) | 0, (topY + 1 + rnd() * (topH - 2)) | 0, 1, 1, 'rgba(96,96,112,0.35)');
+    P(ctx, x, topY + topH - 1, w, 1, '#63637a');            // parapet
+    P(ctx, x, topY + topH, w, fh, pal.blackB);              // south face
+    P(ctx, x, topY + topH, w, 1, pal.blackC);
+    P(ctx, x + 2, topY + topH + 2, w - 4, 1, pal.trim);     // red trim line
+    P(ctx, x + w - 2, topY + topH, 2, fh, '#1a1a20');
+    P(ctx, x, topY + topH + fh - 2, w, 1, pal.blackA);
+    P(ctx, x, topY + topH + fh - 1, w, 1, OUT);
+    outlineRect(ctx, x - 1, topY - 1, w + 2, topH + fh + 2);
   }
 
-  function drawTmpl(ctx, W, H, pal, f, side, rnd) { // 72x72 — black step pyramid
+  function pylon(ctx, x, y, pal) { // squat obsidian spike with its own shadow
+    ctx.fillStyle = SH; ctx.fillRect(x + 4, y + 6, 2, 4);
+    P(ctx, x - 1, y + 4, 6, 4, pal.blackA);
+    P(ctx, x, y - 2, 3, 7, pal.blackB);
+    P(ctx, x + 1, y - 5, 1, 4, pal.blackB);
+    P(ctx, x, y - 2, 1, 7, pal.blackC);
+    outlineRect(ctx, x - 2, y + 3, 8, 6);
+    P(ctx, x - 1, y - 3, 5, 1, OUT);
+    P(ctx, x, y - 6, 3, 1, OUT);
+    P(ctx, x + 1, y - 6, 1, 1, pal.trim2);
+    P(ctx, x + 1, y - 5, 1, 2, pal.trim);
+  }
+
+  function drawTmpl(ctx, W, H, pal, f, side, rnd) { // 72x72 +12 — step pyramid
     baseSlab(ctx, W, H, '#68685f', '#79796f', '#525249'); slabNoise(ctx, W, H, rnd);
-    P(ctx, 10, 48, 60, 22, SH);
-    tstep(ctx, 6, 44, 60, 24, pal);
-    tstep(ctx, 15, 26, 42, 20, pal);
-    tstep(ctx, 23, 12, 26, 16, pal);
-    tstep(ctx, 30, 5, 12, 9, pal);
     const g = [0, 1, 2, 1][f % 4];  // rune-glow pulse 0..2
-    // glowing top slit
+    // tiers bottom-up so each upper tier overdraws the platform behind it
+    tier(ctx, 4, 64, 42, 8, 14, pal, rnd);
+    tier(ctx, 12, 48, 22, 8, 12, pal, rnd);
+    tier(ctx, 20, 32, 4, 8, 10, pal, rnd);
+    tier(ctx, 28, 16, -10, 6, 8, pal, rnd);
+    // glowing slit on the apex platform
     const slitCol = ['#b02818', '#e04028', '#ff7050'][g];
     const slitHi = ['#d04030', '#ffa080', '#ffd0b0'][g];
-    P(ctx, 32, 8, 8, 2, slitCol);
-    P(ctx, 33, 7, 6, 1, slitHi);
+    P(ctx, 32, -8, 8, 2, slitCol);
+    P(ctx, 33, -9, 6, 1, slitHi);
     ctx.fillStyle = 'rgba(255,96,56,' + (0.12 + g * 0.09).toFixed(2) + ')';
-    ctx.fillRect(29, 4, 14, 8);
-    // rune dots along the step fronts, pulsing with the slit
+    ctx.fillRect(29, -12, 14, 8);
+    // rune dots along the tier faces, pulsing with the slit
     const runeCol = ['#8a2015', '#c83422', '#ff6a4a'][g];
-    for (let i = 0; i < 5; i++) P(ctx, 20 + i * 8, 40, 2, 2, runeCol);
-    for (let i = 0; i < 3; i++) P(ctx, 27 + i * 7, 23, 2, 2, runeCol);
-    // entrance with red arch
-    P(ctx, 32, 58, 8, 10, '#0d0d10');
-    P(ctx, 33, 58, 6, 1, '#2a1215');
-    outlineRect(ctx, 31, 57, 10, 11);
-    P(ctx, 31, 57, 10, 1, pal.trim);
-    P(ctx, 30, 56, 12, 1, pal.blackC);
-    hazardH(ctx, 31, 66, 10, pal.haz);
-    // corner pylons
-    pylon(ctx, 10, 48, pal);
-    pylon(ctx, 59, 48, pal);
+    for (let i = 0; i < 5; i++) P(ctx, 16 + i * 10, 57, 2, 2, runeCol);
+    for (let i = 0; i < 4; i++) P(ctx, 20 + i * 9, 36, 2, 2, runeCol);
+    for (let i = 0; i < 3; i++) P(ctx, 26 + i * 9, 15, 2, 2, runeCol);
+    // entrance on the base face with red arch + hazard
+    P(ctx, 32, 54, 8, 10, '#0d0d10');
+    P(ctx, 33, 54, 6, 1, '#2a1215');
+    outlineRect(ctx, 31, 53, 10, 11);
+    P(ctx, 31, 53, 10, 1, pal.trim);
+    P(ctx, 30, 52, 12, 1, pal.blackC);
+    hazardH(ctx, 31, 62, 10, pal.haz);
+    // corner pylons on the base platform
+    pylon(ctx, 7, 44, pal);
+    pylon(ctx, 62, 44, pal);
   }
 
-  function drawHpad(ctx, W, H, pal, f, side, rnd) { // 48x48 — pad + rotating beacon
+  function drawHpad(ctx, W, H, pal, f, side, rnd) { // 48x48 — raised deck
     baseSlab(ctx, W, H, '#62625a', '#73736a', '#50504a'); slabNoise(ctx, W, H, rnd);
-    P(ctx, 4, 4, 40, 40, '#42423d');
-    P(ctx, 5, 5, 38, 1, '#35352f');
-    P(ctx, 5, 5, 1, 38, '#35352f');
-    P(ctx, 5, 42, 38, 1, '#54544c');
-    outlineRect(ctx, 3, 3, 42, 42);
-    outlineRect(ctx, 7, 7, 34, 34, '#8a8a80');
-    // corner hazard chevrons
+    // raised landing deck: flat top + south lip face + SE shadow
+    ctx.fillStyle = SH; ctx.fillRect(44, 7, 2, 36); ctx.fillRect(7, 42, 37, 2);
+    outlineRect(ctx, 3, 3, 42, 40);
+    P(ctx, 4, 4, 40, 32, '#42423d');
+    P(ctx, 4, 4, 40, 1, '#5c5c53');
+    P(ctx, 4, 4, 1, 32, '#5c5c53');
+    P(ctx, 42, 5, 2, 31, '#33332e');
+    P(ctx, 4, 35, 40, 1, '#74746a');       // parapet lip
+    P(ctx, 4, 36, 40, 5, '#31312c');       // deck south face
+    P(ctx, 4, 36, 40, 1, '#4a4a44');
+    P(ctx, 4, 40, 40, 2, '#262622');
+    hazardH(ctx, 17, 37, 14, pal.haz);
+    outlineRect(ctx, 7, 7, 34, 26, '#8a8a80');
+    // corner hazard chevrons on the deck
     hazardH(ctx, 8, 8, 8, pal.haz); hazardH(ctx, 32, 8, 8, pal.haz);
-    hazardH(ctx, 8, 38, 8, pal.haz); hazardH(ctx, 32, 38, 8, pal.haz);
-    // white H with shading
-    P(ctx, 17, 14, 4, 20, WHT);
-    P(ctx, 27, 14, 4, 20, WHT);
-    P(ctx, 21, 22, 6, 4, WHT);
-    P(ctx, 17, 14, 1, 20, '#ffffff'); P(ctx, 27, 14, 1, 20, '#ffffff');
-    P(ctx, 20, 14, 1, 20, WHT_D); P(ctx, 30, 14, 1, 20, WHT_D);
-    P(ctx, 17, 33, 4, 1, WHT_D); P(ctx, 27, 33, 4, 1, WHT_D);
-    P(ctx, 21, 25, 6, 1, WHT_D);
-    // scuff marks on the pad
+    hazardH(ctx, 8, 29, 8, pal.haz); hazardH(ctx, 32, 29, 8, pal.haz);
+    // white H (foreshortened)
+    P(ctx, 17, 12, 4, 16, WHT);
+    P(ctx, 27, 12, 4, 16, WHT);
+    P(ctx, 21, 18, 6, 4, WHT);
+    P(ctx, 17, 12, 1, 16, '#ffffff'); P(ctx, 27, 12, 1, 16, '#ffffff');
+    P(ctx, 20, 12, 1, 16, WHT_D); P(ctx, 30, 12, 1, 16, WHT_D);
+    P(ctx, 17, 27, 4, 1, WHT_D); P(ctx, 27, 27, 4, 1, WHT_D);
+    P(ctx, 21, 21, 6, 1, WHT_D);
+    // scuff marks
     ctx.fillStyle = 'rgba(12,12,10,0.30)';
-    for (let i = 0; i < 5; i++) ctx.fillRect((10 + rnd() * 26) | 0, (10 + rnd() * 26) | 0, 3, 1);
+    for (let i = 0; i < 5; i++) ctx.fillRect((10 + rnd() * 26) | 0, (10 + rnd() * 20) | 0, 3, 1);
     // corner landing lights: rotating chase (one lit per frame)
-    const corners = [[5, 5], [40, 5], [40, 40], [5, 40]];
+    const corners = [[5, 5], [40, 5], [40, 31], [5, 31]];
     for (let i = 0; i < 4; i++) {
       const lit = (f % 4) === i;
       P(ctx, corners[i][0], corners[i][1], 3, 3, lit ? '#ffd860' : '#4a3a14');
       if (lit) { ctx.fillStyle = 'rgba(255,216,96,0.30)'; ctx.fillRect(corners[i][0] - 1, corners[i][1] - 1, 5, 5); }
     }
-    // fuel console + hose
-    P(ctx, 36, 8, 7, 6, pal.base);
-    P(ctx, 36, 8, 7, 1, pal.light);
-    outlineRect(ctx, 35, 7, 9, 8);
-    P(ctx, 37, 9, 2, 2, pal.trim);
-    P(ctx, 40, 9, 2, 3, GLASS);
-    P(ctx, 39, 14, 1, 4, '#22221e'); P(ctx, 38, 17, 1, 2, '#22221e');
-    // rotating beacon mast (bottom-right corner console)
-    P(ctx, 8, 10, 2, 5, '#2e2e2a');
+    // fuel console: mini roof + face, on the deck NE
+    ctx.fillStyle = SH; ctx.fillRect(43, 9, 1, 7); ctx.fillRect(37, 15, 7, 1);
+    outlineRect(ctx, 35, 7, 9, 9);
+    P(ctx, 36, 8, 7, 3, pal.base); P(ctx, 36, 8, 7, 1, pal.light);
+    P(ctx, 36, 10, 7, 1, pal.light);
+    P(ctx, 36, 11, 7, 4, pal.dark);
+    P(ctx, 36, 14, 7, 1, pal.shadow);
+    P(ctx, 37, 12, 2, 2, pal.trim);
+    P(ctx, 40, 12, 2, 2, GLASS);
+    P(ctx, 39, 15, 1, 3, '#22221e'); P(ctx, 38, 17, 1, 2, '#22221e');
+    // rotating beacon mast (west edge)
+    P(ctx, 8, 11, 2, 4, '#2e2e2a');
     const bdir = [[0, -2], [2, 0], [0, 2], [-2, 0]][f % 4];
-    P(ctx, 8, 8, 2, 2, '#e84838');
-    P(ctx, 8 + bdir[0], 8 + bdir[1], 2, 2, 'rgba(255,120,90,0.65)');
+    P(ctx, 8, 9, 2, 2, '#e84838');
+    P(ctx, 8 + bdir[0], 9 + bdir[1], 2, 2, 'rgba(255,120,90,0.65)');
   }
 
-  function drawFix(ctx, W, H, pal, f, side, rnd) { // 72x72 — ring platform + arms
+  function drawFix(ctx, W, H, pal, f, side, rnd) { // 72x72 — ring platform
     baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
-    const cx = 36, cy = 36;
-    circleFill(ctx, cx + 2, cy + 2, 31, SH);
-    circleFill(ctx, cx, cy, 32, OUT);
-    circleFill(ctx, cx, cy, 31, '#8f8f86');
-    circleFill(ctx, cx - 1, cy - 1, 29, '#9d9d94');
-    circleFill(ctx, cx - 2, cy - 2, 26, '#a8a89e');
-    circleFill(ctx, cx, cy, 24, OUT);
-    circleFill(ctx, cx, cy, 23, '#4e4e48');
-    circleFill(ctx, cx, cy, 22, '#454540');
-    // hazard marks around ring
+    const cx = 36, cy = 33, rx = 31, ry = 25, lip = 4;
+    // cast shadow SE + platform rim face (the pad is a raised disc)
+    ctx.fillStyle = SH;
+    ctx.fillRect(cx + rx - 4, cy + 8, 4, ry); // east spill
+    for (let dx = -rx; dx <= rx; dx++) {
+      const e = Math.round(ry * Math.sqrt(Math.max(0, 1 - dx * dx / (rx * rx))));
+      P(ctx, cx + dx, cy + e, 1, lip, dx > rx * 0.45 ? CONC_D2 : CONC_D);
+      P(ctx, cx + dx, cy + e + lip, 1, 1, OUT);
+      if (dx > -rx * 0.5) { ctx.fillStyle = SH; ctx.fillRect(cx + dx, cy + e + lip + 1, 1, 2); }
+    }
+    ellipseFill(ctx, cx, cy, rx + 1, ry + 1, OUT);
+    ellipseFill(ctx, cx, cy, rx, ry, '#94948b');
+    ellipseFill(ctx, cx - 1, cy - 1, rx - 2, ry - 2, '#a4a49a');
+    ellipseFill(ctx, cx, cy, rx - 4, ry - 4, '#99998f');
+    // hazard ring marks
     for (let i = 0; i < 16; i++) {
       const a = i / 16 * Math.PI * 2;
-      P(ctx, Math.round(cx + Math.cos(a) * 27) - 1, Math.round(cy + Math.sin(a) * 27) - 1,
+      P(ctx, Math.round(cx + Math.cos(a) * (rx - 4)) - 1, Math.round(cy + Math.sin(a) * (ry - 4)) - 1,
         2, 2, i % 2 ? pal.haz : '#33332e');
     }
-    // chevrons in the pit pointing center
+    // recessed service pit
+    ellipseFill(ctx, cx, cy, 22, 17, OUT);
+    ellipseFill(ctx, cx, cy, 21, 16, '#4e4e48');
+    ellipseFill(ctx, cx, cy + 1, 20, 15, '#454540');
+    P(ctx, cx - 14, cy - 15, 24, 1, '#2e2e2a');     // recess: dark north lip
+    P(ctx, cx - 16, cy + 15, 26, 1, '#5f5f58');     // lit south lip
+    // chevrons pointing center
     for (let i = 0; i < 4; i++) {
       const a = i / 4 * Math.PI * 2 + Math.PI / 4;
-      const px = Math.round(cx + Math.cos(a) * 16), py = Math.round(cy + Math.sin(a) * 16);
+      const px = Math.round(cx + Math.cos(a) * 13), py = Math.round(cy + Math.sin(a) * 11);
       P(ctx, px - 1, py, 3, 1, '#5f5f58'); P(ctx, px, py - 1, 1, 3, '#5f5f58');
     }
-    // center lift pad
-    circleFill(ctx, cx, cy, 10, OUT);
-    circleFill(ctx, cx, cy, 9, '#8f8f86');
-    circleFill(ctx, cx - 2, cy - 2, 5, '#a5a59c');
-    circleFill(ctx, cx, cy, 4, '#6e6e66');
-    P(ctx, cx - 3, cy, 7, 1, '#54544e'); P(ctx, cx, cy - 3, 1, 7, '#54544e');
-    // two service arms (west + east) with pistons
+    // center lift pad: small raised disc with 2px face
+    for (let dx = -9; dx <= 9; dx++) {
+      const e = Math.round(7 * Math.sqrt(Math.max(0, 1 - dx * dx / 81)));
+      P(ctx, cx + dx, cy + e, 1, 2, CONC_D);
+      P(ctx, cx + dx, cy + e + 2, 1, 1, OUT);
+    }
+    ellipseFill(ctx, cx, cy, 10, 8, OUT);
+    ellipseFill(ctx, cx, cy, 9, 7, '#8f8f86');
+    ellipseFill(ctx, cx - 2, cy - 2, 5, 4, '#a5a59c');
+    ellipseFill(ctx, cx, cy, 4, 3, '#6e6e66');
+    P(ctx, cx - 3, cy, 7, 1, '#54544e'); P(ctx, cx, cy - 2, 1, 5, '#54544e');
+    // two service arm gantries (west + east): mini roof + face + piston
     for (const s of [-1, 1]) {
       const ax = s < 0 ? 5 : 45;
-      P(ctx, ax + 2, 35, 22, 7, SH);
-      P(ctx, ax, 33, 22, 6, pal.base);
-      P(ctx, ax, 33, 22, 1, pal.light);
-      P(ctx, ax, 38, 22, 1, pal.dark);
-      outlineRect(ctx, ax - 1, 32, 24, 8);
-      P(ctx, ax + (s < 0 ? 16 : 2), 34, 4, 4, IRON);
-      P(ctx, ax + (s < 0 ? 16 : 2), 34, 4, 1, IRON_L);
-      hazardH(ctx, ax + (s < 0 ? 2 : 10), 34, 9, pal.haz);
+      ctx.fillStyle = SH; ctx.fillRect(ax + 22, cy - 1, 2, 6); ctx.fillRect(ax + 2, cy + 5, 21, 2);
+      outlineRect(ctx, ax - 1, cy - 4, 24, 9);
+      P(ctx, ax, cy - 3, 22, 3, pal.base);
+      P(ctx, ax, cy - 3, 22, 1, pal.light);
+      P(ctx, ax, cy - 1, 22, 1, pal.light);
+      P(ctx, ax, cy, 22, 4, pal.dark);
+      P(ctx, ax, cy + 3, 22, 1, pal.shadow);
+      P(ctx, ax + (s < 0 ? 17 : 1), cy - 2, 4, 5, IRON);
+      P(ctx, ax + (s < 0 ? 17 : 1), cy - 2, 4, 1, IRON_L);
+      hazardH(ctx, ax + (s < 0 ? 2 : 9), cy + 1, 9, pal.haz);
     }
-    // blinking service lights + weld spark
-    P(ctx, 25, 35, 2, 2, f ? PAL.uiGreen : '#1e4a22');
-    P(ctx, 45, 35, 2, 2, f ? '#1e4a22' : PAL.uiGreen);
-    if (f) { P(ctx, 33, 40, 2, 2, '#e8f6ff'); ctx.fillStyle = 'rgba(160,220,255,0.35)'; ctx.fillRect(31, 38, 6, 6); }
-    // control hut
-    P(ctx, 58, 4, 14, 12, SH);
-    panel(ctx, 56, 2, 14, 12, pal.base, pal.light, pal.dark);
-    P(ctx, 58, 5, 10, 3, GLASS);
-    P(ctx, 58, 5, 10, 1, GLASS_L);
-    P(ctx, 60 + (f ? 3 : 0), 6, 1, 1, GLASS_HI);
+    // blinking service lights + weld spark in the pit
+    P(ctx, 25, cy - 6, 2, 2, f ? PAL.uiGreen : '#1e4a22');
+    P(ctx, 45, cy - 6, 2, 2, f ? '#1e4a22' : PAL.uiGreen);
+    if (f) { P(ctx, 33, cy + 6, 2, 2, '#e8f6ff'); ctx.fillStyle = 'rgba(160,220,255,0.35)'; ctx.fillRect(31, cy + 4, 6, 6); }
+    // control hut (NE): mini box with glassed face
+    box3(ctx, 56, 1, 13, 5, 8, mats(pal));
+    P(ctx, 58, 7, 9, 3, GLASS);
+    P(ctx, 58, 7, 9, 1, GLASS_L);
+    P(ctx, 60 + (f ? 3 : 0), 8, 1, 1, GLASS_HI);
   }
 
   function drawGtwr(ctx, W, H, pal, f, side, rnd) { // 24x24 — sandbag MG nest
-    roundPad(ctx, 12, 12, 11, rnd);
-    const SB = '#b3a06a', SBD = '#7e6f45', SBL = '#cfc088', SBD2 = '#5e5233';
-    circleFill(ctx, 13, 13, 10, SH);
-    circleFill(ctx, 12, 12, 11, OUT);
-    circleFill(ctx, 12, 12, 10, SB);
-    // sandbag courses: radial seams + a middle course line
-    for (let i = 0; i < 14; i++) {
-      const a = i / 14 * Math.PI * 2 + 0.2;
-      P(ctx, Math.round(12 + Math.cos(a) * 8.5), Math.round(12 + Math.sin(a) * 8.5), 1, 2, SBD);
+    roundPad(ctx, 12, 13, 11, rnd);
+    const SB = '#b3a06a', SBL = '#cfc088', SBD = '#7e6f45', SBD2 = '#5e5233';
+    // raised sandbag ring: bright top ring + 3px bag-course south face
+    ctx.fillStyle = SH; ctx.fillRect(21, 8, 2, 9);
+    for (let dx = -9; dx <= 9; dx++) {
+      const e = Math.round(7 * Math.sqrt(Math.max(0, 1 - dx * dx / 81)));
+      const x = 12 + dx;
+      P(ctx, x, 9 + e, 1, 3, dx > 4 ? SBD2 : SBD);
+      P(ctx, x, 10 + e, 1, 1, dx > 4 ? '#463d24' : SBD2); // bag course seam
+      P(ctx, x, 12 + e, 1, 1, OUT);
     }
-    for (let i = 0; i < 360; i += 20) {
-      const a = i * Math.PI / 180;
-      P(ctx, Math.round(12 + Math.cos(a) * 7), Math.round(12 + Math.sin(a) * 7), 1, 1, SBD2);
+    ellipseFill(ctx, 12, 9, 10, 8, OUT);
+    ellipseFill(ctx, 12, 9, 9, 7, SB);
+    // bag texture on the top ring: radial seams + NW highlight arc
+    for (let i = 0; i < 12; i++) {
+      const a = i / 12 * Math.PI * 2 + 0.2;
+      P(ctx, Math.round(12 + Math.cos(a) * 7.5), Math.round(9 + Math.sin(a) * 5.5), 1, 2, SBD);
     }
-    // top-left highlight arc
-    for (let a = 3.3; a < 5.3; a += 0.3) {
-      P(ctx, Math.round(12 + Math.cos(a) * 9), Math.round(12 + Math.sin(a) * 9), 2, 1, SBL);
-    }
-    // nest interior
-    circleFill(ctx, 12, 12, 6, '#3e3e38');
-    circleFill(ctx, 11, 11, 5, '#34342f');
+    for (let a = 3.4; a < 5.2; a += 0.3)
+      P(ctx, Math.round(12 + Math.cos(a) * 8), Math.round(9 + Math.sin(a) * 6), 2, 1, SBL);
+    // nest interior (sunken)
+    ellipseFill(ctx, 12, 9, 5, 4, '#3e3e38');
+    ellipseFill(ctx, 12, 10, 4, 3, '#34342f');
+    P(ctx, 8, 6, 8, 1, '#26261f');
     // MG on tripod, barrel north with muzzle glint
-    P(ctx, 10, 9, 5, 5, IRON);
-    P(ctx, 10, 9, 5, 1, IRON_L);
-    outlineRect(ctx, 9, 8, 7, 7);
-    P(ctx, 11, 2, 2, 8, '#22222a');
-    P(ctx, 11, 2, 1, 8, '#5a5a64');
-    P(ctx, 10, 2, 4, 1, OUT);
-    if (f) { P(ctx, 11, 2, 2, 1, '#ffffff'); P(ctx, 12, 3, 1, 1, GLASS_HI); }
-    // ammo belt + crate
-    P(ctx, 15, 10, 2, 3, pal.haz);
-    P(ctx, 15, 11, 2, 1, HAZK);
-    P(ctx, 16, 16, 4, 3, '#8a7444');
-    outlineRect(ctx, 16, 16, 4, 3);
+    P(ctx, 10, 7, 5, 4, IRON);
+    P(ctx, 10, 7, 5, 1, IRON_L);
+    outlineRect(ctx, 9, 6, 7, 6);
+    P(ctx, 11, 0, 2, 7, '#22222a');
+    P(ctx, 11, 0, 1, 7, '#5a5a64');
+    P(ctx, 10, 0, 4, 1, OUT);
+    if (f) { P(ctx, 11, 0, 2, 1, '#ffffff'); P(ctx, 12, 1, 1, 1, GLASS_HI); }
+    // ammo crate on the pad SE
+    P(ctx, 16, 16, 5, 3, '#8a7444');
+    P(ctx, 16, 16, 5, 1, '#a89058');
+    outlineRect(ctx, 16, 16, 5, 4);
+    P(ctx, 17, 17, 1, 1, pal.haz);
   }
 
-  function missileBox(ctx, x, y, pal) { // 8x9 launcher box, split hatch doors
-    P(ctx, x, y, 8, 9, pal.base);
+  function missileBox(ctx, x, y, pal) { // 8x10 launcher: bright top + south face
+    ctx.fillStyle = SH; ctx.fillRect(x + 8, y + 1, 1, 9);
+    P(ctx, x - 1, y - 1, 10, 12, OUT);
+    // top: split hatch doors seen from above, missile tips peeking
+    P(ctx, x, y, 8, 4, pal.base);
     P(ctx, x, y, 8, 1, pal.light);
-    P(ctx, x, y, 1, 9, pal.light);
-    P(ctx, x + 6, y + 1, 2, 8, pal.dark);
-    P(ctx, x, y + 8, 8, 1, pal.dark);
-    outlineRect(ctx, x - 1, y - 1, 10, 11);
-    // center door split + hinge lines
-    P(ctx, x + 3, y + 1, 1, 7, pal.shadow);
-    P(ctx, x + 1, y + 3, 6, 1, pal.shadow);
-    P(ctx, x + 1, y + 6, 6, 1, pal.shadow);
-    // missile tips peeking from the cracked top doors
-    P(ctx, x + 1, y + 1, 2, 1, '#d8d8d2');
-    P(ctx, x + 5, y + 1, 2, 1, '#d8d8d2');
-    P(ctx, x + 1, y + 1, 1, 1, PAL.nodRed);
-    P(ctx, x + 5, y + 1, 1, 1, PAL.nodRed);
-    // warning diamond
-    P(ctx, x + 3, y + 4, 2, 2, pal.haz);
+    P(ctx, x + 3, y, 1, 4, pal.shadow);
+    P(ctx, x + 1, y + 1, 2, 2, '#d8d8d2'); P(ctx, x + 5, y + 1, 2, 2, '#d8d8d2');
+    P(ctx, x + 1, y + 1, 1, 1, PAL.nodRed); P(ctx, x + 5, y + 1, 1, 1, PAL.nodRed);
+    P(ctx, x, y + 3, 8, 1, pal.light);          // parapet
+    // south face with warning diamond
+    P(ctx, x, y + 4, 8, 6, pal.dark);
+    P(ctx, x + 6, y + 4, 2, 6, pal.shadow);
+    P(ctx, x + 3, y + 6, 2, 2, pal.haz);
+    P(ctx, x, y + 9, 8, 1, pal.shadow);
   }
 
-  function drawAtwr(ctx, W, H, pal, f, side, rnd) { // 24x48 — tall missile tower
-    roundPad(ctx, 12, H - 12, 11, rnd); // pad on the 1x1 footprint cell only
-    // base plinth with hazard
-    P(ctx, 5, 41, 18, 5, SH);
-    panel(ctx, 3, 38, 18, 8, CONC, CONC_L, CONC_D);
-    hazardH(ctx, 5, 42, 14, pal.haz);
-    // shaft
-    P(ctx, 17, 17, 3, 22, SH);
-    P(ctx, 7, 14, 10, 25, CONC);
-    P(ctx, 7, 14, 2, 25, CONC_L);
-    P(ctx, 15, 14, 2, 25, CONC_D);
-    P(ctx, 16, 14, 1, 25, CONC_D2);
-    outlineRect(ctx, 6, 13, 12, 27);
-    P(ctx, 8, 20, 8, 1, CONC_D); P(ctx, 8, 28, 8, 1, CONC_D);
-    // window slit + gold band
-    P(ctx, 9, 22, 6, 3, GLASS);
-    P(ctx, 9, 22, 6, 1, GLASS_L);
-    P(ctx, 10 + (f ? 2 : 0), 23, 1, 1, GLASS_HI);
-    P(ctx, 8, 33, 8, 2, pal.trim);
-    P(ctx, 8, 35, 8, 1, pal.shadow);
-    // platform with struts
-    P(ctx, 5, 12, 2, 3, CONC_D2); P(ctx, 17, 12, 2, 3, CONC_D2);
-    P(ctx, 3, 9, 18, 5, CONC);
-    P(ctx, 3, 9, 18, 1, CONC_L);
-    P(ctx, 3, 12, 18, 2, CONC_D);
-    outlineRect(ctx, 2, 8, 20, 7);
-    // twin missile boxes with hatch doors
-    missileBox(ctx, 3, 1, pal);
-    missileBox(ctx, 14, 1, pal);
-    // beacon
-    P(ctx, 11, 0, 2, 2, f ? pal.trim2 : '#4a1810');
-    if (f) { ctx.fillStyle = 'rgba(244,220,128,0.25)'; ctx.fillRect(9, 0, 6, 4); }
-  }
-
-  function drawGun(ctx, W, H, pal, f, side, rnd) { // 24x24 — turret base + ammo
+  function drawAtwr(ctx, W, H, pal, f, side, rnd) { // 24x24 +24 — missile tower
     roundPad(ctx, 12, 12, 11, rnd);
-    // ammo boxes on the slab corner
-    P(ctx, 1, 18, 5, 4, '#6a5a20');
-    P(ctx, 1, 18, 5, 1, '#8f7c30');
-    outlineRect(ctx, 1, 18, 5, 4);
-    P(ctx, 2, 19, 1, 1, pal.haz);
-    P(ctx, 18, 1, 4, 4, '#6a5a20');
-    P(ctx, 18, 1, 4, 1, '#8f7c30');
-    outlineRect(ctx, 18, 1, 4, 4);
-    // round base
-    circleFill(ctx, 13, 13, 10, SH);
-    circleFill(ctx, 12, 12, 11, OUT);
-    circleFill(ctx, 12, 12, 10, pal.dark);
-    circleFill(ctx, 12, 12, 8, pal.base);
-    circleFill(ctx, 10, 10, 4, pal.light);
-    circleFill(ctx, 12, 12, 4, pal.shadow);
-    circleFill(ctx, 12, 12, 3, '#26262a');
-    for (let i = 0; i < 8; i++) {
+    ctx.fillStyle = SH;                       // tower shadow east + SE on pad
+    ctx.fillRect(18, -6, 2, 22);
+    ellipseFill(ctx, 16, 18, 5, 2, SH);
+    // base plinth: bright top + hazard face
+    outlineRect(ctx, 2, 11, 20, 11);
+    P(ctx, 3, 12, 18, 3, CONC);
+    P(ctx, 3, 12, 18, 1, CONC_L);
+    P(ctx, 3, 14, 18, 1, CONC_L);
+    P(ctx, 3, 15, 18, 6, CONC_D);
+    hazardH(ctx, 5, 16, 14, pal.haz);
+    P(ctx, 3, 20, 18, 1, CONC_D2);
+    // concrete shaft, west-lit / east-dark
+    P(ctx, 7, -10, 10, 23, CONC);
+    P(ctx, 7, -10, 2, 23, CONC_L);
+    P(ctx, 15, -10, 2, 23, CONC_D);
+    P(ctx, 16, -10, 1, 23, CONC_D2);
+    outlineRect(ctx, 6, -11, 12, 25);
+    P(ctx, 8, -4, 8, 1, CONC_D); P(ctx, 8, 4, 8, 1, CONC_D);
+    // lit window slit + gold band
+    P(ctx, 9, -2, 6, 3, GLASS);
+    P(ctx, 9, -2, 6, 1, GLASS_L);
+    P(ctx, 10 + (f ? 2 : 0), -1, 1, 1, WIN_LIT);
+    P(ctx, 8, 8, 8, 2, pal.trim);
+    P(ctx, 8, 10, 8, 1, pal.shadow);
+    // launcher platform: bright top slab + south lip + struts
+    P(ctx, 5, -13, 2, 3, CONC_D2); P(ctx, 17, -13, 2, 3, CONC_D2);
+    outlineRect(ctx, 2, -16, 20, 6);
+    P(ctx, 3, -15, 18, 2, CONC_L);
+    P(ctx, 3, -13, 18, 1, CONC);
+    P(ctx, 3, -12, 18, 2, CONC_D);
+    // twin missile boxes on the platform
+    missileBox(ctx, 3, -24, pal);
+    missileBox(ctx, 14, -24, pal);
+    // beacon
+    P(ctx, 11, -24, 2, 2, f ? pal.trim2 : '#4a1810');
+    if (f) { ctx.fillStyle = 'rgba(244,220,128,0.25)'; ctx.fillRect(9, -24, 6, 4); }
+  }
+
+  function drawGun(ctx, W, H, pal, f, side, rnd) { // 24x24 — turret drum base
+    roundPad(ctx, 12, 13, 11, rnd);
+    // ammo boxes on the pad corners (tiny top + face)
+    P(ctx, 1, 17, 5, 2, '#8f7c30'); P(ctx, 1, 19, 5, 2, '#554712');
+    outlineRect(ctx, 1, 17, 5, 5); P(ctx, 2, 18, 1, 1, pal.haz);
+    P(ctx, 18, 1, 4, 2, '#8f7c30'); P(ctx, 18, 3, 4, 2, '#554712');
+    outlineRect(ctx, 18, 1, 4, 5);
+    // raised drum: curved south wall + bright cap where the turret seats
+    cyl3(ctx, 12, 9, 8, 3, 6, [pal.light, pal.base, pal.dark, pal.shadow],
+         [pal.base, pal.light, pal.shadow]);
+    ellipseFill(ctx, 12, 9, 5, 2, pal.shadow);
+    ellipseFill(ctx, 12, 9, 4, 2, '#26262a');
+    for (let i = 0; i < 8; i++) {   // cap bolts
       const a = i / 8 * Math.PI * 2 + 0.39;
-      P(ctx, Math.round(12 + Math.cos(a) * 9), Math.round(12 + Math.sin(a) * 9), 1, 1, '#2e2e2a');
+      P(ctx, Math.round(12 + Math.cos(a) * 6.5), Math.round(9 + Math.sin(a) * 2.6), 1, 1, '#2e2e2a');
     }
     P(ctx, 11, 19, 2, 2, f ? pal.trim2 : '#3a1410');
   }
 
-  function makeGunTurret(pal) { // 16 rotation frames, canonical north
+  function makeGunTurret(pal) { // 16 pseudo-3D rotation frames, canonical north
     const c = mkCanvas(24, 24);
     const ctx = c.getContext('2d');
     // rear counterweight
@@ -1077,113 +1236,114 @@
     circleFill(ctx, 11, 12, 2, pal.light);
     P(ctx, 12, 13, 2, 1, pal.shadow);
     P(ctx, 11, 15, 3, 1, pal.dark);   // rear hatch
-    return rotFrames(c, 16);
+    return rot3D(c, 16, { height: 1 });
   }
 
-  function drawObli(ctx, W, H, pal, f, side, rnd, glow) { // 24x48 — black monolith
-    roundPad(ctx, 12, H - 12, 11, rnd); // pad on the 1x1 footprint cell only
-    // plinth with vents
-    P(ctx, 6, 42, 16, 4, SH);
-    P(ctx, 4, 40, 16, 5, '#26262d');
-    P(ctx, 4, 40, 16, 1, '#3a3a46');
-    outlineRect(ctx, 3, 39, 18, 7);
-    P(ctx, 6, 42, 3, 1, '#15151a'); P(ctx, 11, 42, 3, 1, '#15151a'); P(ctx, 16, 42, 3, 1, '#15151a');
-    // sleek tapered monolith
-    for (let y = 4; y < 41; y++) {
-      const t = (y - 4) / 37;
+  function drawObli(ctx, W, H, pal, f, side, rnd, glow) { // 24x24 +24 — spike
+    roundPad(ctx, 12, 12, 11, rnd);
+    ctx.fillStyle = SH;                        // spike shadow SE on the pad
+    ellipseFill(ctx, 16, 19, 5, 2, SH);
+    // plinth with vents: bright top edge + dark face
+    P(ctx, 6, 18, 16, 4, SH);
+    P(ctx, 4, 16, 16, 5, '#26262d');
+    P(ctx, 4, 16, 16, 1, '#3a3a46');
+    outlineRect(ctx, 3, 15, 18, 7);
+    P(ctx, 6, 18, 3, 1, '#15151a'); P(ctx, 11, 18, 3, 1, '#15151a'); P(ctx, 16, 18, 3, 1, '#15151a');
+    // sleek tapered monolith, west edge lit, east edge darkest + cast strip
+    for (let y = -20; y < 17; y++) {
+      const t = (y + 20) / 37;
       const hw = Math.max(1, Math.round(1 + t * 4));
       P(ctx, 12 - hw - 1, y, 1, 1, OUT);
       P(ctx, 12 + hw, y, 1, 1, OUT);
       P(ctx, 12 - hw, y, hw * 2, 1, '#191920');
       P(ctx, 12 - hw, y, 1, 1, '#34343f');       // lit west edge
       P(ctx, 12 + hw - 1, y, 1, 1, '#0e0e13');   // dark east edge
+      if (y > -12) { ctx.fillStyle = SH; ctx.fillRect(12 + hw + 1, y + 2, 1, 1); }
     }
-    P(ctx, 11, 3, 2, 1, OUT);
+    P(ctx, 11, -21, 2, 1, OUT);
     // subtle red edge-light groove down the face
-    P(ctx, 11, 8, 1, 31, glow ? '#d04030' : '#571812');
-    if (!glow && f) P(ctx, 11, 8, 1, 31, '#7a1f16');
+    P(ctx, 11, -16, 1, 31, glow ? '#d04030' : '#571812');
+    if (!glow && f) P(ctx, 11, -16, 1, 31, '#7a1f16');
     if (glow > 0) {
       const tip = ['#a02818', '#e04028', '#ff7050'][glow - 1];
       const core = ['#ff8060', '#ffc0a0', '#ffffff'][glow - 1];
-      P(ctx, 10, 2, 4, 3 + glow, tip);
-      P(ctx, 11, 3, 2, 2 + glow, core);
-      P(ctx, 11, 8, 1, 31, glow >= 2 ? '#ff6a50' : '#d04030');
-      if (glow >= 2) P(ctx, 12, 12, 1, 20, '#a03224');
+      P(ctx, 10, -22, 4, 3 + glow, tip);
+      P(ctx, 11, -21, 2, 2 + glow, core);
+      P(ctx, 11, -16, 1, 31, glow >= 2 ? '#ff6a50' : '#d04030');
+      if (glow >= 2) P(ctx, 12, -12, 1, 20, '#a03224');
       ctx.fillStyle = 'rgba(255,80,44,' + (0.12 * glow).toFixed(2) + ')';
-      ctx.fillRect(6, 0, 12, 12 + glow * 4);
-      if (glow === 3) { P(ctx, 9, 0, 6, 2, 'rgba(255,220,200,0.55)'); }
+      ctx.fillRect(6, -24, 12, 12 + glow * 4);
+      if (glow === 3) { P(ctx, 9, -24, 6, 2, 'rgba(255,220,200,0.55)'); }
     } else {
-      P(ctx, 11, 4, 2, 2, f ? '#8a2418' : '#5c1810');
+      P(ctx, 11, -20, 2, 2, f ? '#8a2418' : '#5c1810');
     }
   }
 
   function drawSam(ctx, W, H, pal, f, side, rnd, open) { // 48x24 — dome launcher
-    ovalPad(ctx, 24, 14, 23, 9, rnd);
-    P(ctx, 6, 8, 40, 15, SH);
-    P(ctx, 4, 6, 40, 16, pal.dark);
-    P(ctx, 5, 7, 38, 1, pal.base);
-    P(ctx, 5, 20, 38, 1, pal.shadow);
-    outlineRect(ctx, 3, 5, 42, 18);
-    // deck seams + hazard corners
-    P(ctx, 10, 8, 1, 12, pal.shadow); P(ctx, 38, 8, 1, 12, pal.shadow);
-    hazardH(ctx, 5, 17, 5, pal.haz); hazardH(ctx, 38, 17, 5, pal.haz);
-    P(ctx, 5, 8, 2, 2, PAL.uiGold);
-    P(ctx, 41, 8, 2, 2, PAL.uiGold);
+    ovalPad(ctx, 24, 13, 23, 10, rnd);
+    // raised launcher deck: bright top + south lip face + SE shadow
+    ctx.fillStyle = SH; ctx.fillRect(44, 5, 2, 14); ctx.fillRect(7, 18, 37, 2);
+    outlineRect(ctx, 3, 2, 42, 16);
+    P(ctx, 4, 3, 40, 10, pal.base);
+    P(ctx, 4, 3, 40, 1, pal.light);
+    P(ctx, 4, 3, 1, 10, pal.light);
+    P(ctx, 42, 4, 2, 9, pal.dark);
+    P(ctx, 4, 12, 40, 1, pal.light);           // parapet lip
+    P(ctx, 4, 13, 40, 4, pal.dark);            // deck south face
+    P(ctx, 4, 16, 40, 1, pal.shadow);
+    hazardH(ctx, 6, 14, 6, pal.haz); hazardH(ctx, 36, 14, 6, pal.haz);
+    P(ctx, 6, 4, 2, 2, PAL.uiGold);
+    P(ctx, 40, 4, 2, 2, PAL.uiGold);
+    P(ctx, 10, 4, 1, 8, pal.dark); P(ctx, 38, 4, 1, 8, pal.dark); // deck seams
     if (!open) {
-      dome(ctx, 24, 21, 10, pal.base, pal.light, pal.shadow);
+      dome3(ctx, 24, 12, 10, { top: pal.base, topL: pal.light, face: pal.dark, dark: pal.shadow });
       // meridian panel lines
-      P(ctx, 24, 11, 1, 10, pal.dark);
-      for (const dx of [-5, 5]) {
-        for (let dy = 0; dy <= 8; dy++) {
-          const hw = Math.floor(Math.sqrt(100 - dy * dy) + 0.5);
-          if (Math.abs(dx) < hw) P(ctx, 24 + (dx < 0 ? -Math.round(hw * 0.55) : Math.round(hw * 0.55)), 21 - dy, 1, 1, pal.dark);
-        }
+      P(ctx, 24, 4, 1, 8, pal.dark);
+      P(ctx, 19, 6, 1, 6, pal.dark); P(ctx, 29, 6, 1, 6, pal.dark);
+      for (let dx = -7; dx <= 7; dx++) {          // latitude seam
+        const dy = Math.round(Math.sqrt(Math.max(0, 100 - dx * dx)) * 0.45);
+        P(ctx, 24 + dx, 12 - dy - 2, 1, 1, pal.dark);
       }
-      // latitude seam
-      for (let dx = -7; dx <= 7; dx++) {
-        const dy = Math.round(Math.sqrt(Math.max(0, 100 - dx * dx)) * 0.55);
-        P(ctx, 24 + dx, 21 - dy - 2, 1, 1, pal.dark);
-      }
-      P(ctx, 20, 13, 2, 1, pal.light);
-      P(ctx, 7, 16, 2, 2, f ? pal.trim2 : '#3a1410');
+      P(ctx, 7, 9, 2, 2, f ? pal.trim2 : '#3a1410');
     } else {
       const gap = [0, 2, 5, 8][open];
       // pit interior with rack
-      P(ctx, 24 - gap - 1, 11, (gap + 1) * 2, 11, '#15150f');
-      P(ctx, 24 - gap - 1, 11, (gap + 1) * 2, 1, '#060604');
-      if (open >= 1) { P(ctx, 24 - gap, 20, gap * 2, 1, '#3a3a32'); }
+      P(ctx, 24 - gap - 1, 3, (gap + 1) * 2, 10, '#15150f');
+      P(ctx, 24 - gap - 1, 3, (gap + 1) * 2, 1, '#060604');
+      if (open >= 1) { P(ctx, 24 - gap, 11, gap * 2, 1, '#3a3a32'); }
       if (open >= 2) {
         // rack rails + twin missiles, white with red noses
-        P(ctx, 24 - gap, 18, gap * 2, 1, '#4c4c44');
-        P(ctx, 20, 12, 2, 9, '#e2e2da'); P(ctx, 20, 12, 1, 9, '#ffffff');
-        P(ctx, 26, 12, 2, 9, '#e2e2da'); P(ctx, 26, 12, 1, 9, '#ffffff');
-        P(ctx, 20, 12, 2, 2, PAL.nodRedLight); P(ctx, 26, 12, 2, 2, PAL.nodRedLight);
-        P(ctx, 20, 19, 2, 1, '#8a8a84'); P(ctx, 26, 19, 2, 1, '#8a8a84');
+        P(ctx, 24 - gap, 9, gap * 2, 1, '#4c4c44');
+        P(ctx, 20, 3, 2, 9, '#e2e2da'); P(ctx, 20, 3, 1, 9, '#ffffff');
+        P(ctx, 26, 3, 2, 9, '#e2e2da'); P(ctx, 26, 3, 1, 9, '#ffffff');
+        P(ctx, 20, 3, 2, 2, PAL.nodRedLight); P(ctx, 26, 3, 2, 2, PAL.nodRedLight);
+        P(ctx, 20, 10, 2, 1, '#8a8a84'); P(ctx, 26, 10, 2, 1, '#8a8a84');
       }
       if (open >= 3) {
         // center missile raised on the elevator
-        P(ctx, 23, 9, 3, 12, '#f0f0e8');
-        P(ctx, 23, 9, 1, 12, '#ffffff');
-        P(ctx, 23, 9, 3, 2, PAL.nodRedLight);
-        P(ctx, 23, 10, 1, 1, '#ffe0d0');
-        P(ctx, 22, 20, 5, 1, '#6a6a62');
+        P(ctx, 23, 0, 3, 12, '#f0f0e8');
+        P(ctx, 23, 0, 1, 12, '#ffffff');
+        P(ctx, 23, 0, 3, 2, PAL.nodRedLight);
+        P(ctx, 23, 1, 1, 1, '#ffe0d0');
+        P(ctx, 22, 11, 5, 1, '#6a6a62');
       }
-      // dome halves slid apart, with hydraulic arms
-      for (let dy = 0; dy <= 9; dy++) {
-        const hw = Math.floor(Math.sqrt(81 - dy * dy) + 0.5);
+      // dome halves slid apart (south face shading on the lower rows)
+      for (let dy = 0; dy <= 8; dy++) {
+        const hw = Math.floor(Math.sqrt(64 - dy * dy) * 1.1 + 0.5);
         if (hw < 2) continue;
-        const y = 21 - dy;
-        P(ctx, 24 - hw - gap, y, hw - 1, 1, pal.base);
+        const y = 12 - dy;
+        const col = dy < 3 ? pal.dark : pal.base;
+        P(ctx, 24 - hw - gap, y, hw - 1, 1, col);
         P(ctx, 24 - hw - gap, y, 2, 1, pal.light);
-        P(ctx, 24 + gap + 1, y, hw - 1, 1, pal.base);
+        P(ctx, 24 + gap + 1, y, hw - 1, 1, col);
         P(ctx, 24 + gap + hw - 2, y, 2, 1, pal.shadow);
       }
-      P(ctx, 24 - gap - 1, 20, 2, 1, IRON_L); P(ctx, 24 + gap - 1, 20, 2, 1, IRON_L);
-      P(ctx, 7, 16, 2, 2, pal.trim2);
+      P(ctx, 24 - gap - 1, 11, 2, 1, IRON_L); P(ctx, 24 + gap - 1, 11, 2, 1, IRON_L);
+      P(ctx, 7, 9, 2, 2, pal.trim2);
     }
   }
 
-  // ---- builders table / frame counts -----------------------------------------
+  // ---- builders table / frame counts / yOff -----------------------------------
 
   const BUILDERS = {
     fact: drawFact,
@@ -1211,6 +1371,13 @@
   const FRAME_COUNT = {
     fact: 4, nuke: 3, nuk2: 3, proc: 4, weap: 4, afld: 4,
     hq: 8, eye: 4, tmpl: 4, hpad: 4,
+  };
+
+  // extra pixels drawn ABOVE the footprint (render offsets by entry yOff):
+  // tall structures rise over their anchor cells
+  const YOFF = {
+    fact: 10, nuke: 12, nuk2: 12, proc: 6, silo: 6, pyle: 4, hand: 12,
+    weap: 6, afld: 8, hq: 8, eye: 12, tmpl: 12, atwr: 24, obli: 24,
   };
 
   // ---- damage overlay (deterministic per key+side; fires flicker per frame) --
@@ -1296,41 +1463,42 @@
 
   // ---- frame factories --------------------------------------------------------
 
-  // towers rise above their 1x1 footprint: extra pixels drawn ABOVE the anchor
-  // cell (render offsets by the entry's yOff)
-  const TALL_OVER = { atwr: 24, obli: 24 };
-
   function renderBuildingFrame(key, side, f, damaged) {
     const d = DATA.buildings[key];
-    const over = TALL_OVER[key] || 0;
-    const W = d.w * C.CELL, H = d.h * C.CELL + over;
+    const over = YOFF[key] || 0;
+    const W = d.w * C.CELL, H = d.h * C.CELL;
     // defenses sit on their own pads: no concrete bib apron
-    const c = mkCanvas(W, H + (d.defense ? 0 : 8));
+    const c = mkCanvas(W, over + H + (d.defense ? 0 : 8));
     const ctx = c.getContext('2d');
     const rnd = mulberry(hashStr(key + ':' + side));
+    ctx.save();
+    ctx.translate(0, over);
     if (!d.defense) drawBib(ctx, W, H, rnd);
     BUILDERS[key](ctx, W, H, sidePal(side), f, side, rnd);
     if (damaged) {
       if (d.defense) {
         // clip wear to the sprite silhouette (transparent around the pad)
-        ctx.save();
+        ctx.restore(); ctx.save();
         ctx.globalCompositeOperation = 'source-atop';
-        damageOverlay(ctx, W, H, key + ':' + side);
-        fireOverlay(ctx, W, H, key + ':' + side + ':fire', f);
-        ctx.restore();
+        damageOverlay(ctx, W, over + H, key + ':' + side);
+        fireOverlay(ctx, W, over + H, key + ':' + side + ':fire', f);
       } else {
+        // overlays land on the footprint body (below the yOff headroom)
         damageOverlay(ctx, W, H, key + ':' + side);
         fireOverlay(ctx, W, H, key + ':' + side + ':fire', f);
       }
     }
+    ctx.restore();
     return c;
   }
 
   function renderObliCharge(side, glow) {
     const d = DATA.buildings.obli;
-    const W = d.w * C.CELL, H = d.h * C.CELL + (TALL_OVER.obli || 0);
-    const c = mkCanvas(W, H);
+    const over = YOFF.obli;
+    const W = d.w * C.CELL, H = d.h * C.CELL;
+    const c = mkCanvas(W, over + H);
     const ctx = c.getContext('2d');
+    ctx.translate(0, over);
     const rnd = mulberry(hashStr('obli:' + side));
     drawObli(ctx, W, H, sidePal(side), 0, side, rnd, glow);
     return c;
@@ -1388,6 +1556,25 @@
     outlineRect(ctx, 0, 0, 64, 48, '#000000');
   }
 
+  // opaque-pixel bounding box, so tall sprites with empty yOff headroom still
+  // fill the cameo portrait
+  function cropAlpha(c) {
+    const img = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let minX = c.width, minY = c.height, maxX = -1, maxY = -1;
+    for (let y = 0; y < c.height; y++) {
+      for (let x = 0; x < c.width; x++) {
+        if (img[(y * c.width + x) * 4 + 3] > 40) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX < 0) return { x: 0, y: 0, w: c.width, h: c.height };
+    return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+  }
+
   function buildingCameo(key) {
     const d = DATA.buildings[key];
     const side = d.side || 'gdi';
@@ -1405,12 +1592,14 @@
     const c = cameoCanvas();
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = false;
-    let s = Math.min(56 / spr.width, 32 / spr.height, 1.6);
-    const dw = Math.max(1, Math.round(spr.width * s));
-    const dh = Math.max(1, Math.round(spr.height * s));
+    const cr = cropAlpha(spr);
+    const s = Math.min(56 / cr.w, 32 / cr.h, 1.6);
+    const dw = Math.max(1, Math.round(cr.w * s));
+    const dh = Math.max(1, Math.round(cr.h * s));
     // grounding shadow behind the portrait
     ellipseFill(ctx, 32, Math.round((37 - dh) / 2) + dh - 1, Math.min(28, (dw >> 1) + 4), 3, 'rgba(0,0,0,0.35)');
-    ctx.drawImage(spr, Math.round((64 - dw) / 2), Math.round((37 - dh) / 2) + 1, dw, dh);
+    ctx.drawImage(spr, cr.x, cr.y, cr.w, cr.h,
+                  Math.round((64 - dw) / 2), Math.round((37 - dh) / 2) + 1, dw, dh);
     finishCameo(ctx, d.name);
     return c;
   }
@@ -1509,7 +1698,7 @@
         damaged.push(renderBuildingFrame(key, side, f, true));
       }
       const entry = { normal, damaged };
-      if (TALL_OVER[key]) entry.yOff = TALL_OVER[key];
+      if (YOFF[key]) entry.yOff = YOFF[key];
       if (key === 'gun') entry.turret = makeGunTurret(sidePal(side));
       if (key === 'obli') entry.charge = [1, 2, 3].map(g => renderObliCharge(side, g));
       if (key === 'sam') entry.open = [1, 2, 3].map(g => renderSamOpen(side, g));
