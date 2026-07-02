@@ -41,6 +41,7 @@ Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1`.
 | `S` / `G` | Stop / guard |
 | `T` | Select same type on screen |
 | Arrow keys / screen edges | Scroll the map |
+| Two-finger touchpad scroll (or mouse wheel) | Pan the map |
 | `Esc` | Options menu / cancel placement, sell, repair, targeting |
 
 Sidebar: left icon strip is structures, right strip is units. Click an icon to
@@ -73,7 +74,13 @@ a powered Communications Center.
 - **Combat details** — warhead vs. armor tables, turret rotation, homing
   rockets, artillery arcs, splash damage with friendly fire, tanks crush
   infantry, stealth tank cloaking, Mammoth self-repair
-- **Fog of war** — permanent-reveal black shroud, jagged edges, radar minimap
+- **Fog of war** — permanent-reveal black shroud, jagged edges, radar minimap;
+  enemy blips on the radar need live line-of-sight from your own forces
+- **Visceroids** — infantry that die on a tiberium field mutate into hostile
+  creatures that attack everyone
+- **Auto-repair** — damaged buildings start repairing themselves (toggleable
+  with the REPAIR button); wading through tiberium hurts infantry, standing
+  still in it doesn't
 - **Skirmish AI** — builds a base, harvests, expands, repairs, places defenses
   toward you, sends attack waves, and fires its superweapon at your base
 - **EVA** — "Construction complete", "Unit ready", "Low power", "Base under

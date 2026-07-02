@@ -633,3 +633,54 @@
 
   for (const key of KEYS) SPRITES.cameo[key] = makeCameo(key);
 })();
+
+// Visceroid — the tiberium creature that forms when infantry die on a field.
+// One pulsing blob shape shared across all 16 facings (blobs don't face).
+(function () {
+  if (typeof SPRITES === 'undefined' || typeof mkCanvas === 'undefined' ||
+      typeof document === 'undefined') return;
+
+  function blobFrame(phase) {
+    const c = mkCanvas(24, 24);
+    const g = c.getContext('2d');
+    const wob = phase ? 1 : 0;
+    // ground slime shadow
+    g.fillStyle = 'rgba(20,40,16,0.35)';
+    g.beginPath(); g.ellipse(12, 17, 8 + wob, 4, 0, 0, Math.PI * 2); g.fill();
+    // body lobes: sickly reds with green tiberium veins
+    const body = '#8f3038', bodyL = '#b8505a', bodyD = '#5c1c24', out = '#160a08';
+    const lobes = phase
+      ? [[9, 12, 6], [15, 13, 5], [12, 9, 4], [8, 15, 3]]
+      : [[10, 13, 6], [15, 11, 5], [11, 8, 4], [16, 15, 3]];
+    for (const [x, y, r] of lobes) {
+      g.fillStyle = out;
+      g.beginPath(); g.arc(x, y, r + 1, 0, Math.PI * 2); g.fill();
+    }
+    for (const [x, y, r] of lobes) {
+      g.fillStyle = body;
+      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+      g.fillStyle = bodyL;
+      g.beginPath(); g.arc(x - 1, y - 1, Math.max(1, r - 2), 0, Math.PI * 2); g.fill();
+      g.fillStyle = body;
+      g.beginPath(); g.arc(x, y, Math.max(1, r - 2), 0, Math.PI * 2); g.fill();
+    }
+    // dark underside + green pustules
+    g.fillStyle = bodyD;
+    g.fillRect(7, 15, 10, 2);
+    const pust = phase ? [[9, 11], [14, 14], [12, 8]] : [[11, 13], [16, 11], [9, 15]];
+    for (const [x, y] of pust) {
+      g.fillStyle = PAL.tib1; g.fillRect(x, y, 2, 2);
+      g.fillStyle = PAL.tib3; g.fillRect(x, y, 1, 1);
+    }
+    // wet highlight
+    g.fillStyle = 'rgba(255,220,220,0.5)';
+    g.fillRect(9 + wob, 9, 2, 1);
+    return c;
+  }
+
+  const f0 = blobFrame(0), f1 = blobFrame(1);
+  const entry = { body: [], anim: [f0, f1] }; // anim overlay pulses while it moves
+  for (let i = 0; i < 16; i++) entry.body.push(f0);
+  // same sprite for every owner palette slot (creatures have no faction colors)
+  SPRITES.units.vice = { gdi: entry, nod: entry, mut: entry };
+})();

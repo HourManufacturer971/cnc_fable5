@@ -255,9 +255,12 @@ const MAPGEN = (function () {
     }
 
     // --- tiberium fields ---------------------------------------------------------
-    // One rich field 7-9 cells from each start, offset toward map center.
-    for (const st of starts) {
-      let dx = 32 - st.cx, dy = 32 - st.cy;
+    // One rich field 7-9 cells from each start, offset AWAY from the enemy so
+    // your harvesters work the safe side of your base.
+    for (let s = 0; s < starts.length; s++) {
+      const st = starts[s];
+      const foe = starts[1 - s];
+      let dx = st.cx - foe.cx, dy = st.cy - foe.cy;
       const len = Math.sqrt(dx * dx + dy * dy) || 1;
       dx /= len; dy /= len;
       const off = 7 + rng() * 2; // 7..9

@@ -35,7 +35,8 @@ DATA.weapons = {
   orcaRockets: { dmg: 50, range: 3.5, rof: 18, speed: 7, warhead: 'ap', splash: 10, homing: true, sound: 'rocket' },
   heliMg:    { dmg: 25, range: 3.0, rof: 8, speed: 0, warhead: 'sa', splash: 0, sound: 'mgun' },
   gtwrMg:    { dmg: 22, range: 4.0, rof: 10, speed: 0, warhead: 'sa', splash: 0, sound: 'mgun' },
-  atwrMissile: { dmg: 55, range: 5.0, rof: 30, speed: 8, warhead: 'he', splash: 10, homing: true, antiAir: true, sound: 'rocket' },
+  atwrMissile: { dmg: 90, range: 5.5, rof: 26, speed: 8, warhead: 'he', splash: 10, homing: true, antiAir: true, sound: 'rocket' },
+  slime:     { dmg: 30, range: 1.3, rof: 22, speed: 0, warhead: 'fire', splash: 8, sound: 'flame' },
   gunTurret: { dmg: 45, range: 4.75, rof: 30, speed: 8, warhead: 'ap', splash: 8, sound: 'cannon' },
   obelisk:   { dmg: 400, range: 7.0, rof: 90, speed: 0, warhead: 'laser', splash: 0, charge: 30, sound: 'laser' },
   samMissile: { dmg: 60, range: 5.5, rof: 25, speed: 9, warhead: 'he', splash: 8, homing: true, antiAir: true, airOnly: true, sound: 'rocket' },
@@ -66,6 +67,8 @@ DATA.units = {
   msam: { name: 'Rocket Launcher', cost: 800, hp: 100, speed: 1.8, sight: 4, armor: 'light', weapon: 'rocket227', side: 'gdi', factory: 'vehicle', prereq: ['hq'], turn: 1 },
   harv: { name: 'Harvester', cost: 1400, hp: 600, speed: 1.8, sight: 2, armor: 'light', weapon: null, side: null, factory: 'vehicle', prereq: ['proc'], harvester: true, turn: 1 },
   mcv:  { name: 'MCV', cost: 5000, hp: 600, speed: 1.4, sight: 2, armor: 'light', weapon: null, side: null, factory: 'vehicle', prereq: ['fix'], deploysTo: 'fact', turn: 1 },
+  // creature — never buildable; spawns when infantry die on tiberium
+  vice: { name: 'Visceroid', cost: 0, hp: 150, speed: 1.2, sight: 3, armor: 'light', weapon: 'slime', side: null, factory: null, prereq: [], creature: true, tibImmune: true, turn: 4 },
   // aircraft
   orca: { name: 'Orca', cost: 1200, hp: 125, speed: 4.0, sight: 5, armor: 'light', weapon: 'orcaRockets', side: 'gdi', factory: 'air', prereq: [], air: true, ammo: 6 },
   heli: { name: 'Apache', cost: 1200, hp: 125, speed: 3.6, sight: 5, armor: 'light', weapon: 'heliMg', side: 'nod', factory: 'air', prereq: [], air: true, ammo: 10 },
@@ -87,11 +90,11 @@ DATA.buildings = {
   tmpl: { name: 'Temple of Nod', cost: 3000, hp: 1000, w: 3, h: 3, armor: 'concrete', sight: 4, power: 0, drain: 150, side: 'nod', prereq: ['hq', 'afld'], superweapon: 'nuke' },
   hpad: { name: 'Helipad', cost: 1500, hp: 400, w: 2, h: 2, armor: 'wood', sight: 3, power: 0, drain: 10, side: null, prereq: ['proc'], factory: 'air', freeUnitAir: true },
   fix:  { name: 'Repair Facility', cost: 1200, hp: 400, w: 3, h: 3, armor: 'wood', sight: 3, power: 0, drain: 30, side: null, prereq: ['weap', 'afld'], prereqAny: true, repairPad: true },
-  gtwr: { name: 'Guard Tower', cost: 500, hp: 400, w: 1, h: 1, armor: 'wood', sight: 4, power: 0, drain: 10, side: 'gdi', prereq: ['pyle'], weapon: 'gtwrMg' },
-  atwr: { name: 'Adv. Guard Tower', cost: 1000, hp: 400, w: 1, h: 2, armor: 'concrete', sight: 5, power: 0, drain: 60, side: 'gdi', prereq: ['hq'], weapon: 'atwrMissile', needsPower: true },
-  gun:  { name: 'Gun Turret', cost: 600, hp: 400, w: 1, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 20, side: 'nod', prereq: ['hand'], weapon: 'gunTurret', turret: true },
-  obli: { name: 'Obelisk of Light', cost: 1500, hp: 400, w: 1, h: 2, armor: 'concrete', sight: 5, power: 0, drain: 150, side: 'nod', prereq: ['hq'], weapon: 'obelisk', needsPower: true },
-  sam:  { name: 'SAM Site', cost: 750, hp: 300, w: 2, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 25, side: 'nod', prereq: ['hand'], weapon: 'samMissile', needsPower: true },
+  gtwr: { name: 'Guard Tower', cost: 500, hp: 400, w: 1, h: 1, armor: 'wood', sight: 4, power: 0, drain: 10, side: 'gdi', prereq: ['pyle'], weapon: 'gtwrMg', defense: true, threat: 0.4 },
+  atwr: { name: 'Adv. Guard Tower', cost: 1000, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 60, side: 'gdi', prereq: ['hq'], weapon: 'atwrMissile', needsPower: true, defense: true, threat: 0.9 },
+  gun:  { name: 'Gun Turret', cost: 600, hp: 400, w: 1, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 20, side: 'nod', prereq: ['hand'], weapon: 'gunTurret', turret: true, defense: true, threat: 0.5 },
+  obli: { name: 'Obelisk of Light', cost: 1500, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 150, side: 'nod', prereq: ['hq'], weapon: 'obelisk', needsPower: true, defense: true, threat: 0.9 },
+  sam:  { name: 'SAM Site', cost: 750, hp: 300, w: 2, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 25, side: 'nod', prereq: ['hand'], weapon: 'samMissile', needsPower: true, defense: true, threat: 0.3 },
 };
 
 // sidebar ordering (filtered by prereqOk at runtime)

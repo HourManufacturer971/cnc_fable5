@@ -5,7 +5,9 @@
 const Fog = (function () {
 
   function init(g) {
-    (g || game).shroud.fill(0);
+    g = g || game;
+    g.shroud.fill(0);
+    if (g.visible) g.visible.fill(0);
   }
 
   function revealCircle(a, b, c, d) {
@@ -19,7 +21,11 @@ const Fog = (function () {
     for (let y = y0; y <= y1; y++) {
       for (let x = x0; x <= x1; x++) {
         const dx = x - cx, dy = y - cy;
-        if (dx * dx + dy * dy <= rr) g.shroud[cellIdx(x, y)] = 1;
+        if (dx * dx + dy * dy <= rr) {
+          const i = cellIdx(x, y);
+          g.shroud[i] = 1;               // permanent reveal (classic shroud)
+          if (g.visible) g.visible[i] = 1; // live line-of-sight this pass
+        }
       }
     }
   }
@@ -28,6 +34,7 @@ const Fog = (function () {
     g = g || game;
     if (!g) return;
     if (g.tick % 5 !== 0 && g.tick > 0) return;
+    if (g.visible) g.visible.fill(0);
     const side = g.humanSide;
     for (const u of g.units.values()) {
       if (u.owner !== side) continue;

@@ -92,6 +92,15 @@ const Input = (function () {
         const strip = mouse.x < C.STRIP_UX ? 'b' : 'u';
         _scrollStrip(strip, ev.deltaY > 0 ? 1 : -1);
         ev.preventDefault();
+        return;
+      }
+      // two-finger touchpad scroll (or mouse wheel) pans the map
+      if (hit.zone === 'viewport' && !game.paused) {
+        const r = canvas.getBoundingClientRect();
+        const scale = C.SCREEN_W / r.width; // client px -> internal px
+        game.camera.x = clamp(game.camera.x + ev.deltaX * scale, 0, C.MAP_W * C.CELL - C.VIEW_W);
+        game.camera.y = clamp(game.camera.y + ev.deltaY * scale, 0, C.MAP_H * C.CELL - C.VIEW_H);
+        ev.preventDefault();
       }
     }, { passive: false });
 

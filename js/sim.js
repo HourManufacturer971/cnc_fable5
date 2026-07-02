@@ -59,10 +59,9 @@ function _nearestEnemy(e, rangeCells, opts) {
   const g = game;
   const ex = _entX(e), ey = _entY(e);
   const maxD = rangeCells * C.CELL;
-  const enemy = enemyOf(e.owner);
   let best = null, bestD = Infinity;
   for (const u of g.units.values()) {
-    if (u.owner !== enemy || u._dead) continue;
+    if (u.owner === e.owner || u._dead) continue;
     if (u.cloaked && !opts.seeCloaked) continue;
     if (_isAir(u) && !opts.antiAir) continue;
     if (opts.airOnly && !_isAir(u)) continue;
@@ -71,9 +70,14 @@ function _nearestEnemy(e, rangeCells, opts) {
   }
   if (!opts.airOnly && !opts.unitsOnly) {
     for (const b of g.buildings.values()) {
-      if (b.owner !== enemy || b._dead) continue;
+      if (b.owner === e.owner || b._dead) continue;
       const d = _distTo(ex, ey, b);
-      if (d <= maxD && d < bestD) { bestD = d; best = b; }
+      if (d > maxD) continue;
+      // defensive structures draw fire first: the deadlier the tower, the
+      // shorter it "feels" to the targeting scan (AGT/obelisk over gtwr)
+      const bd = DATA.buildings[b.type];
+      const score = bd.threat ? d * (1 - bd.threat * 0.6) : d;
+      if (score < bestD) { bestD = score; best = b; }
     }
   }
   return best;
@@ -476,7 +480,7 @@ function _harvester(u, d) {
     if (u.tib >= C.HARV_CAP) { u.state = 'return'; u.path = []; return; }
     const cx = worldToCell(u.x), cy = worldToCell(u.y);
     const i = cellIdx(cx, cy);
-    if (u.pathi < u.path.length) { _stepAlongPath(u, d); return; }
+    if (u.pathi < u.path.length) { _stepAlongPath(u, d); _harvWatchdog(u); return; }
     if (g.tib[i] > 0) {
       u._eat = (u._eat || 0) + 1;
       u.anim++;
@@ -510,7 +514,9 @@ function _harvester(u, d) {
       return;
     }
     const dock = _procDock(proc);
-    if (dist(u.x, u.y, cellCenterX(dock.cx), cellCenterY(dock.cy)) <= C.CELL * 1.2) {
+    // 1.5 cells covers diagonal-adjacent waiting spots, so a queued harvester
+    // can always unload instead of wedging beside an occupied dock
+    if (dist(u.x, u.y, cellCenterX(dock.cx), cellCenterY(dock.cy)) <= C.CELL * 1.5) {
       u.state = 'unload';
       u._unload = 60;
       u._chunk = u.tib / 60;
@@ -523,6 +529,7 @@ function _harvester(u, d) {
       u.pathi = 0;
     }
     _stepAlongPath(u, d);
+    _harvWatchdog(u);
     return;
   }
   if (u.state === 'unload') {
@@ -549,6 +556,34 @@ function _harvester(u, d) {
     const c = _findTibCell(u, 40);
     if (c) orderHarvest(u, c.cx, c.cy);
     else _clearDock(u);
+  }
+}
+
+// stuck-detector: a harvester that hasn't moved or made progress for ~6s
+// while trying to work gets shaken loose (repath from a side-step, or re-seek)
+function _harvWatchdog(u) {
+  const g = game;
+  const key = (u.x | 0) * 4096 + (u.y | 0);
+  if (u._wdKey !== key) {
+    u._wdKey = key;
+    u._wdSince = g.tick;
+    return;
+  }
+  if (g.tick - u._wdSince < 90) return;
+  u._wdSince = g.tick;
+  // side-step to any free neighbor, then let the normal logic re-plan
+  const cx = worldToCell(u.x), cy = worldToCell(u.y);
+  const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]];
+  const start = (g.rng() * dirs.length) | 0;
+  for (let i = 0; i < dirs.length; i++) {
+    const [dx, dy] = dirs[(start + i) % dirs.length];
+    if (isPassable(cx + dx, cy + dy, u)) {
+      const wasState = u.state;
+      u.path = findPath(u, cx + dx, cy + dy);
+      u.pathi = 0;
+      u.state = wasState; // keep purpose; the step just breaks the wedge
+      return;
+    }
   }
 }
 
@@ -749,11 +784,18 @@ function _tickUnit(u) {
       _autoAcquire(u, d);
       // mammoth self-heal to 50%
       if (d.selfHeal && u.hp < u.maxHp / 2 && g.tick % 8 === 0) u.hp++;
+      // creatures roam the fields between meals
+      if (d.creature && (g.tick + u.id) % 45 === 0) {
+        const cx = worldToCell(u.x) + ((g.rng() * 7) | 0) - 3;
+        const cy = worldToCell(u.y) + ((g.rng() * 7) | 0) - 3;
+        if (inMap(cx, cy) && isPassable(cx, cy, u)) orderMove(u, cx, cy);
+      }
       break;
   }
 
-  // infantry standing in tiberium
-  if (d.infantry && !d.tibImmune && g.tick % 8 === 0) {
+  // infantry wading THROUGH tiberium take damage; standing still is safe
+  if (d.infantry && !d.tibImmune && g.tick % 8 === 0 &&
+      u.path && u.pathi < u.path.length) {
     const i = cellIdx(worldToCell(u.x), worldToCell(u.y));
     if (g.tib[i] > 0) {
       u.hp -= 1;
@@ -894,6 +936,15 @@ function killEntity(ent, attacker) {
     _releasePad(ent);
     if (d.infantry) {
       spawnEffect('infdie', ent.x, ent.y, { itype: ent.type, side: ent.owner });
+      // dying on a tiberium field mutates the body into a visceroid
+      const tc = cellIdx(worldToCell(ent.x), worldToCell(ent.y));
+      if (g.tib[tc] > 0 && DATA.units.vice) {
+        const v = makeUnit('vice', 'mut', worldToCell(ent.x), worldToCell(ent.y));
+        if (isPassable(worldToCell(ent.x), worldToCell(ent.y), v)) {
+          addUnit(v);
+          _maybePlay('squish', ent.x, ent.y);
+        }
+      }
     } else {
       const big = d.hp >= 300 || d.harvester;
       spawnEffect(big ? 'expL' : 'expS', ent.x, ent.y);
@@ -929,6 +980,12 @@ EV.on('damaged', function (target, attacker) {
   if (!g || !attacker || attacker.owner === target.owner) return;
   if (target.kind === 'building') {
     if (target.owner === g.humanSide) _evaOnce('baseUnderAttack', 450);
+    // auto-repair: damaged finished buildings start repairing on their own
+    // (costs credits per hp as usual; the repair toggle can still switch it off)
+    if (target.buildProgress >= 1 && !target.repairing && target.hp < target.maxHp &&
+        g.players[target.owner].credits > 100) {
+      target.repairing = true;
+    }
     return;
   }
   const d = DATA.units[target.type];

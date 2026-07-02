@@ -1256,14 +1256,14 @@
     // apex glint
     g.fillStyle = '#ff9070'; g.fillRect(apexX - 1, apexY - 1, 2, 2);
 
-    // scorpion tail: one smooth, strongly tapered limb sweeping in from the
-    // lower-left, crossing the badge border, arching over the top and hooking
-    // down into a stinger. Lower interior stays open so the badge reads.
+    // scorpion tail: one smooth, strongly tapered limb coiled ENTIRELY inside
+    // the triangle — rising along the left interior, arching under the top
+    // edge and hooking down into a stinger over the badge core.
     const spine = [
-      [41, 48], [39, 41], [40, 34], [43, 28], [48, 23], [54, 20], [60, 19],
-      [66, 21], [70, 25], [71, 30], [70, 34], [68, 38], [65, 41], [62, 44],
+      [56, 43], [51, 38], [48, 32], [48, 26], [51, 21], [56, 17], [61, 16],
+      [66, 18], [70, 22], [71, 27], [70, 31], [67, 35], [63, 38], [60, 40],
     ];
-    const rad = [6, 6, 5, 5, 4, 4, 4, 3, 3, 3, 2, 2, 1, 1];
+    const rad = [5, 5, 5, 4, 4, 4, 4, 3, 3, 3, 2, 2, 1, 1];
     // interpolated points for a smooth continuous body
     const pts = [];
     for (let i = 0; i < spine.length - 1; i++) {
@@ -1290,11 +1290,11 @@
       g.fillStyle = '#ff9070';
       g.fillRect(spine[i][0] - 1, spine[i][1] - rad[i] + 1, 2, 1);
     }
-    // stinger point: sharp venom tip finishing the stroke
-    g.fillStyle = RED; g.fillRect(61, 44, 2, 2);
-    g.fillStyle = RED_L; g.fillRect(61, 44, 1, 1);
-    g.fillStyle = '#ffb090'; g.fillRect(60, 46, 1, 1);
-    g.fillStyle = '#120202'; g.fillRect(59, 47, 1, 1);
+    // stinger point: sharp venom tip finishing the stroke (inside the core)
+    g.fillStyle = RED; g.fillRect(59, 40, 2, 2);
+    g.fillStyle = RED_L; g.fillRect(59, 40, 1, 1);
+    g.fillStyle = '#ffb090'; g.fillRect(58, 42, 1, 1);
+    g.fillStyle = '#120202'; g.fillRect(57, 43, 1, 1);
     // inner shadow along the right slant so the badge reads dimensional
     g.fillStyle = RED_S;
     for (let y = topY + 2; y <= apexY - 2; y++) {

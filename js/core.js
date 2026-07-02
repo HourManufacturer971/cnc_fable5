@@ -183,13 +183,16 @@ function makeGame(opts) {
     buildings: new Map(),
     bullets: [],
     effects: [],
-    players: { gdi: makePlayer('gdi', false), nod: makePlayer('nod', true) },
+    // mut is a stub owner for tiberium creatures (visceroids): no base, no
+    // production, hostile to everyone, never checked for win/lose
+    players: { gdi: makePlayer('gdi', false), nod: makePlayer('nod', true), mut: makePlayer('mut', true) },
     humanSide: (opts && opts.side) || 'gdi',
     human: null, ai: null,
     camera: { x: 0, y: 0 },
     selection: [],
     groups: {},
     shroud: new Uint8Array(n),
+    visible: new Uint8Array(n), // cells currently within human sight (recomputed by Fog)
     startPos: null,
     status: 'playing',
     paused: false,

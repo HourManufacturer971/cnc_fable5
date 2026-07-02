@@ -96,16 +96,23 @@ const Render = (function () {
         mc.fillRect(cx * 2, cy * 2, 2, 2);
       }
     }
+    // faction colors: GDI gold, Nod red, creatures sickly green
+    const OWNER_COLOR = { gdi: '#ffd23c', nod: '#ff2418', mut: '#4ce03c' };
     for (const b of g.buildings.values()) {
       if (g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
-      mc.fillStyle = b.owner === 'gdi' ? PAL.uiGold : PAL.nodRedLight;
+      mc.fillStyle = OWNER_COLOR[b.owner] || '#ccc';
       mc.fillRect(b.cx * 2, b.cy * 2, b.w * 2, b.h * 2);
     }
     for (const u of g.units.values()) {
       const cx = worldToCell(u.x), cy = worldToCell(u.y);
-      if (g.shroud[cellIdx(cx, cy)] !== 1) continue;
-      if (u.cloaked && u.owner !== g.humanSide) continue;
-      mc.fillStyle = u.owner === 'gdi' ? '#f8e8a0' : '#f86048';
+      const i = cellIdx(cx, cy);
+      if (g.shroud[i] !== 1) continue;
+      if (u.owner !== g.humanSide) {
+        // enemy blips only where MY forces can currently see, not just explored
+        if (!g.visible || g.visible[i] !== 1) continue;
+        if (u.cloaked) continue;
+      }
+      mc.fillStyle = OWNER_COLOR[u.owner] || '#ccc';
       mc.fillRect(cx * 2, cy * 2, 2, 2);
     }
   }
@@ -139,7 +146,9 @@ const Render = (function () {
   function _drawBuilding(g, b, ox, oy) {
     const set = SPRITES.buildings[b.type] && SPRITES.buildings[b.type][b.owner];
     if (!set) return;
-    const x = b.cx * C.CELL - ox, y = b.cy * C.CELL - oy;
+    // tall structures (towers, obelisk) rise above their footprint: set.yOff
+    // pixels of the canvas sit ABOVE the anchor cell
+    const x = b.cx * C.CELL - ox, y = b.cy * C.CELL - oy - (set.yOff || 0);
     const damaged = b.hp < b.maxHp * 0.5;
     let frames = damaged && set.damaged ? set.damaged : set.normal;
     if (b.type === 'obli' && b.charging && set.charge) {

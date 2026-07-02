@@ -248,6 +248,38 @@
     }
   }
 
+  // round concrete pad for defensive structures — they sit on a small circular
+  // emplacement instead of the square slab + bib regular buildings get
+  function roundPad(ctx, cx, cy, r, rnd) {
+    circleFill(ctx, cx + 1, cy + 1, r, 'rgba(0,0,0,0.28)'); // cast shadow
+    circleFill(ctx, cx, cy, r, OUT);
+    circleFill(ctx, cx, cy, r - 1, SLAB);
+    circleFill(ctx, cx - 1, cy - 1, r - 2, SLAB_L);
+    circleFill(ctx, cx, cy, r - 2, SLAB);
+    // rim seam + speckle
+    for (let i = 0; i < 10; i++) {
+      const a = rnd() * Math.PI * 2, rr = rnd() * (r - 3);
+      ctx.fillStyle = rnd() < 0.5 ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,250,0.06)';
+      ctx.fillRect((cx + Math.cos(a) * rr) | 0, (cy + Math.sin(a) * rr) | 0, 1, 1);
+    }
+  }
+
+  // wide elliptical pad (SAM site)
+  function ovalPad(ctx, cx, cy, rx, ry, rnd) {
+    ctx.fillStyle = OUT;
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = SLAB;
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx - 1, ry - 1, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = SLAB_L;
+    ctx.beginPath(); ctx.ellipse(cx - 1, cy - 1, rx - 2, ry - 2, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = SLAB;
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx - 2, ry - 2, 0, 0, Math.PI * 2); ctx.fill();
+    for (let i = 0; i < 14; i++) {
+      ctx.fillStyle = rnd() < 0.5 ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,250,0.06)';
+      ctx.fillRect((cx - rx + 3 + rnd() * (rx * 2 - 6)) | 0, (cy - ry + 2 + rnd() * (ry * 2 - 4)) | 0, 1, 1);
+    }
+  }
+
   // ---- building drawers -------------------------------------------------------
   // signature: (ctx, W, H, pal, f, side, rnd); W/H = footprint px (bib excluded)
 
@@ -907,7 +939,7 @@
   }
 
   function drawGtwr(ctx, W, H, pal, f, side, rnd) { // 24x24 — sandbag MG nest
-    baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
+    roundPad(ctx, 12, 12, 11, rnd);
     const SB = '#b3a06a', SBD = '#7e6f45', SBL = '#cfc088', SBD2 = '#5e5233';
     circleFill(ctx, 13, 13, 10, SH);
     circleFill(ctx, 12, 12, 11, OUT);
@@ -964,7 +996,7 @@
   }
 
   function drawAtwr(ctx, W, H, pal, f, side, rnd) { // 24x48 — tall missile tower
-    baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
+    roundPad(ctx, 12, H - 12, 11, rnd); // pad on the 1x1 footprint cell only
     // base plinth with hazard
     P(ctx, 5, 41, 18, 5, SH);
     panel(ctx, 3, 38, 18, 8, CONC, CONC_L, CONC_D);
@@ -998,7 +1030,7 @@
   }
 
   function drawGun(ctx, W, H, pal, f, side, rnd) { // 24x24 — turret base + ammo
-    baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
+    roundPad(ctx, 12, 12, 11, rnd);
     // ammo boxes on the slab corner
     P(ctx, 1, 18, 5, 4, '#6a5a20');
     P(ctx, 1, 18, 5, 1, '#8f7c30');
@@ -1049,7 +1081,7 @@
   }
 
   function drawObli(ctx, W, H, pal, f, side, rnd, glow) { // 24x48 — black monolith
-    baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
+    roundPad(ctx, 12, H - 12, 11, rnd); // pad on the 1x1 footprint cell only
     // plinth with vents
     P(ctx, 6, 42, 16, 4, SH);
     P(ctx, 4, 40, 16, 5, '#26262d');
@@ -1086,7 +1118,7 @@
   }
 
   function drawSam(ctx, W, H, pal, f, side, rnd, open) { // 48x24 — dome launcher
-    baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
+    ovalPad(ctx, 24, 14, 23, 9, rnd);
     P(ctx, 6, 8, 40, 15, SH);
     P(ctx, 4, 6, 40, 16, pal.dark);
     P(ctx, 5, 7, 38, 1, pal.base);
@@ -1264,28 +1296,42 @@
 
   // ---- frame factories --------------------------------------------------------
 
+  // towers rise above their 1x1 footprint: extra pixels drawn ABOVE the anchor
+  // cell (render offsets by the entry's yOff)
+  const TALL_OVER = { atwr: 24, obli: 24 };
+
   function renderBuildingFrame(key, side, f, damaged) {
     const d = DATA.buildings[key];
-    const W = d.w * C.CELL, H = d.h * C.CELL;
-    const c = mkCanvas(W, H + 8);
+    const over = TALL_OVER[key] || 0;
+    const W = d.w * C.CELL, H = d.h * C.CELL + over;
+    // defenses sit on their own pads: no concrete bib apron
+    const c = mkCanvas(W, H + (d.defense ? 0 : 8));
     const ctx = c.getContext('2d');
     const rnd = mulberry(hashStr(key + ':' + side));
-    drawBib(ctx, W, H, rnd);
+    if (!d.defense) drawBib(ctx, W, H, rnd);
     BUILDERS[key](ctx, W, H, sidePal(side), f, side, rnd);
     if (damaged) {
-      damageOverlay(ctx, W, H, key + ':' + side);
-      fireOverlay(ctx, W, H, key + ':' + side + ':fire', f);
+      if (d.defense) {
+        // clip wear to the sprite silhouette (transparent around the pad)
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-atop';
+        damageOverlay(ctx, W, H, key + ':' + side);
+        fireOverlay(ctx, W, H, key + ':' + side + ':fire', f);
+        ctx.restore();
+      } else {
+        damageOverlay(ctx, W, H, key + ':' + side);
+        fireOverlay(ctx, W, H, key + ':' + side + ':fire', f);
+      }
     }
     return c;
   }
 
   function renderObliCharge(side, glow) {
     const d = DATA.buildings.obli;
-    const W = d.w * C.CELL, H = d.h * C.CELL;
-    const c = mkCanvas(W, H + 8);
+    const W = d.w * C.CELL, H = d.h * C.CELL + (TALL_OVER.obli || 0);
+    const c = mkCanvas(W, H);
     const ctx = c.getContext('2d');
     const rnd = mulberry(hashStr('obli:' + side));
-    drawBib(ctx, W, H, rnd);
     drawObli(ctx, W, H, sidePal(side), 0, side, rnd, glow);
     return c;
   }
@@ -1293,10 +1339,9 @@
   function renderSamOpen(side, stage) {
     const d = DATA.buildings.sam;
     const W = d.w * C.CELL, H = d.h * C.CELL;
-    const c = mkCanvas(W, H + 8);
+    const c = mkCanvas(W, H);
     const ctx = c.getContext('2d');
     const rnd = mulberry(hashStr('sam:' + side));
-    drawBib(ctx, W, H, rnd);
     drawSam(ctx, W, H, sidePal(side), 0, side, rnd, stage);
     return c;
   }
@@ -1464,6 +1509,7 @@
         damaged.push(renderBuildingFrame(key, side, f, true));
       }
       const entry = { normal, damaged };
+      if (TALL_OVER[key]) entry.yOff = TALL_OVER[key];
       if (key === 'gun') entry.turret = makeGunTurret(sidePal(side));
       if (key === 'obli') entry.charge = [1, 2, 3].map(g => renderObliCharge(side, g));
       if (key === 'sam') entry.open = [1, 2, 3].map(g => renderSamOpen(side, g));

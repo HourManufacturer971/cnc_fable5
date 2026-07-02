@@ -254,24 +254,31 @@ const AUDIO = (function () {
     },
     squish(t) { SFX.crush(t); },
 
-    // 3-4 rapid cracks, each randomly detuned ~±10%, over one shared sub knock
+    // 5-6 round burst at a believable cyclic rate: each shot is a wideband
+    // 1ms snap + low-mid report + its own little chest knock
     mgun(t) {
-      const n = 3 + ((Math.random() * 2) | 0);
+      const n = 5 + ((Math.random() * 2) | 0);
       for (let i = 0; i < n; i++) {
-        const tt = t + i * rnd(0.05, 0.062);
-        const f = vr(1500, 0.1);
-        noiseHit(tt, 0.05, 'bandpass', [[0, f], [0.05, f * 0.35]], 1.1,
-          [[0, 0.001], [0.003, vr(0.5, 0.12)], [0.05, 0.001]]);
+        const tt = t + i * rnd(0.066, 0.078);
+        // wideband muzzle snap (raw noise, near-instant decay)
+        noiseHit(tt, 0.018, null, null, 1,
+          [[0, 0.001], [0.001, vr(0.4, 0.15)], [0.018, 0.001]]);
+        // low-mid report body — this is what makes it read as a gunshot
+        const f = vr(430, 0.12);
+        noiseHit(tt, 0.06, 'bandpass', [[0, f], [0.06, f * 0.5]], 0.8,
+          [[0, 0.001], [0.002, vr(0.5, 0.12)], [0.06, 0.001]]);
+        thump(tt, vr(120), 55, 0.05, 0.2);
       }
-      thump(t, 130, 62, 0.09, 0.16);
     },
 
-    // single crack: snap-shaped noise body with downward sweep + small knock
+    // single shot: snap + low-mid report + knock, slightly bigger than one mg round
     pistol(t) {
-      const f = vr(1900, 0.1);
-      noiseHit(t, 0.07, 'bandpass', [[0, f], [0.07, f * 0.3]], 0.9,
-        [[0, 0.001], [0.002, 0.46], [0.07, 0.001]]);
-      thump(t, vr(160), 60, 0.08, 0.2);
+      noiseHit(t, 0.02, null, null, 1,
+        [[0, 0.001], [0.001, 0.42], [0.02, 0.001]]);
+      const f = vr(480, 0.1);
+      noiseHit(t, 0.09, 'bandpass', [[0, f], [0.09, f * 0.4]], 0.8,
+        [[0, 0.001], [0.002, 0.5], [0.09, 0.001]]);
+      thump(t, vr(150), 55, 0.07, 0.24);
     },
 
     // tank gun: 2ms snap, punchy 60-80Hz sub thump, mid crack, pink rumble tail + echo
@@ -624,10 +631,32 @@ const AUDIO = (function () {
     pumpEva();
   }
 
+  // short PTT radio squelch: the tactile "order received" click-hiss.
+  // Reads as comms chatter without leaning on synthetic speech.
+  let lastSquelchAt = -1e9;
+  function squelch() {
+    if (!audioReady()) return;
+    const n = nowMs();
+    if (n - lastSquelchAt < 220) return;
+    lastSquelchAt = n;
+    const t = ctx.currentTime;
+    noiseHit(t, 0.03, 'bandpass', [[0, 2100], [0.03, 1600]], 2,
+      [[0, 0.001], [0.004, 0.16], [0.03, 0.001]]);
+    noiseHit(t + 0.045, 0.05, 'bandpass', [[0, vr(1700)], [0.05, 1100]], 1.6,
+      [[0, 0.001], [0.006, 0.11], [0.05, 0.001]]);
+    tone(t + 0.045, 0.04, 'sine', [[0, vr(1250, 0.06)], [0.04, 1150]],
+      [[0, 0.001], [0.008, 0.05], [0.04, 0.001]]);
+  }
+
   function ack(kind, cls) {
-    if (!enabled || !inited || !hasSpeech()) return;
+    if (!enabled || !inited) return;
+    // move/attack orders lead with a radio squelch every time...
+    if (kind !== 'select') squelch();
+    if (!hasSpeech()) return;
     const acks = (typeof DATA !== 'undefined' && DATA && DATA.acks) ? DATA.acks : null;
     if (!acks) return;
+    // ...and only sometimes add a spoken word, so constant TTS doesn't grate
+    if (kind !== 'select' && Math.random() > 0.4) return;
     // 'select' picks a class-specific pool so infantry never say "vehicle reporting"
     let lines;
     if (kind === 'select') {
