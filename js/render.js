@@ -48,9 +48,10 @@ const Render = (function () {
     if (x < C.VIEW_PW) return { zone: 'viewport' };
     if (x >= C.RADAR_X && y >= C.RADAR_Y && y < C.RADAR_Y + C.RADAR_H) return { zone: 'radar' };
     if (y >= C.BTN_Y && y < C.BTN_Y + C.BTN_H) {
-      if (x >= 968 && x < 1064) return { zone: 'btn', which: 'repair' };
-      if (x >= 1072 && x < 1168) return { zone: 'btn', which: 'sell' };
-      if (x >= 1176 && x < 1272) return { zone: 'btn', which: 'map' };
+      const b0 = C.SIDEBAR_X + 8;
+      if (x >= b0 && x < b0 + 96) return { zone: 'btn', which: 'repair' };
+      if (x >= b0 + 104 && x < b0 + 200) return { zone: 'btn', which: 'sell' };
+      if (x >= b0 + 208 && x < b0 + 304) return { zone: 'btn', which: 'map' };
       return { zone: 'sidebar' };
     }
     if (game && game.human) {
@@ -173,7 +174,24 @@ const Render = (function () {
     } else if (b.type === 'sam' && b.targetId && set.open) {
       frames = set.open;
     }
-    const frame = frames[((g.tick >> 3) + b.id) % frames.length];
+    let frame;
+    if (set.wallMask) {
+      // walls auto-connect: frame index = neighbor bitmask (1=N 2=E 4=S 8=W)
+      let m = 0;
+      const isWall = (cx, cy) => {
+        const o = occAt(cx, cy);
+        if (o <= 0) return false;
+        const e = getEnt(o);
+        return e && e.kind === 'building' && e.type === b.type;
+      };
+      if (isWall(b.cx, b.cy - 1)) m |= 1;
+      if (isWall(b.cx + 1, b.cy)) m |= 2;
+      if (isWall(b.cx, b.cy + 1)) m |= 4;
+      if (isWall(b.cx - 1, b.cy)) m |= 8;
+      frame = frames[m % frames.length];
+    } else {
+      frame = frames[((g.tick >> 3) + b.id) % frames.length];
+    }
     const s = sca(frame);
     const DW = frame.width * s, DH = frame.height * s;
 
@@ -457,7 +475,17 @@ const Render = (function () {
     }
 
     // placement overlay
-    if (Input.mode === 'place' && Input.modeArg) {
+    if (Input.mode === 'place' && Input.modeArg && Input.wallLine && Input.wallLine.length) {
+      // RA2-style wall drag: preview the whole segment line
+      for (const cell of Input.wallLine) {
+        const ok = Production.cellOk(g, g.human, cell.cx, cell.cy);
+        ctx.fillStyle = ok ? 'rgba(80,240,80,0.4)' : 'rgba(240,60,40,0.4)';
+        ctx.fillRect(X(cell.cx * C.CELL), Y(cell.cy * C.CELL), cs, cs);
+        ctx.strokeStyle = ok ? '#8f8' : '#f88';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(X(cell.cx * C.CELL) + 0.5, Y(cell.cy * C.CELL) + 0.5, cs - 1, cs - 1);
+      }
+    } else if (Input.mode === 'place' && Input.modeArg) {
       const w = worldFromScreen(Input.mouse.x, Input.mouse.y);
       if (w) {
         const d = DATA.buildings[Input.modeArg];
@@ -581,7 +609,7 @@ const Render = (function () {
     }
 
     // buttons
-    const btns = [['REPAIR', 968, 'repair'], ['SELL', 1072, 'sell'], ['MAP', 1176, 'map']];
+    const btns = [['REPAIR', C.SIDEBAR_X + 8, 'repair'], ['SELL', C.SIDEBAR_X + 112, 'sell'], ['MAP', C.SIDEBAR_X + 216, 'map']];
     ctx.font = '16px monospace';
     for (const [label, bx, which] of btns) {
       const active = Input.mode === which;
@@ -642,10 +670,19 @@ const Render = (function () {
             ctx.fillText(t, sx + 44, iy + 41);
           }
         } else if (item.state === 'ready') {
-          if ((g.tick >> 3) & 1) {
-            ctx.fillStyle = '#fff';
-            ctx.fillText('READY', sx + 42, iy + 41);
-          }
+          // unmissable: pulsing gold frame + brightening wash + big READY tag
+          const pulse = (g.tick >> 2) & 1;
+          ctx.fillStyle = pulse ? 'rgba(255,235,150,0.28)' : 'rgba(255,215,90,0.12)';
+          ctx.fillRect(sx, iy, C.CAMEO_PW, C.CAMEO_PH);
+          ctx.strokeStyle = pulse ? '#ffe789' : PAL.uiGold;
+          ctx.lineWidth = 3;
+          ctx.strokeRect(sx + 1.5, iy + 1.5, C.CAMEO_PW - 3, C.CAMEO_PH - 3);
+          ctx.fillStyle = 'rgba(0,0,0,0.72)';
+          ctx.fillRect(sx + 20, iy + 34, C.CAMEO_PW - 40, 26);
+          ctx.font = 'bold 17px monospace';
+          ctx.fillStyle = pulse ? '#fff' : '#ffe789';
+          ctx.fillText('READY', sx + 37, iy + 39);
+          ctx.font = '14px monospace';
         }
         // queued-unit count badge
         if (item.count > 1 || (item.count === 1 && item.state === 'idle')) {

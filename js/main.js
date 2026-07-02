@@ -128,7 +128,7 @@ const Main = (function () {
     game.camera.x = clamp(cellCenterX(hp.cx) - C.VIEW_W / 2, 0, C.MAP_W * C.CELL - C.VIEW_W);
     game.camera.y = clamp(cellCenterY(hp.cy) - C.VIEW_H / 2, 0, C.MAP_H * C.CELL - C.VIEW_H);
     game.startTime = Date.now();
-    game.speed = ($('speedSlider').value || 100) / 100;
+    game.speed = ($('speedSlider').value || 140) / 100;
 
     AUDIO.eva('battleControlOnline');
   }
@@ -161,7 +161,11 @@ const Main = (function () {
 
   function _checkEnd() {
     const g = game;
-    const alive = p => p.buildingIds.length > 0 || p.unitIds.length > 0;
+    const alive = p => p.unitIds.length > 0 ||
+      p.buildingIds.some(id => {
+        const b = g.buildings.get(id);
+        return b && !DATA.buildings[b.type].wall; // walls alone don't keep you in the game
+      });
     const humanAlive = alive(g.human), aiAlive = alive(g.ai);
     if (humanAlive && aiAlive) return;
     endGame(humanAlive && !aiAlive);

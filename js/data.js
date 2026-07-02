@@ -90,6 +90,7 @@ DATA.buildings = {
   tmpl: { name: 'Temple of Nod', cost: 3000, hp: 1000, w: 3, h: 3, armor: 'concrete', sight: 4, power: 0, drain: 150, side: 'nod', prereq: ['hq', 'afld'], superweapon: 'nuke' },
   hpad: { name: 'Helipad', cost: 1500, hp: 400, w: 2, h: 2, armor: 'wood', sight: 3, power: 0, drain: 10, side: null, prereq: ['proc'], factory: 'air', freeUnitAir: true },
   fix:  { name: 'Repair Facility', cost: 1200, hp: 400, w: 3, h: 3, armor: 'wood', sight: 3, power: 0, drain: 30, side: null, prereq: ['weap', 'afld'], prereqAny: true, repairPad: true },
+  brik: { name: 'Concrete Wall', cost: 100, hp: 300, w: 1, h: 1, armor: 'concrete', sight: 1, power: 0, drain: 0, side: null, prereq: [], defense: true, wall: true },
   gtwr: { name: 'Guard Tower', cost: 500, hp: 400, w: 1, h: 1, armor: 'wood', sight: 4, power: 0, drain: 10, side: 'gdi', prereq: ['pyle'], weapon: 'gtwrMg', defense: true, threat: 0.4 },
   atwr: { name: 'Adv. Guard Tower', cost: 1000, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 60, side: 'gdi', prereq: ['hq'], weapon: 'atwrMissile', needsPower: true, defense: true, threat: 0.9 },
   gun:  { name: 'Gun Turret', cost: 600, hp: 400, w: 1, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 20, side: 'nod', prereq: ['hand'], weapon: 'gunTurret', turret: true, defense: true, threat: 0.5 },
@@ -100,11 +101,11 @@ DATA.buildings = {
 // sidebar ordering (filtered by prereqOk at runtime)
 DATA.buildList = {
   gdi: {
-    buildings: ['nuke', 'proc', 'pyle', 'nuk2', 'silo', 'weap', 'hq', 'gtwr', 'fix', 'hpad', 'atwr', 'eye'],
+    buildings: ['nuke', 'proc', 'pyle', 'nuk2', 'silo', 'brik', 'weap', 'hq', 'gtwr', 'fix', 'hpad', 'atwr', 'eye'],
     units: ['e1', 'e2', 'e3', 'e6', 'rmbo', 'jeep', 'apc', 'mtnk', 'harv', 'msam', 'htnk', 'orca', 'mcv'],
   },
   nod: {
-    buildings: ['nuke', 'proc', 'hand', 'nuk2', 'silo', 'afld', 'hq', 'gun', 'sam', 'fix', 'hpad', 'obli', 'tmpl'],
+    buildings: ['nuke', 'proc', 'hand', 'nuk2', 'silo', 'brik', 'afld', 'hq', 'gun', 'sam', 'fix', 'hpad', 'obli', 'tmpl'],
     units: ['e1', 'e3', 'e4', 'e6', 'e5', 'rmbo', 'bggy', 'bike', 'ltnk', 'harv', 'arty', 'ftnk', 'stnk', 'heli', 'mcv'],
   },
 };

@@ -10,19 +10,19 @@ const C = {
   MAP_W: 64,
   MAP_H: 64,
   TPS: 15,
-  SCREEN_W: 1280,
-  SCREEN_H: 800,
+  SCREEN_W: 1600,
+  SCREEN_H: 1000,
   TAB_H: 32,
-  VIEW_W: 480,   // viewport span in WORLD px (480 world = 960 screen)
-  VIEW_H: 384,
-  VIEW_PW: 960,  // viewport span in SCREEN px
-  VIEW_PH: 768,
-  SIDEBAR_X: 960,
+  VIEW_W: 640,   // viewport span in WORLD px (640 world = 1280 screen)
+  VIEW_H: 484,
+  VIEW_PW: 1280, // viewport span in SCREEN px
+  VIEW_PH: 968,
+  SIDEBAR_X: 1280,
   SIDEBAR_W: 320,
-  RADAR_X: 960, RADAR_Y: 32, RADAR_W: 320, RADAR_H: 260,
-  MM_X: 992, MM_Y: 34, MM_S: 256,       // radar minimap blit rect (4px/cell)
+  RADAR_X: 1280, RADAR_Y: 32, RADAR_W: 320, RADAR_H: 260,
+  MM_X: 1312, MM_Y: 34, MM_S: 256,      // radar minimap blit rect (4px/cell)
   BTN_Y: 292, BTN_H: 40,
-  STRIP_BX: 968, STRIP_UX: 1104, STRIP_Y: 344, STRIP_SPACING: 100, STRIP_VISIBLE: 4,
+  STRIP_BX: 1288, STRIP_UX: 1424, STRIP_Y: 344, STRIP_SPACING: 100, STRIP_VISIBLE: 6,
   CAMEO_W: 64, CAMEO_H: 48,             // cameo SOURCE size (art authored at this)
   CAMEO_PW: 128, CAMEO_PH: 96,          // cameo SCREEN slot size
   HARV_CAP: 700,

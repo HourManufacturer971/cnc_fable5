@@ -1689,6 +1689,7 @@
   // ---- generate everything at load ---------------------------------------------
 
   for (const key of Object.keys(DATA.buildings)) {
+    if (DATA.buildings[key].wall) continue; // walls have their own generator below
     SPRITES.buildings[key] = SPRITES.buildings[key] || {};
     for (const side of ['gdi', 'nod']) {
       const n = FRAME_COUNT[key] || 2;
@@ -1710,4 +1711,85 @@
   // (its original internal name) and must keep its own cameo.
   SPRITES.cameo.ionStrike = ionCameo();
   SPRITES.cameo.nukeStrike = nukeCameo();
+})();
+
+// Concrete wall (brik) — 16 auto-connect variants indexed by neighbor bitmask
+// (1=N, 2=E, 4=S, 8=W). Pseudo-3D: light top face, shaded south face, posts at
+// junctions. Same look for both factions. Render picks the frame by mask.
+(function () {
+  if (typeof SPRITES === 'undefined' || typeof mkCanvas === 'undefined' ||
+      typeof document === 'undefined') return;
+
+  const TOP = '#a8a89c', TOP_L = '#c2c2b4', FACE = '#7e7e74', FACE_D = '#5c5c54';
+  const OUT = '#14140f';
+  const H = 10; // wall height in px (south face rows)
+
+  function seg(g, x, y, w, h, top) {
+    // one wall chunk: top face + south face + outline
+    g.fillStyle = OUT;
+    g.fillRect(x - 1, y - 1, w + 2, h + H + 2);
+    g.fillStyle = top ? TOP_L : TOP;
+    g.fillRect(x, y, w, h);
+    g.fillStyle = FACE;
+    g.fillRect(x, y + h, w, H - 2);
+    g.fillStyle = FACE_D;
+    g.fillRect(x, y + h + H - 2, w, 2);
+  }
+
+  function wallFrame(mask, damaged) {
+    const c = mkCanvas(24, 32); // 8px rises above the cell (yOff 8 world px /2)
+    const g = c.getContext('2d');
+    const cx = 12, cy = 14; // wall center on the cell (top-face coords)
+    // arms first so the post overlaps them
+    if (mask & 1) seg(g, 8, 0, 8, cy - 4, false);           // north arm
+    if (mask & 4) seg(g, 8, cy, 8, 18 - cy + 4 - H, false); // south arm
+    if (mask & 8) seg(g, 0, cy - 4, cx, 6, false);          // west arm
+    if (mask & 2) seg(g, cx, cy - 4, 12, 6, false);         // east arm
+    // center post: slightly taller block
+    g.fillStyle = OUT;
+    g.fillRect(6, 2, 12, 26);
+    g.fillStyle = TOP_L;
+    g.fillRect(7, 3, 10, 8);
+    g.fillStyle = TOP;
+    g.fillRect(7, 6, 10, 5);
+    g.fillStyle = FACE;
+    g.fillRect(7, 11, 10, 12);
+    g.fillStyle = FACE_D;
+    g.fillRect(7, 21, 10, 2);
+    g.fillRect(7, 3, 1, 20);
+    // cap highlight
+    g.fillStyle = '#d8d8ca';
+    g.fillRect(7, 3, 10, 1);
+    if (damaged) {
+      g.fillStyle = 'rgba(20,16,10,0.35)';
+      g.fillRect(0, 0, 24, 32);
+      g.fillStyle = OUT;
+      g.fillRect(9, 8, 2, 3); g.fillRect(14, 14, 3, 2); g.fillRect(8, 18, 2, 2);
+    }
+    // soft SE shadow
+    g.fillStyle = 'rgba(0,0,0,0.22)';
+    g.fillRect(18, 24, 6, 4);
+    return c;
+  }
+
+  const normal = [], damagedArr = [];
+  for (let m = 0; m < 16; m++) {
+    normal.push(wallFrame(m, false));
+    damagedArr.push(wallFrame(m, true));
+  }
+  const entry = { normal, damaged: damagedArr, yOff: 4, wallMask: true };
+  SPRITES.buildings.brik = { gdi: entry, nod: entry, mut: entry };
+
+  // cameo: a short wall run
+  const cam = mkCanvas(64, 48);
+  const g = cam.getContext('2d');
+  g.fillStyle = PAL.cameoBg; g.fillRect(0, 0, 64, 48);
+  g.drawImage(wallFrame(10, false), 4, 4, 24, 32);   // E+W run piece
+  g.drawImage(wallFrame(10, false), 22, 4, 24, 32);
+  g.drawImage(wallFrame(10, false), 40, 2, 24, 32);
+  g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(0, 36, 64, 8);
+  g.font = '7px monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = PAL.uiText; g.fillText('Concrete Wall', 32, 40, 62);
+  g.fillStyle = PAL.uiGold; g.fillRect(0, 44, 64, 4);
+  SPRITES.cameo.brik = cam;
 })();

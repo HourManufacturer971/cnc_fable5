@@ -9,6 +9,8 @@ const Input = (function () {
   let modeArg = null;
   let dragStart = null;
   let dragRect = null;
+  let wallDrag = null;   // start cell of a wall drag
+  let wallLine = null;   // preview cells while dragging
   let radarDrag = false;
   let lastClick = { t: 0, id: 0 };
   let lastGroupTap = { t: 0, n: -1 };
@@ -37,6 +39,10 @@ const Input = (function () {
           dragRect = { x1: dragStart.x, y1: dragStart.y, x2: p.x, y2: p.y };
         }
       }
+      if (wallDrag) {
+        const w = Render.worldFromScreen(p.x, p.y);
+        if (w) wallLine = _wallCells(wallDrag, { cx: worldToCell(w.x), cy: worldToCell(w.y) });
+      }
       if (radarDrag) _radarJump();
     });
     canvas.addEventListener('mouseleave', () => { mouse.inside = false; });
@@ -58,6 +64,14 @@ const Input = (function () {
         if (!game || game.paused || game.status !== 'playing') return;
         const hit = Render.hitTest(p.x, p.y);
         if (hit.zone === 'viewport' && mode === 'normal') dragStart = { x: p.x, y: p.y };
+        if (hit.zone === 'viewport' && mode === 'place' && modeArg &&
+            DATA.buildings[modeArg] && DATA.buildings[modeArg].wall) {
+          const w = Render.worldFromScreen(p.x, p.y);
+          if (w) {
+            wallDrag = { cx: worldToCell(w.x), cy: worldToCell(w.y) };
+            wallLine = [wallDrag];
+          }
+        }
         if (hit.zone === 'radar' && game.human.radar) { radarDrag = true; _radarJump(); }
       }
       ev.preventDefault();
@@ -69,7 +83,18 @@ const Input = (function () {
       if (ev.button === 0) {
         mouse.down = false;
         radarDrag = false;
-        if (!game || game.paused || game.status !== 'playing') { dragStart = null; dragRect = null; return; }
+        if (!game || game.paused || game.status !== 'playing') {
+          dragStart = null; dragRect = null; wallDrag = null; wallLine = null;
+          return;
+        }
+        if (wallDrag) {
+          const cells = wallLine || [wallDrag];
+          const placed = Production.placeWallLine(game, game.human, modeArg, cells);
+          wallDrag = null; wallLine = null;
+          if (placed && !game.human.ready.building) _setMode('normal');
+          else if (!placed) AUDIO.play('buzz');
+          return;
+        }
         if (dragRect) {
           _boxSelect(ev.shiftKey);
           dragStart = null; dragRect = null;
@@ -85,12 +110,18 @@ const Input = (function () {
 
     canvas.addEventListener('contextmenu', ev => ev.preventDefault());
 
+    let wheelAcc = 0;
     canvas.addEventListener('wheel', ev => {
       if (!game) return;
       const hit = Render.hitTest(mouse.x, mouse.y);
       if (hit.zone === 'icon' || hit.zone === 'arrow' || hit.zone === 'sidebar') {
-        const strip = mouse.x < C.STRIP_UX ? 'b' : 'u';
-        _scrollStrip(strip, ev.deltaY > 0 ? 1 : -1);
+        // accumulate so touchpads step one icon per deliberate swipe, not per event
+        wheelAcc += ev.deltaY;
+        if (Math.abs(wheelAcc) >= 140) {
+          const strip = mouse.x < C.STRIP_UX ? 'b' : 'u';
+          _scrollStrip(strip, wheelAcc > 0 ? 1 : -1);
+          wheelAcc = 0;
+        }
         ev.preventDefault();
         return;
       }
@@ -122,6 +153,22 @@ const Input = (function () {
   function _setMode(m, arg) {
     mode = m;
     modeArg = arg || null;
+    wallDrag = null;
+    wallLine = null;
+  }
+
+  // wall run: straight line from start toward end along the dominant axis
+  function _wallCells(a, b) {
+    const cells = [];
+    const dx = b.cx - a.cx, dy = b.cy - a.cy;
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      const n = clamp(Math.abs(dx), 0, 13), s = Math.sign(dx) || 1;
+      for (let i = 0; i <= n; i++) cells.push({ cx: a.cx + i * s, cy: a.cy });
+    } else {
+      const n = clamp(Math.abs(dy), 0, 13), s = Math.sign(dy) || 1;
+      for (let i = 0; i <= n; i++) cells.push({ cx: a.cx, cy: a.cy + i * s });
+    }
+    return cells;
   }
 
   function _radarJump() {
@@ -570,5 +617,6 @@ const Input = (function () {
     get mode() { return mode; },
     get modeArg() { return modeArg; },
     get dragRect() { return dragRect; },
+    get wallLine() { return wallDrag ? (wallLine || [wallDrag]) : null; },
   };
 })();

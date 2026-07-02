@@ -39,6 +39,7 @@ Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1`.
 |---|---|
 | Left-click | Select unit/building; with units selected: click ground = move, click enemy = attack, click tiberium with a harvester = harvest |
 | Left-drag | Band-box select units |
+| Left-drag with a wall ready | Place a whole run of wall segments (extra segments charge on placement) |
 | **Right-click** | **Deselect / cancel mode** (no right-click orders — just like the original) |
 | Shift+click | Add/remove from selection |
 | Double-click | Select all visible units of that type |
@@ -76,7 +77,8 @@ a powered Communications Center.
   Harvester, MCV; Orca and Apache with helipad rearming; Nod vehicles arrive by
   cargo plane at the Airstrip
 - **Defenses** — Guard Tower, Advanced Guard Tower, Gun Turret, SAM Site, and
-  the Obelisk of Light with its charge-up laser
+  the Obelisk of Light with its charge-up laser; concrete walls place in
+  drag-runs, auto-connect, and block movement
 - **Superweapons** — GDI Ion Cannon (Advanced Comm. Center) and the Nod nuclear
   strike (Temple of Nod)
 - **Combat details** — warhead vs. armor tables, turret rotation, homing
@@ -89,8 +91,11 @@ a powered Communications Center.
 - **Auto-repair** — damaged buildings start repairing themselves (toggleable
   with the REPAIR button); wading through tiberium hurts infantry, standing
   still in it doesn't
-- **Skirmish AI** — builds a base, harvests, expands, repairs, places defenses
-  toward you, sends attack waves, and fires its superweapon at your base
+- **Skirmish AI** — plans its base by role (power tucked behind, refineries at
+  the tiberium, defense arc facing you), keeps its economy and unit lines
+  running, masses each attack at a staging point before striking on a
+  sustained 2-4 minute cadence that scales up, garrisons its home, and fires
+  its superweapon at your densest cluster
 - **EVA** — "Construction complete", "Unit ready", "Low power", "Base under
   attack", "Silos needed"… spoken via speech synthesis, plus synthesized
   weapon/explosion sound effects

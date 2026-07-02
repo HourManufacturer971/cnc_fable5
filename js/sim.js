@@ -71,6 +71,7 @@ function _nearestEnemy(e, rangeCells, opts) {
   if (!opts.airOnly && !opts.unitsOnly) {
     for (const b of g.buildings.values()) {
       if (b.owner === e.owner || b._dead) continue;
+      if (DATA.buildings[b.type].wall) continue; // walls aren't worth auto-fire
       const d = _distTo(ex, ey, b);
       if (d > maxD) continue;
       // defensive structures draw fire first: the deadlier the tower, the

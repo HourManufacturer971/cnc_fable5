@@ -17,10 +17,16 @@ import bpy, math, json, os, sys
 # ---- args -------------------------------------------------------------------
 argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 OUT = '/tmp/render3d_raw'
+ONLY = None
 for i, a in enumerate(argv):
     if a == '--out':
         OUT = argv[i + 1]
+    if a == '--only':
+        ONLY = argv[i + 1]
 os.makedirs(OUT, exist_ok=True)
+
+def wanted(name):
+    return ONLY is None or ONLY in name
 
 SS = 6                       # raw supersample: 144 raw px/unit -> 48 final px/cell
 PX_PER_UNIT = 24 * SS        # raw pixels per world unit (horizontal)
@@ -124,11 +130,11 @@ def _register(obj, material):
     PARTS.append(obj)
     return obj
 
-def box(x, y, z, sx, sy, sz, material, rz=0.0):
+def box(x, y, z, sx, sy, sz, material, rz=0.0, rx=0.0):
     bpy.ops.mesh.primitive_cube_add(size=1, location=(x, y, z))
     o = bpy.context.active_object
     o.scale = (sx, sy, sz)
-    o.rotation_euler = (0, 0, rz)
+    o.rotation_euler = (rx, 0, rz)
     return _register(o, material)
 
 def cyl(x, y, z, r, depth, material, vertices=20, rx=0.0, ry=0.0):
@@ -232,8 +238,10 @@ def render_vehicle(key, builder, frame_units=1.0):
     META['frames'][key] = {'kind': 'vehicle', 'raw': raw, 'units': frame_units,
                            'center': project((0, 0, 0))}
 
-render_vehicle('mtnk_body', build_mtnk_hull)
-render_vehicle('mtnk_turret', build_mtnk_turret)
+if wanted('mtnk'):
+    render_vehicle('mtnk_body', build_mtnk_hull)
+if wanted('mtnk'):
+    render_vehicle('mtnk_turret', build_mtnk_turret)
 
 # =================================================================================
 # CONSTRUCTION YARD — 3x2 footprint, crane above the roof, south facade
@@ -292,30 +300,43 @@ def render_building(key, builder, w_cells, h_cells, y_off_px, bib_px, view_pad=1
     }
     clear_parts()
 
-render_building('fact', build_fact, 3, 2, 14, 8)
+if wanted('fact'):
+    render_building('fact', build_fact, 3, 2, 14, 8)
 
 # =================================================================================
 # OBELISK OF LIGHT — 1x1 pad, tall black spike, red emitter
 # =================================================================================
 def build_obli():
-    # slender near-black monolith with a notched tip holding the red emitter
+    # distinctive silhouette: slim black tower flaring into a WIDER angular
+    # crown that juts south over the shaft, red emitter blazing on its
+    # slanted face. No stripe down the shaft — the head is the identity.
     oy = 0.06
-    cyl(0, oy, 0.025, 0.40, 0.05, M['concrete'], vertices=28)    # low round pad
-    box(0, oy, 0.12, 0.30, 0.30, 0.12, M['obsLite'])             # small plinth
-    # tall slim square-section shaft, very slight taper, ~2.2 units
-    cone(0, oy, 1.20, 0.125, 0.085, 2.05, M['obsidian'], vertices=4)
-    # notch: the tip splits — a fin rises on the north side, the south side
-    # steps down, and the red emitter crystal sits in the cut
-    box(0, oy + 0.05, 2.32, 0.09, 0.045, 0.30, M['obsidian'])    # north fin
-    box(0, oy + 0.05, 2.44, 0.10, 0.05, 0.04, M['obsLite'])      # fin cap catchlight
-    box(0, oy - 0.035, 2.24, 0.075, 0.05, 0.10, M['obsLite'])    # south step
-    box(0, oy - 0.02, 2.33, 0.055, 0.055, 0.09, M['redLight'])   # emitter crystal
-    # faint red feed line down the south face
-    box(0, oy - 0.075, 1.35, 0.018, 0.012, 1.8, M['nodRed'])
+    a = math.radians(-35)
+    cyl(0, oy, 0.02, 0.36, 0.04, M['concDark'], vertices=28)     # low dark pad
+    box(0, oy, 0.09, 0.30, 0.24, 0.10, M['obsLite'])             # plinth
+    box(0, oy + 0.02, 0.75, 0.24, 0.11, 1.35, M['obsidian'])     # lower shaft
+    box(0, oy + 0.03, 1.70, 0.19, 0.09, 0.70, M['obsidian'])     # upper shaft (taper)
+    # crown: wider than the shaft on both sides, tilted out over the front
+    box(0, oy - 0.10, 2.18, 0.44, 0.10, 0.42, M['obsidian'], rx=a)
+    box(0, oy - 0.02, 2.34, 0.36, 0.08, 0.16, M['obsidian'], rx=a)   # crest step
+    box(0, oy + 0.09, 2.12, 0.30, 0.05, 0.30, M['obsLite'])      # back spine catchlight
+    # side cheek plates make the flare read at game size
+    box(-0.20, oy - 0.06, 2.10, 0.05, 0.09, 0.34, M['obsLite'], rx=a)
+    box(0.20, oy - 0.06, 2.10, 0.05, 0.09, 0.34, M['obsidian'], rx=a)
+    # emitter: wide blazing band across the slanted face + core
+    box(0, oy - 0.185, 2.24, 0.30, 0.02, 0.10, M['redLight'], rx=a)
+    box(0, oy - 0.205, 2.16, 0.14, 0.018, 0.06, M['redLight'], rx=a)
 
-render_building('obli', build_obli, 1, 1, 24, 0, view_pad=1.2)
+if wanted('obli'):
+    render_building('obli', build_obli, 1, 1, 24, 0, view_pad=1.2)
 
 # ---- write metadata -------------------------------------------------------------
-with open(os.path.join(OUT, 'meta.json'), 'w') as f:
+meta_path = os.path.join(OUT, 'meta.json')
+if ONLY and os.path.exists(meta_path):
+    with open(meta_path) as f:
+        old = json.load(f)
+    old['frames'].update(META['frames'])
+    META = old
+with open(meta_path, 'w') as f:
     json.dump(META, f, indent=1)
 print('RENDER COMPLETE ->', OUT)

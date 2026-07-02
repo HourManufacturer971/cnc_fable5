@@ -228,12 +228,38 @@ const Production = (function () {
       return false;
     }
     const b = makeBuilding(key, player.side, cx, cy);
-    b.buildProgress = 0;
+    const d = DATA.buildings[key];
+    b.buildProgress = d.wall ? 1 : 0;
     addBuilding(b);
+    if (d.wall) { computePower(player); }
     player.ready.building = null;
     player.queues.building = null;
     if (_isHuman(player)) AUDIO.play('place');
     return true;
+  }
+
+  // RA2-style wall run: the pre-paid ready segment goes down first, each
+  // further segment charges its cost on the spot; placement chains adjacency
+  // (a placed wall is a finished building the next segment can hug).
+  function placeWallLine(g, player, key, cells) {
+    const d = DATA.buildings[key];
+    if (!d || !d.wall || !cells.length) return 0;
+    let placed = 0;
+    for (const cell of cells) {
+      if (player.ready.building === key) {
+        if (place(g, player, key, cell.cx, cell.cy)) placed++;
+      } else {
+        if (player.credits < d.cost) break;
+        if (!canPlace(g, player, key, cell.cx, cell.cy)) continue;
+        player.credits -= d.cost;
+        const b = makeBuilding(key, player.side, cell.cx, cell.cy);
+        b.buildProgress = 1;
+        addBuilding(b);
+        placed++;
+      }
+    }
+    if (placed && _isHuman(player)) AUDIO.play('place');
+    return placed;
   }
 
   // ---- sell / repair -----------------------------------------------------------
@@ -410,7 +436,11 @@ const Production = (function () {
         if (cat === 'building') {
           player.ready.building = job.key;
           player.queues.building = null;
-          if (human) { AUDIO.eva('constructionComplete'); AUDIO.play('ready'); }
+          if (human) {
+            AUDIO.eva('constructionComplete');
+            AUDIO.play('ready');
+            _scrollToKey(player, job.key);
+          }
         } else {
           if (_spawnUnit(g, player, job.key)) {
             player.queues.unit = null;
@@ -475,8 +505,23 @@ const Production = (function () {
     }
   }
 
+  // make sure the icon for `key` sits inside the visible strip window
+  function _scrollToKey(player, key) {
+    const list = items(player);
+    const cat = categoryOf(key);
+    const arr = cat === 'building' ? list.buildings : list.units;
+    const idx = arr.findIndex(i => i.key === key);
+    if (idx < 0) return;
+    const s = cat === 'building' ? 'b' : 'u';
+    const vis = C.STRIP_VISIBLE;
+    if (idx < player.scroll[s] || idx >= player.scroll[s] + vis) {
+      player.scroll[s] = clamp(idx - ((vis / 2) | 0), 0, Math.max(0, arr.length - vis));
+    }
+  }
+
   return {
     tick, tryStart, toggleHold, cancel, items, canPlace, cellOk, place, sell,
-    toggleRepair, computePower, categoryOf, prereqOk, superReady, launchSuper,
+    placeWallLine, toggleRepair, computePower, categoryOf, prereqOk, superReady,
+    launchSuper,
   };
 })();
