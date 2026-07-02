@@ -105,20 +105,8 @@ a powered Communications Center.
 Campaign missions and FMV, multiplayer, naval units, save/load, difficulty
 levels.
 
-## Pre-rendered 3D sprite pipeline (optional)
+## Experimental: pre-rendered 3D sprite pipeline (unused)
 
-`tools/render3d/` recreates the mid-90s Westwood workflow: low-poly models are
-defined in code, rendered headlessly by Blender/Cycles from a fixed tilted
-orthographic camera (one NW sun, shadow-catcher ground), then post-processed
-into palette-quantized sprite sheets under `assets/` at 48 px/cell — the
-game runs at 1280x800 internal ("hi-res mode": the sim keeps 24px world
-cells; the display doubles them). When `assets/manifest.json` is present,
-`js/assets.js` swaps those sheets in over the procedural art at load
-(`?noassets=1` compares against the procedural fallback).
-
-```sh
-blender -b -P tools/render3d/render_sprites.py -- --out /tmp/render3d_raw
-node tools/render3d/post.js /tmp/render3d_raw assets
-```
-
-Currently covered: Construction Yard, Medium Tank, Obelisk of Light.
+`tools/render3d/` holds an experimental Westwood-style pipeline (low-poly
+models rendered headlessly by Blender/Cycles into sprite sheets). The game
+does not use it — all shipping art is the procedural pixel art.

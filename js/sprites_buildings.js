@@ -1249,33 +1249,43 @@
     P(ctx, 4, 16, 16, 1, '#3a3a46');
     outlineRect(ctx, 3, 15, 18, 7);
     P(ctx, 6, 18, 3, 1, '#15151a'); P(ctx, 11, 18, 3, 1, '#15151a'); P(ctx, 16, 18, 3, 1, '#15151a');
-    // sleek tapered monolith, west edge lit, east edge darkest + cast strip
-    for (let y = -20; y < 17; y++) {
-      const t = (y + 20) / 37;
-      const hw = Math.max(1, Math.round(1 + t * 4));
+    // slim tapered shaft rising to the crown (narrow at top, wider at base)
+    for (let y = -14; y < 17; y++) {
+      const t = (y + 14) / 31;
+      const hw = Math.max(2, Math.round(2 + t * 3));
       P(ctx, 12 - hw - 1, y, 1, 1, OUT);
       P(ctx, 12 + hw, y, 1, 1, OUT);
       P(ctx, 12 - hw, y, hw * 2, 1, '#191920');
       P(ctx, 12 - hw, y, 1, 1, '#34343f');       // lit west edge
       P(ctx, 12 + hw - 1, y, 1, 1, '#0e0e13');   // dark east edge
-      if (y > -12) { ctx.fillStyle = SH; ctx.fillRect(12 + hw + 1, y + 2, 1, 1); }
+      if (y > -8) { ctx.fillStyle = SH; ctx.fillRect(12 + hw + 1, y + 2, 1, 1); }
     }
-    P(ctx, 11, -21, 2, 1, OUT);
-    // subtle red edge-light groove down the face
-    P(ctx, 11, -16, 1, 31, glow ? '#d04030' : '#571812');
-    if (!glow && f) P(ctx, 11, -16, 1, 31, '#7a1f16');
+    // THE CROWN: an angular head clearly wider than the shaft, jutting out
+    // over the front — the obelisk's identity. Bright north edge, flared
+    // cheeks, dark underside shading the shaft below it.
+    const CROWN = [4, 6, 7, 7, 7, 6, 5];         // half-widths, y -23..-17
+    for (let i = 0; i < CROWN.length; i++) {
+      const y = -23 + i, hw = CROWN[i];
+      P(ctx, 12 - hw - 1, y, 1, 1, OUT);
+      P(ctx, 12 + hw, y, 1, 1, OUT);
+      P(ctx, 12 - hw, y, hw * 2, 1, i === 0 ? '#3e3e4c' : '#23232c');
+      P(ctx, 12 - hw, y, 1, 1, '#4a4a5a');       // lit west cheek
+      P(ctx, 12 + hw - 1, y, 1, 1, '#101016');   // dark east cheek
+    }
+    P(ctx, 5, -24, 14, 1, OUT);                  // crown top outline
+    P(ctx, 6, -16, 12, 1, '#0a0a0e');            // dark underside lip
+    P(ctx, 9, -15, 6, 1, 'rgba(0,0,0,0.35)');                   // overhang shadow on the shaft
+    // EMITTER: blazing band across the crown's slanted face
+    const band = glow > 0
+      ? ['#e04028', '#ff7050', '#ffd0b0'][glow - 1]
+      : (f ? '#a82818' : '#8a2014');
+    P(ctx, 7, -20, 10, 2, band);
+    P(ctx, 9, -20, 6, 1, glow > 0 ? '#ffe8d8' : '#d04030');   // hot core line
+    P(ctx, 6, -20, 1, 2, '#4a1008'); P(ctx, 17, -20, 1, 2, '#4a1008');
     if (glow > 0) {
-      const tip = ['#a02818', '#e04028', '#ff7050'][glow - 1];
-      const core = ['#ff8060', '#ffc0a0', '#ffffff'][glow - 1];
-      P(ctx, 10, -22, 4, 3 + glow, tip);
-      P(ctx, 11, -21, 2, 2 + glow, core);
-      P(ctx, 11, -16, 1, 31, glow >= 2 ? '#ff6a50' : '#d04030');
-      if (glow >= 2) P(ctx, 12, -12, 1, 20, '#a03224');
-      ctx.fillStyle = 'rgba(255,80,44,' + (0.12 * glow).toFixed(2) + ')';
-      ctx.fillRect(6, -24, 12, 12 + glow * 4);
-      if (glow === 3) { P(ctx, 9, -24, 6, 2, 'rgba(255,220,200,0.55)'); }
-    } else {
-      P(ctx, 11, -20, 2, 2, f ? '#8a2418' : '#5c1810');
+      ctx.fillStyle = 'rgba(255,80,44,' + (0.14 * glow).toFixed(2) + ')';
+      ctx.fillRect(4, -25, 16, 12 + glow * 3);
+      if (glow === 3) P(ctx, 7, -24, 10, 1, 'rgba(255,220,200,0.6)');
     }
   }
 
