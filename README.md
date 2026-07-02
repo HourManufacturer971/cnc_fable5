@@ -99,3 +99,20 @@ a powered Communications Center.
 
 Campaign missions and FMV, multiplayer, walls/sandbags, naval units, save/load,
 difficulty levels.
+
+## Pre-rendered 3D sprite pipeline (optional)
+
+`tools/render3d/` recreates the mid-90s Westwood workflow: low-poly models are
+defined in code, rendered headlessly by Blender/Cycles from a fixed tilted
+orthographic camera (one NW sun, shadow-catcher ground), then post-processed
+into palette-quantized sprite sheets under `assets/`. When
+`assets/manifest.json` is present, `js/assets.js` swaps those sheets in over
+the procedural art at load (disable with `?noassets=1`); when absent, the game
+falls back to the built-in procedural sprites.
+
+```sh
+blender -b -P tools/render3d/render_sprites.py -- --out /tmp/render3d_raw
+node tools/render3d/post.js /tmp/render3d_raw assets
+```
+
+Currently covered: Construction Yard, Medium Tank, Obelisk of Light.
