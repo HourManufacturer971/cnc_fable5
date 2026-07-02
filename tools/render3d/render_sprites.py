@@ -22,7 +22,7 @@ for i, a in enumerate(argv):
         OUT = argv[i + 1]
 os.makedirs(OUT, exist_ok=True)
 
-SS = 4                       # supersample factor (4x raw -> 1x final)
+SS = 6                       # raw supersample: 144 raw px/unit -> 48 final px/cell
 PX_PER_UNIT = 24 * SS        # raw pixels per world unit (horizontal)
 ELEV = math.radians(55)      # camera elevation above the ground plane
 DEPTH_K = 1.0 / math.sin(ELEV)  # building depth pre-scale -> square ground cells
@@ -106,13 +106,14 @@ M = {
     'concDark': mat('concDark', c(95, 95, 88), 0.9),
     'glass':    mat('glass', c(30, 48, 66), 0.2, 0.3),
     'hazard':   mat('hazard', c(224, 184, 64), 0.6),
-    'redLight': mat('redLight', c(230, 40, 24), 0.4, 0.0, 4.0),
-    'obsidian': mat('obsidian', c(16, 16, 22), 0.25, 0.4),
-    'obsLite':  mat('obsLite', c(38, 38, 50), 0.35, 0.4),
+    'redLight': mat('redLight', c(240, 60, 40), 0.35, 0.0, 9.0),
+    'obsidian': mat('obsidian', c(7, 7, 11), 0.2, 0.5),
+    'obsLite':  mat('obsLite', c(26, 26, 38), 0.3, 0.5),
     'nodRed':   mat('nodRed', c(160, 32, 24), 0.6),
     'gunmetal': mat('gunmetal', c(70, 72, 78), 0.5, 0.55),
     'engine':   mat('engine', c(52, 48, 40), 0.8),
-    'crane':    mat('crane', c(200, 160, 40), 0.6),
+    'crane':    mat('crane', c(238, 186, 44), 0.55),
+    'beacon':   mat('beacon', c(230, 40, 24), 0.4, 0.0, 1.5),
 }
 
 # ---- geometry helpers ---------------------------------------------------------
@@ -196,26 +197,28 @@ META = {'ss': SS, 'pxPerUnit': PX_PER_UNIT, 'frames': {}}
 # MEDIUM TANK — hull (facing +Y) and turret, 16 rotations each
 # =================================================================================
 def build_mtnk_hull():
-    # tracks: two long dark blocks with front/rear rounding hints
-    for sx in (-0.26, 0.26):
-        box(sx, 0, 0.075, 0.17, 0.78, 0.15, M['track'])
-        box(sx, 0.36, 0.09, 0.15, 0.08, 0.10, M['darkMetal'])   # drive wheel hump
-        box(sx, -0.36, 0.09, 0.15, 0.08, 0.10, M['darkMetal'])
-    # hull between the tracks
-    box(0, -0.02, 0.16, 0.36, 0.72, 0.14, M['gdi'])
-    wedge(0, 0.28, 0.21, 0.34, 0.22, 0.10, M['gdi'])            # front glacis
-    box(0, -0.30, 0.235, 0.30, 0.14, 0.05, M['engine'])         # engine deck
-    box(0, -0.30, 0.245, 0.26, 0.10, 0.05, M['darkMetal'])      # grille
-    box(0.13, 0.05, 0.235, 0.05, 0.3, 0.02, M['gdiDark'])       # side stowage
-    box(-0.13, 0.05, 0.235, 0.05, 0.3, 0.02, M['gdiDark'])
+    # M1-style main battle tank: long low hull, track skirts, sharp glacis
+    for sx in (-0.27, 0.27):
+        box(sx, 0, 0.07, 0.16, 0.86, 0.14, M['track'])           # long tracks
+        box(sx, 0, 0.145, 0.17, 0.82, 0.045, M['gdiDark'])       # armored side skirt
+    # low wide hull
+    box(0, -0.04, 0.155, 0.40, 0.80, 0.13, M['gdi'])
+    wedge(0, 0.32, 0.20, 0.38, 0.26, 0.09, M['gdi'])             # long sloped glacis
+    box(0, -0.36, 0.225, 0.34, 0.14, 0.04, M['engine'])          # rear engine deck
+    box(0, -0.36, 0.235, 0.30, 0.10, 0.04, M['darkMetal'])       # exhaust grille
+    box(0, 0.10, 0.225, 0.34, 0.30, 0.02, M['gdiDark'])          # deck plate line
 
 def build_mtnk_turret():
-    cyl(0, -0.02, 0.32, 0.155, 0.12, M['gdi'])                  # turret drum
-    box(0, -0.02, 0.385, 0.20, 0.24, 0.02, M['gdiDark'])        # turret roof plate
-    box(0, -0.14, 0.33, 0.10, 0.10, 0.08, M['gdiDark'])         # rear bustle
-    cyl(0, 0.26, 0.325, 0.028, 0.42, M['gunmetal'], rx=math.pi / 2)  # barrel
-    cyl(0, 0.44, 0.325, 0.04, 0.07, M['darkMetal'], rx=math.pi / 2)  # muzzle brake
-    box(0.09, 0.02, 0.40, 0.04, 0.06, 0.03, M['darkMetal'])     # hatch
+    # wide, flat, angular western MBT turret set slightly forward
+    box(0, 0.02, 0.30, 0.34, 0.34, 0.10, M['gdi'])               # main turret block
+    wedge(0, 0.22, 0.30, 0.30, 0.10, 0.10, M['gdi'])             # angled turret cheeks
+    box(0, -0.18, 0.30, 0.28, 0.14, 0.09, M['gdiDark'])          # rear bustle rack
+    box(0, 0.02, 0.36, 0.26, 0.26, 0.03, M['gdiDark'])           # roof plate
+    box(-0.10, -0.02, 0.395, 0.07, 0.07, 0.04, M['gdiDark'])     # commander cupola
+    box(0.10, 0.04, 0.385, 0.05, 0.05, 0.025, M['darkMetal'])    # loader hatch
+    cyl(0, 0.42, 0.315, 0.026, 0.52, M['gunmetal'], rx=math.pi / 2)  # long main gun
+    box(0, 0.36, 0.315, 0.07, 0.09, 0.055, M['gdiDark'])         # mantlet
+    cyl(0, 0.66, 0.315, 0.036, 0.06, M['darkMetal'], rx=math.pi / 2)  # muzzle ref
 
 def render_vehicle(key, builder, frame_units=1.0):
     raw = int(frame_units * PX_PER_UNIT)
@@ -236,36 +239,38 @@ render_vehicle('mtnk_turret', build_mtnk_turret)
 # CONSTRUCTION YARD — 3x2 footprint, crane above the roof, south facade
 # =================================================================================
 def build_fact():
-    # main assembly hall filling the west 2 cells, tall with a visible facade
-    box(-0.55, 0.12, 0.45, 1.8, 1.6, 0.9, M['gdi'])
-    box(-0.55, 0.12, 0.93, 1.68, 1.48, 0.07, M['gdiDark'])       # roof rim
-    box(-0.55, 0.12, 0.99, 1.3, 1.1, 0.05, M['gdi'])             # raised roof deck
-    # big roll-up door on the south facade + hazard lintel
-    box(-0.55, -0.70, 0.32, 0.95, 0.06, 0.55, M['darkMetal'])
-    box(-0.55, -0.71, 0.34, 0.85, 0.05, 0.42, M['engine'])
-    box(-0.55, -0.72, 0.64, 1.05, 0.04, 0.10, M['hazard'])
-    box(-1.25, -0.70, 0.25, 0.22, 0.05, 0.36, M['glass'])        # crew door glazing
-    # roof vents marching along the hall
-    for vx in (-1.05, -0.55, -0.05):
-        box(vx, 0.42, 1.06, 0.30, 0.38, 0.12, M['gdiDark'])
-        box(vx, 0.42, 1.13, 0.24, 0.30, 0.04, M['metal'])
-    # service tower on the east cell
-    box(1.0, 0.35, 0.6, 0.8, 0.95, 1.2, M['gdiDark'])
-    box(1.0, 0.35, 1.24, 0.66, 0.78, 0.09, M['metal'])
-    box(1.0, -0.14, 0.55, 0.55, 0.06, 0.45, M['glass'])          # control glazing
-    box(1.0, -0.14, 0.24, 0.7, 0.06, 0.14, M['hazard'])          # tower base stripe
-    # small concrete work apron ONLY under the crane yard (not a full-slab card)
-    box(0.7, -0.55, 0.02, 1.3, 0.8, 0.04, M['concDark'])
-    # crane gantry over the yard
-    cyl(0.72, -0.30, 0.95, 0.075, 1.9, M['crane'])               # mast
-    box(0.72, 0.1, 1.86, 0.11, 1.55, 0.11, M['crane'])           # jib
-    box(0.72, 0.80, 1.86, 0.18, 0.18, 0.16, M['darkMetal'])      # counterweight
-    cyl(0.72, -0.52, 1.5, 0.015, 0.7, M['darkMetal'])            # cable
-    box(0.72, -0.52, 1.12, 0.13, 0.13, 0.09, M['metal'])         # hook block
-    # fuel drum on the west flank
-    cyl(-1.32, -0.5, 0.24, 0.17, 0.48, M['metal'], rx=math.pi / 2)
-    # red beacon on the tower
-    box(1.0, 0.35, 1.33, 0.06, 0.06, 0.09, M['redLight'])
+    # The construction yard's silhouette is the huge open GANTRY CRANE spanning
+    # a central assembly bay — the buildings around it stay low.
+    # low perimeter structure: an L of workshops around the open bay
+    box(-1.05, 0.15, 0.28, 0.85, 1.5, 0.55, M['gdi'])            # west workshop
+    box(-1.05, 0.15, 0.58, 0.75, 1.38, 0.05, M['gdiDark'])       # its roof rim
+    box(-0.05, 0.62, 0.21, 2.8, 0.65, 0.42, M['gdi'])            # north workshop strip
+    box(-0.05, 0.62, 0.44, 2.7, 0.55, 0.05, M['gdiDark'])
+    # control cab on the NW corner, slightly taller, glazed
+    box(-1.05, 0.60, 0.72, 0.55, 0.5, 0.35, M['gdiDark'])
+    box(-1.05, 0.38, 0.70, 0.45, 0.06, 0.22, M['glass'])
+    # open assembly bay: dark work slab with a vehicle chassis being built
+    box(0.35, -0.15, 0.02, 2.1, 1.15, 0.04, M['concDark'])
+    box(0.35, -0.15, 0.10, 0.55, 0.35, 0.12, M['metal'])         # chassis on the pad
+    box(0.35, -0.15, 0.17, 0.4, 0.25, 0.06, M['darkMetal'])
+    box(-0.5, -0.55, 0.10, 0.25, 0.25, 0.2, M['engine'])         # crates
+    box(-0.22, -0.62, 0.08, 0.18, 0.18, 0.16, M['gdiDark'])
+    # THE GANTRY: two A-frame legs + spanning beam, high over the bay
+    for lx in (-0.55, 1.25):
+        box(lx, -0.65, 0.70, 0.14, 0.14, 1.4, M['crane'])        # south legs
+        box(lx, 0.35, 0.70, 0.14, 0.14, 1.4, M['crane'])         # north legs
+        box(lx, -0.15, 1.42, 0.16, 1.2, 0.12, M['crane'])        # side rails
+    box(0.35, -0.15, 1.52, 2.0, 0.20, 0.18, M['crane'])          # main cross beam
+    box(0.35, -0.15, 1.42, 2.06, 0.10, 0.06, M['darkMetal'])     # beam underside
+    box(0.1, -0.15, 1.36, 0.22, 0.22, 0.14, M['darkMetal'])      # trolley
+    cyl(0.1, -0.15, 1.02, 0.015, 0.6, M['darkMetal'])            # cable
+    box(0.1, -0.15, 0.68, 0.16, 0.16, 0.08, M['metal'])          # hook block
+    # hazard chevrons on the beam + beacon
+    box(0.35, -0.26, 1.52, 1.9, 0.02, 0.12, M['hazard'])
+    box(1.25, -0.65, 1.33, 0.04, 0.04, 0.05, M['beacon'])
+    # south facade door on the west workshop
+    box(-1.05, -0.58, 0.22, 0.5, 0.05, 0.34, M['darkMetal'])
+    box(-1.05, -0.60, 0.42, 0.56, 0.03, 0.07, M['hazard'])
 
 def render_building(key, builder, w_cells, h_cells, y_off_px, bib_px, view_pad=1.6):
     clear_parts()
@@ -293,18 +298,20 @@ render_building('fact', build_fact, 3, 2, 14, 8)
 # OBELISK OF LIGHT — 1x1 pad, tall black spike, red emitter
 # =================================================================================
 def build_obli():
-    # nudged slightly north so the pad's south rim stays inside the cell
+    # slender near-black monolith with a notched tip holding the red emitter
     oy = 0.06
-    cyl(0, oy, 0.03, 0.42, 0.06, M['concrete'], vertices=28)     # round pad
-    cyl(0, oy, 0.10, 0.32, 0.10, M['concDark'], vertices=28)
-    box(0, oy, 0.22, 0.34, 0.34, 0.22, M['obsidian'])            # plinth
-    # tapered monolith, ~1.85 units tall
-    cone(0, oy, 1.15, 0.17, 0.05, 1.75, M['obsidian'], vertices=4)
-    # lit west edge accent
-    box(-0.10, oy, 1.0, 0.025, 0.06, 1.3, M['obsLite'])
-    # red emitter slit near the tip + glow node
-    box(0.0, oy - 0.065, 1.72, 0.05, 0.02, 0.22, M['redLight'])
-    box(0.0, oy, 1.99, 0.07, 0.07, 0.06, M['nodRed'])
+    cyl(0, oy, 0.025, 0.40, 0.05, M['concrete'], vertices=28)    # low round pad
+    box(0, oy, 0.12, 0.30, 0.30, 0.12, M['obsLite'])             # small plinth
+    # tall slim square-section shaft, very slight taper, ~2.2 units
+    cone(0, oy, 1.20, 0.125, 0.085, 2.05, M['obsidian'], vertices=4)
+    # notch: the tip splits — a fin rises on the north side, the south side
+    # steps down, and the red emitter crystal sits in the cut
+    box(0, oy + 0.05, 2.32, 0.09, 0.045, 0.30, M['obsidian'])    # north fin
+    box(0, oy + 0.05, 2.44, 0.10, 0.05, 0.04, M['obsLite'])      # fin cap catchlight
+    box(0, oy - 0.035, 2.24, 0.075, 0.05, 0.10, M['obsLite'])    # south step
+    box(0, oy - 0.02, 2.33, 0.055, 0.055, 0.09, M['redLight'])   # emitter crystal
+    # faint red feed line down the south face
+    box(0, oy - 0.075, 1.35, 0.018, 0.012, 1.8, M['nodRed'])
 
 render_building('obli', build_obli, 1, 1, 24, 0, view_pad=1.2)
 

@@ -4,15 +4,15 @@
    "kind": "vehicle",
    "body": {
     "frame": [
-     24,
-     24
+     48,
+     48
     ],
     "sheet": "mtnk_body.png"
    },
    "turret": {
     "frame": [
-     24,
-     24
+     48,
+     48
     ],
     "sheet": "mtnk_turret.png"
    }
@@ -25,8 +25,8 @@
    "yOff": 14,
    "bib": 8,
    "size": [
-    72,
-    70
+    144,
+    140
    ]
   },
   "obli": {
@@ -37,8 +37,8 @@
    "yOff": 24,
    "bib": 0,
    "size": [
-    24,
-    48
+    48,
+    96
    ]
   }
  }

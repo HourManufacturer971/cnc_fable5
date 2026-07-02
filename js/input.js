@@ -97,7 +97,7 @@ const Input = (function () {
       // two-finger touchpad scroll (or mouse wheel) pans the map
       if (hit.zone === 'viewport' && !game.paused) {
         const r = canvas.getBoundingClientRect();
-        const scale = C.SCREEN_W / r.width; // client px -> internal px
+        const scale = C.SCREEN_W / r.width / C.ZOOM; // client px -> WORLD px
         game.camera.x = clamp(game.camera.x + ev.deltaX * scale, 0, C.MAP_W * C.CELL - C.VIEW_W);
         game.camera.y = clamp(game.camera.y + ev.deltaY * scale, 0, C.MAP_H * C.CELL - C.VIEW_H);
         ev.preventDefault();
@@ -125,11 +125,8 @@ const Input = (function () {
   }
 
   function _radarJump() {
-    // radar area: 128x128 map centered in the radar rect
-    const rx = C.RADAR_X + (C.RADAR_W - 128) / 2;
-    const ry = C.RADAR_Y + (C.RADAR_H - 128) / 2;
-    const fx = clamp((mouse.x - rx) / 128, 0, 1);
-    const fy = clamp((mouse.y - ry) / 128, 0, 1);
+    const fx = clamp((mouse.x - C.MM_X) / C.MM_S, 0, 1);
+    const fy = clamp((mouse.y - C.MM_Y) / C.MM_S, 0, 1);
     game.camera.x = clamp(fx * C.MAP_W * C.CELL - C.VIEW_W / 2, 0, C.MAP_W * C.CELL - C.VIEW_W);
     game.camera.y = clamp(fy * C.MAP_H * C.CELL - C.VIEW_H / 2, 0, C.MAP_H * C.CELL - C.VIEW_H);
   }
@@ -195,8 +192,9 @@ const Input = (function () {
   function _boxSelect(shift) {
     const g = game;
     const r = dragRect;
-    const wx1 = Math.min(r.x1, r.x2) + g.camera.x, wx2 = Math.max(r.x1, r.x2) + g.camera.x;
-    const wy1 = Math.min(r.y1, r.y2) - C.TAB_H + g.camera.y, wy2 = Math.max(r.y1, r.y2) - C.TAB_H + g.camera.y;
+    const Z = C.ZOOM;
+    const wx1 = Math.min(r.x1, r.x2) / Z + g.camera.x, wx2 = Math.max(r.x1, r.x2) / Z + g.camera.x;
+    const wy1 = (Math.min(r.y1, r.y2) - C.TAB_H) / Z + g.camera.y, wy2 = (Math.max(r.y1, r.y2) - C.TAB_H) / Z + g.camera.y;
     const ids = [];
     for (const u of g.units.values()) {
       if (u.owner !== g.humanSide) continue;

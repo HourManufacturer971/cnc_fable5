@@ -105,10 +105,11 @@ difficulty levels.
 `tools/render3d/` recreates the mid-90s Westwood workflow: low-poly models are
 defined in code, rendered headlessly by Blender/Cycles from a fixed tilted
 orthographic camera (one NW sun, shadow-catcher ground), then post-processed
-into palette-quantized sprite sheets under `assets/`. When
-`assets/manifest.json` is present, `js/assets.js` swaps those sheets in over
-the procedural art at load (opt in with `?assets=1`); otherwise the game
-falls back to the built-in procedural sprites.
+into palette-quantized sprite sheets under `assets/` at 48 px/cell — the
+game runs at 1280x800 internal ("hi-res mode": the sim keeps 24px world
+cells; the display doubles them). When `assets/manifest.json` is present,
+`js/assets.js` swaps those sheets in over the procedural art at load
+(`?noassets=1` compares against the procedural fallback).
 
 ```sh
 blender -b -P tools/render3d/render_sprites.py -- --out /tmp/render3d_raw

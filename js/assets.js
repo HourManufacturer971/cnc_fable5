@@ -7,11 +7,11 @@
 
 (function () {
   if (typeof document === 'undefined' || typeof fetch === 'undefined') return;
-  // The pre-rendered sheets are OPT-IN (?assets=1) while the pipeline matures:
-  // at 24px/cell the hand-authored procedural art still reads crisper.
+  // Hi-res pre-rendered sheets load by default; ?noassets=1 falls back to the
+  // procedural art for comparison.
   try {
-    if (!new URLSearchParams(location.search).get('assets')) return;
-  } catch (e) { return; }
+    if (new URLSearchParams(location.search).get('noassets')) return;
+  } catch (e) { /* no location in odd embeddings */ }
 
   function loadImg(src) {
     return new Promise((res, rej) => {
@@ -27,12 +27,14 @@
     const g = c.getContext('2d');
     g.imageSmoothingEnabled = false;
     g.drawImage(img, i * fw, 0, fw, fh, 0, 0, fw, fh);
+    c._hires = true; // pre-rendered at 48px/cell: render draws it 1:1
     return c;
   }
 
   function copyCanvas(src) {
     const c = mkCanvas(src.width, src.height);
     c.getContext('2d').drawImage(src, 0, 0);
+    c._hires = src._hires;
     return c;
   }
 
@@ -58,36 +60,36 @@
     const g = c.getContext('2d');
     const tip = ['rgba(255,90,60,0.35)', 'rgba(255,140,100,0.55)', 'rgba(255,230,210,0.8)'][level - 1];
     g.fillStyle = tip;
-    g.fillRect(c.width / 2 - 4, 0, 8, 10 + level * 4);
+    g.fillRect(c.width / 2 - 6, 0, 12, 20 + level * 8);
     g.fillStyle = 'rgba(255,60,40,' + (0.10 * level) + ')';
-    g.fillRect(c.width / 2 - 7, 0, 14, 26);
+    g.fillRect(c.width / 2 - 11, 0, 22, 52);
     return c;
   }
 
   // simple cameo from the rendered art (keeps the sidebar layout conventions)
   function cameoFrom(src, name) {
-    const c = mkCanvas(64, 48);
+    const c = mkCanvas(128, 96);
     const g = c.getContext('2d');
     g.fillStyle = PAL.cameoBg;
-    g.fillRect(0, 0, 64, 48);
+    g.fillRect(0, 0, 128, 96);
     g.fillStyle = '#1e1e19';
-    for (let y = 0; y < 38; y += 2) g.fillRect(0, y, 64, 1);
-    const scale = Math.min(56 / src.width, 34 / src.height) * 1.35;
+    for (let y = 0; y < 76; y += 4) g.fillRect(0, y, 128, 2);
+    const scale = Math.min(112 / src.width, 68 / src.height) * 1.35;
     const w = src.width * scale, h = src.height * scale;
     g.imageSmoothingEnabled = false;
-    g.drawImage(src, (64 - w) / 2, Math.max(1, 36 - h) , w, h);
+    g.drawImage(src, (128 - w) / 2, Math.max(2, 72 - h), w, h);
     g.fillStyle = 'rgba(0,0,0,0.5)';
-    g.fillRect(0, 36, 64, 8);
-    g.font = '7px monospace';
+    g.fillRect(0, 72, 128, 16);
+    g.font = '13px monospace';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.fillStyle = PAL.uiText;
-    g.fillText(name, 32, 40, 62);
+    g.fillText(name, 64, 80, 124);
     g.fillStyle = PAL.uiGold;
-    g.fillRect(0, 44, 64, 4);
+    g.fillRect(0, 88, 128, 8);
     g.fillStyle = '#000';
-    g.fillRect(0, 0, 64, 1); g.fillRect(0, 47, 64, 1);
-    g.fillRect(0, 0, 1, 48); g.fillRect(63, 0, 1, 48);
+    g.fillRect(0, 0, 128, 2); g.fillRect(0, 94, 128, 2);
+    g.fillRect(0, 0, 2, 96); g.fillRect(126, 0, 2, 96);
     return c;
   }
 
@@ -119,6 +121,7 @@
         } else if (s.kind === 'building') {
           const img = await loadImg('assets/' + s.sheet);
           const frame = copyCanvas(img);
+          frame._hires = true;
           const entry = {
             normal: [frame],
             damaged: [damage(frame, 1234 + key.length)],

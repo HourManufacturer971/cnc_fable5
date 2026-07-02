@@ -3,21 +3,28 @@
 // Source of truth for every shared data shape. See SPEC.md.
 
 const C = {
+  // world units: the simulation still runs on 24px cells — only the display
+  // doubles ("hi-res mode": 48 screen px per cell at 1280x800 internal)
   CELL: 24,
+  ZOOM: 2,
   MAP_W: 64,
   MAP_H: 64,
   TPS: 15,
-  SCREEN_W: 640,
-  SCREEN_H: 400,
-  TAB_H: 16,
-  VIEW_W: 480,
+  SCREEN_W: 1280,
+  SCREEN_H: 800,
+  TAB_H: 32,
+  VIEW_W: 480,   // viewport span in WORLD px (480 world = 960 screen)
   VIEW_H: 384,
-  SIDEBAR_X: 480,
-  SIDEBAR_W: 160,
-  RADAR_X: 480, RADAR_Y: 16, RADAR_W: 160, RADAR_H: 130,
-  BTN_Y: 146, BTN_H: 20,
-  STRIP_BX: 484, STRIP_UX: 552, STRIP_Y: 172, STRIP_SPACING: 50, STRIP_VISIBLE: 4,
-  CAMEO_W: 64, CAMEO_H: 48,
+  VIEW_PW: 960,  // viewport span in SCREEN px
+  VIEW_PH: 768,
+  SIDEBAR_X: 960,
+  SIDEBAR_W: 320,
+  RADAR_X: 960, RADAR_Y: 32, RADAR_W: 320, RADAR_H: 260,
+  MM_X: 992, MM_Y: 34, MM_S: 256,       // radar minimap blit rect (4px/cell)
+  BTN_Y: 292, BTN_H: 40,
+  STRIP_BX: 968, STRIP_UX: 1104, STRIP_Y: 344, STRIP_SPACING: 100, STRIP_VISIBLE: 4,
+  CAMEO_W: 64, CAMEO_H: 48,             // cameo SOURCE size (art authored at this)
+  CAMEO_PW: 128, CAMEO_PH: 96,          // cameo SCREEN slot size
   HARV_CAP: 700,
   BAIL: 25,
   TIB_MAX: 300,
@@ -28,8 +35,8 @@ const C = {
   REPAIR_COST: 0.3,        // fraction of cost/maxHp paid per hp repaired
   SELL_REFUND: 0.5,
   SUPER_TICKS: { ion: 5400, nuke: 6300 },
-  EDGE_SCROLL: 8,          // px border that triggers edge scrolling
-  SCROLL_SPEED: 12,        // px per frame while scrolling
+  EDGE_SCROLL: 16,         // SCREEN px border that triggers edge scrolling
+  SCROLL_SPEED: 12,        // WORLD px per frame while scrolling
 };
 
 // Shared palette — every sprite file draws from these so the art reads as one set.

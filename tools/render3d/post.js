@@ -106,7 +106,7 @@ const meta = JSON.parse(fs.readFileSync(path.join(RAW, 'meta.json'), 'utf8'));
     function vehicleSheet(key, baseName) {
       const m = meta.frames[baseName + '_00'] ? null : meta.frames[baseName]; // meta stored once
       const info = meta.frames[baseName];
-      const raw = info.raw, fw = Math.round(raw / meta.ss), fh = fw;
+      const raw = info.raw, fw = Math.round(info.units * 48), fh = fw; // 48 px/cell hi-res
       const sheet = mk(fw * 16, fh);
       const g = sheet.getContext('2d');
       for (let i = 0; i < 16; i++) {
@@ -127,11 +127,11 @@ const meta = JSON.parse(fs.readFileSync(path.join(RAW, 'meta.json'), 'utf8'));
     function buildingSheet(key) {
       const info = meta.frames[key];
       const img = imgs[key];
-      const fpW = info.w * 24, fpH = info.h * 24;
-      const finalW = fpW, finalH = info.yOff + fpH + info.bib;
+      const fpW = info.w * 48, fpH = info.h * 48; // 48 px/cell hi-res
+      const finalW = fpW, finalH = (info.yOff + info.h * 24 + info.bib) * 2;
       const scale = fpW / (info.se[0] - info.nw[0]);      // final px per raw px
       const sx = info.nw[0];
-      const sy = info.nw[1] - info.yOff / scale;
+      const sy = info.nw[1] - (info.yOff * 2) / scale; // yOff is world px -> 2x screen rows
       const sw = finalW / scale;
       const sh = finalH / scale;
       const c = bake(img, sx, sy, sw, sh, finalW, finalH);

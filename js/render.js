@@ -1,10 +1,16 @@
 'use strict';
-// render.js — draws the whole 640x400 frame: viewport, tab bar, sidebar,
+// render.js — draws the whole 1280x800 frame: viewport, tab bar, sidebar,
 // radar, cursor. Global: Render.
+//
+// HI-RES MODE: the simulation runs in world px (24/cell) but the display maps
+// world -> screen at C.ZOOM (48 screen px per cell). Sprites flagged `_hires`
+// (from the pre-rendered pipeline) draw at native size; everything else is
+// authored at 24px/cell and drawn scaled 2x with nearest-neighbour sampling.
 
 const Render = (function () {
+  const Z = C.ZOOM;
   let cv = null, ctx = null;
-  let terrainCache = null;      // full-map prerender
+  let terrainCache = null;      // full-map prerender at screen scale
   let terrainCacheSeed = -1;
   let animCells = [];           // water/blossom cells redrawn live
   let minimap = null, minimapTick = -10;
@@ -15,42 +21,52 @@ const Render = (function () {
     cv = canvas;
     ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
-    minimap = mkCanvas(128, 128);
+    minimap = mkCanvas(C.MM_S, C.MM_S);
+  }
+
+  // scale factor for a sprite canvas (pre-rendered assets are already hi-res)
+  function sca(img) { return img._hires ? 1 : Z; }
+
+  // draw a sprite at SCREEN coords (top-left)
+  function drawSpr(img, sx, sy) {
+    const s = sca(img);
+    ctx.drawImage(img, sx, sy, img.width * s, img.height * s);
   }
 
   // ---- coordinate helpers ------------------------------------------------------
 
   function worldFromScreen(x, y) {
-    if (!game || x < 0 || x >= C.VIEW_W || y < C.TAB_H || y >= C.SCREEN_H) return null;
-    return { x: x + game.camera.x, y: y - C.TAB_H + game.camera.y };
+    if (!game || x < 0 || x >= C.VIEW_PW || y < C.TAB_H || y >= C.SCREEN_H) return null;
+    return { x: x / Z + game.camera.x, y: (y - C.TAB_H) / Z + game.camera.y };
   }
 
   function hitTest(x, y) {
     if (y < C.TAB_H) {
-      if (x < 60) return { zone: 'tab-options' };
+      if (x < 120) return { zone: 'tab-options' };
       return { zone: 'tab' };
     }
-    if (x < C.VIEW_W) return { zone: 'viewport' };
+    if (x < C.VIEW_PW) return { zone: 'viewport' };
     if (x >= C.RADAR_X && y >= C.RADAR_Y && y < C.RADAR_Y + C.RADAR_H) return { zone: 'radar' };
     if (y >= C.BTN_Y && y < C.BTN_Y + C.BTN_H) {
-      if (x >= 484 && x < 532) return { zone: 'btn', which: 'repair' };
-      if (x >= 536 && x < 584) return { zone: 'btn', which: 'sell' };
-      if (x >= 588 && x < 636) return { zone: 'btn', which: 'map' };
+      if (x >= 968 && x < 1064) return { zone: 'btn', which: 'repair' };
+      if (x >= 1072 && x < 1168) return { zone: 'btn', which: 'sell' };
+      if (x >= 1176 && x < 1272) return { zone: 'btn', which: 'map' };
       return { zone: 'sidebar' };
     }
     if (game && game.human) {
       const it = Production.items(game.human);
       for (const strip of ['b', 'u']) {
         const sx = strip === 'b' ? C.STRIP_BX : C.STRIP_UX;
-        if (x < sx || x >= sx + C.CAMEO_W) continue;
-        // scroll arrows
-        if (y >= 372 && y < 384) {
-          return { zone: 'arrow', strip, dir: x < sx + 32 ? -1 : 1 };
+        if (x < sx || x >= sx + C.CAMEO_PW) continue;
+        // scroll arrows below the 4 visible icons
+        const ay = C.STRIP_Y + C.STRIP_VISIBLE * C.STRIP_SPACING;
+        if (y >= ay && y < ay + 24) {
+          return { zone: 'arrow', strip, dir: x < sx + C.CAMEO_PW / 2 ? -1 : 1 };
         }
         const list = strip === 'b' ? it.buildings : it.units;
         for (let i = 0; i < C.STRIP_VISIBLE; i++) {
           const iy = C.STRIP_Y + i * C.STRIP_SPACING;
-          if (y >= iy && y < iy + C.CAMEO_H) {
+          if (y >= iy && y < iy + C.CAMEO_PH) {
             const item = list[game.human.scroll[strip] + i];
             if (item) return { zone: 'icon', strip, key: item.key, state: item.state, super: !!item.super };
           }
@@ -63,7 +79,8 @@ const Render = (function () {
   // ---- terrain cache -------------------------------------------------------------
 
   function _buildTerrainCache(g) {
-    terrainCache = mkCanvas(C.MAP_W * C.CELL, C.MAP_H * C.CELL);
+    const cs = C.CELL * Z;
+    terrainCache = mkCanvas(C.MAP_W * cs, C.MAP_H * cs);
     const tc = terrainCache.getContext('2d');
     tc.imageSmoothingEnabled = false;
     animCells = [];
@@ -73,7 +90,8 @@ const Render = (function () {
         const t = g.terrain[i];
         const variants = SPRITES.terrain[t] || SPRITES.terrain[0];
         if (!variants || !variants.length) continue;
-        tc.drawImage(variants[g.tvar[i] % variants.length], cx * C.CELL, cy * C.CELL);
+        const img = variants[g.tvar[i] % variants.length];
+        tc.drawImage(img, cx * cs, cy * cs, cs, cs);
         if (t === 3 || t === 5) animCells.push({ cx, cy, t });
       }
     }
@@ -83,25 +101,25 @@ const Render = (function () {
   // ---- minimap ---------------------------------------------------------------------
 
   const TCOLOR = ['#3e5429', '#8f7a4e', '#6e6e66', '#1e4468', '#1e3416', '#c890b8'];
+  const OWNER_COLOR = { gdi: '#ffd23c', nod: '#ff2418', mut: '#4ce03c' };
+  const MMC = C.MM_S / C.MAP_W;   // minimap px per cell
 
   function _updateMinimap(g) {
     const mc = minimap.getContext('2d');
     mc.fillStyle = '#000';
-    mc.fillRect(0, 0, 128, 128);
+    mc.fillRect(0, 0, C.MM_S, C.MM_S);
     for (let cy = 0; cy < C.MAP_H; cy++) {
       for (let cx = 0; cx < C.MAP_W; cx++) {
         const i = cellIdx(cx, cy);
         if (g.shroud[i] !== 1) continue;
         mc.fillStyle = g.tib[i] > 0 ? PAL.tib2 : TCOLOR[g.terrain[i]] || TCOLOR[0];
-        mc.fillRect(cx * 2, cy * 2, 2, 2);
+        mc.fillRect(cx * MMC, cy * MMC, MMC, MMC);
       }
     }
-    // faction colors: GDI gold, Nod red, creatures sickly green
-    const OWNER_COLOR = { gdi: '#ffd23c', nod: '#ff2418', mut: '#4ce03c' };
     for (const b of g.buildings.values()) {
       if (g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
       mc.fillStyle = OWNER_COLOR[b.owner] || '#ccc';
-      mc.fillRect(b.cx * 2, b.cy * 2, b.w * 2, b.h * 2);
+      mc.fillRect(b.cx * MMC, b.cy * MMC, b.w * MMC, b.h * MMC);
     }
     for (const u of g.units.values()) {
       const cx = worldToCell(u.x), cy = worldToCell(u.y);
@@ -113,11 +131,11 @@ const Render = (function () {
         if (u.cloaked) continue;
       }
       mc.fillStyle = OWNER_COLOR[u.owner] || '#ccc';
-      mc.fillRect(cx * 2, cy * 2, 2, 2);
+      mc.fillRect(cx * MMC, cy * MMC, MMC, MMC);
     }
   }
 
-  // ---- entity drawing ----------------------------------------------------------------
+  // ---- entity drawing -----------------------------------------------------------------
 
   function _healthColor(frac) {
     return frac > 2 / 3 ? PAL.uiGreen : frac > 1 / 3 ? '#d8c020' : PAL.uiRed;
@@ -125,30 +143,29 @@ const Render = (function () {
 
   function _drawHealthBar(x, y, w, frac) {
     ctx.fillStyle = '#000';
-    ctx.fillRect(x, y, w, 4);
+    ctx.fillRect(x, y, w, 8);
     ctx.fillStyle = _healthColor(frac);
-    ctx.fillRect(x + 1, y + 1, Math.max(1, Math.round((w - 2) * frac)), 2);
+    ctx.fillRect(x + 2, y + 2, Math.max(2, Math.round((w - 4) * frac)), 4);
   }
 
   function _drawBrackets(x, y, w, h) {
     ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1;
-    const s = Math.max(4, Math.min(7, w >> 2));
+    ctx.lineWidth = 2;
+    const s = Math.max(8, Math.min(14, w >> 2));
     ctx.beginPath();
-    // four corners
-    ctx.moveTo(x + 0.5, y + s); ctx.lineTo(x + 0.5, y + 0.5); ctx.lineTo(x + s, y + 0.5);
-    ctx.moveTo(x + w - s, y + 0.5); ctx.lineTo(x + w - 0.5, y + 0.5); ctx.lineTo(x + w - 0.5, y + s);
-    ctx.moveTo(x + w - 0.5, y + h - s); ctx.lineTo(x + w - 0.5, y + h - 0.5); ctx.lineTo(x + w - s, y + h - 0.5);
-    ctx.moveTo(x + s, y + h - 0.5); ctx.lineTo(x + 0.5, y + h - 0.5); ctx.lineTo(x + 0.5, y + h - s);
+    ctx.moveTo(x + 1, y + s); ctx.lineTo(x + 1, y + 1); ctx.lineTo(x + s, y + 1);
+    ctx.moveTo(x + w - s, y + 1); ctx.lineTo(x + w - 1, y + 1); ctx.lineTo(x + w - 1, y + s);
+    ctx.moveTo(x + w - 1, y + h - s); ctx.lineTo(x + w - 1, y + h - 1); ctx.lineTo(x + w - s, y + h - 1);
+    ctx.moveTo(x + s, y + h - 1); ctx.lineTo(x + 1, y + h - 1); ctx.lineTo(x + 1, y + h - s);
     ctx.stroke();
   }
 
-  function _drawBuilding(g, b, ox, oy) {
+  function _drawBuilding(g, b, X, Y) {
     const set = SPRITES.buildings[b.type] && SPRITES.buildings[b.type][b.owner];
     if (!set) return;
-    // tall structures (towers, obelisk) rise above their footprint: set.yOff
-    // pixels of the canvas sit ABOVE the anchor cell
-    const x = b.cx * C.CELL - ox, y = b.cy * C.CELL - oy - (set.yOff || 0);
+    // tall structures rise above their footprint: yOff is in WORLD px
+    const x = X(b.cx * C.CELL);
+    const y = Y(b.cy * C.CELL) - (set.yOff || 0) * Z;
     const damaged = b.hp < b.maxHp * 0.5;
     let frames = damaged && set.damaged ? set.damaged : set.normal;
     if (b.type === 'obli' && b.charging && set.charge) {
@@ -157,29 +174,33 @@ const Render = (function () {
       frames = set.open;
     }
     const frame = frames[((g.tick >> 3) + b.id) % frames.length];
+    const s = sca(frame);
+    const DW = frame.width * s, DH = frame.height * s;
 
     if (b.buildProgress < 1) {
       // construction: rising bottom-up reveal with scaffold flicker
-      const H = frame.height;
-      const vis = Math.max(1, Math.round(H * b.buildProgress));
-      ctx.drawImage(frame, 0, H - vis, frame.width, vis, x, y + H - vis - 8 + 8, frame.width, vis);
+      const vis = Math.max(1, Math.round(DH * b.buildProgress));
+      const srcVis = Math.max(1, Math.round(frame.height * b.buildProgress));
+      ctx.drawImage(frame, 0, frame.height - srcVis, frame.width, srcVis,
+        x, y + DH - vis, DW, vis);
       if (g.tick & 1) {
         ctx.fillStyle = 'rgba(255,255,255,0.25)';
-        ctx.fillRect(x, y + H - vis, frame.width, 2);
+        ctx.fillRect(x, y + DH - vis, DW, 4);
       }
       return;
     }
-    ctx.drawImage(frame, x, y);
+    drawSpr(frame, x, y);
     if (b.type === 'gun' && set.turret) {
-      ctx.drawImage(set.turret[b.turretFacing & 15], x, y - 4);
+      drawSpr(set.turret[b.turretFacing & 15], x, y - 8);
     }
     if (b.repairing && (g.tick >> 3) & 1 && SPRITES.fx.wrench) {
       const wr = SPRITES.fx.wrench[0];
-      ctx.drawImage(wr, x + (b.w * C.CELL - wr.width) / 2, y + (b.h * C.CELL - wr.height) / 2);
+      drawSpr(wr, x + (b.w * C.CELL * Z - wr.width * sca(wr)) / 2,
+        Y(b.cy * C.CELL) + (b.h * C.CELL * Z - wr.height * sca(wr)) / 2);
     }
   }
 
-  function _drawUnit(g, u, ox, oy) {
+  function _drawUnit(g, u, X, Y) {
     const d = DATA.units[u.type];
     const hidden = u.cloaked && u.owner !== g.humanSide;
     if (hidden) return;
@@ -196,90 +217,92 @@ const Render = (function () {
       } else {
         img = set.stand[f8][0] || set.stand[f8];
       }
-      if (img && img.width) ctx.drawImage(img, Math.round(u.x - 12 - ox), Math.round(u.y - 12 - oy));
-      else ctx.drawImage(set.stand[f8], Math.round(u.x - 12 - ox), Math.round(u.y - 12 - oy));
+      if (!img || !img.width) img = set.stand[f8];
+      drawSpr(img, Math.round(X(u.x) - img.width * sca(img) / 2),
+        Math.round(Y(u.y) - img.height * sca(img) / 2));
       return;
     }
 
     const set = SPRITES.units[u.type] && SPRITES.units[u.type][u.owner];
     if (!set) return;
     const air = d.air;
-    let x = Math.round(u.x - 12 - ox), y = Math.round(u.y - 12 - oy);
+    const body = set.body[u.facing & 15];
+    const s = sca(body);
+    let x = Math.round(X(u.x) - body.width * s / 2);
+    let y = Math.round(Y(u.y) - body.height * s / 2);
 
     if (air) {
-      // shadow + bob
       ctx.fillStyle = 'rgba(0,0,0,0.3)';
       ctx.beginPath();
-      ctx.ellipse(u.x - ox, u.y - oy + 12, 8, 3, 0, 0, Math.PI * 2);
+      ctx.ellipse(X(u.x), Y(u.y) + 24, 16, 6, 0, 0, Math.PI * 2);
       ctx.fill();
-      y -= 8 + Math.round(Math.sin(u.anim / 6) * 2);
+      y -= 16 + Math.round(Math.sin(u.anim / 6) * 4);
     }
 
     const cloakAlpha = u.cloaked && u.owner === g.humanSide;
     if (cloakAlpha) ctx.globalAlpha = 0.35;
-    ctx.drawImage(set.body[u.facing & 15], x, y);
-    if (set.turret) ctx.drawImage(set.turret[u.turretFacing & 15], x, y);
+    drawSpr(body, x, y);
+    if (set.turret) drawSpr(set.turret[u.turretFacing & 15], x, y);
     if (set.anim && set.anim.length) {
       const a = set.anim[(u.anim >> 1) % set.anim.length];
       const af = a && a[u.facing & 15];
       const img = af || a;
-      if (img && img.width) ctx.drawImage(img, x, y);
+      if (img && img.width) drawSpr(img, x, y);
     }
     if (cloakAlpha) ctx.globalAlpha = 1;
   }
 
-  // ---- effects ------------------------------------------------------------------------
+  // ---- effects ---------------------------------------------------------------------------
 
-  function _drawEffect(g, e, ox, oy) {
+  function _drawEffect(g, e, X, Y) {
     switch (e.name) {
       case 'tracer':
         ctx.strokeStyle = '#f8e850';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.moveTo(e.x1 - ox, e.y1 - oy);
-        ctx.lineTo(e.x2 - ox, e.y2 - oy);
+        ctx.moveTo(X(e.x1), Y(e.y1));
+        ctx.lineTo(X(e.x2), Y(e.y2));
         ctx.stroke();
         return;
       case 'laserBeam': {
-        // layered beam: dark red glow, bright red body, white-hot core
         ctx.beginPath();
-        ctx.moveTo(e.x1 - ox, e.y1 - oy);
-        ctx.lineTo(e.x2 - ox, e.y2 - oy);
+        ctx.moveTo(X(e.x1), Y(e.y1));
+        ctx.lineTo(X(e.x2), Y(e.y2));
         ctx.strokeStyle = 'rgba(160,24,16,0.55)';
-        ctx.lineWidth = 5;
+        ctx.lineWidth = 10;
         ctx.stroke();
         ctx.strokeStyle = PAL.laser;
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 5;
         ctx.stroke();
         ctx.strokeStyle = '#ffd8c8';
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 2;
         ctx.stroke();
-        // impact flare
         ctx.fillStyle = '#fff0e0';
-        ctx.fillRect(e.x2 - ox - 2, e.y2 - oy - 2, 4, 4);
+        ctx.fillRect(X(e.x2) - 4, Y(e.y2) - 4, 8, 8);
         return;
       }
       case 'ionBeam': {
-        const x = e.x - ox;
+        const x = X(e.x);
         ctx.fillStyle = 'rgba(168,216,248,0.75)';
-        ctx.fillRect(x - 4, 0, 8, e.y - oy);
+        ctx.fillRect(x - 8, 0, 16, Y(e.y));
         ctx.fillStyle = '#fff';
-        ctx.fillRect(x - 1, 0, 2, e.y - oy);
+        ctx.fillRect(x - 2, 0, 4, Y(e.y));
         return;
       }
       case 'nukeMissile': {
         const fall = (e.ttl - e.tick) * 12;
         ctx.fillStyle = '#ddd';
-        ctx.fillRect(e.x - ox - 2, e.y - oy - fall - 12, 4, 12);
+        ctx.fillRect(X(e.x) - 4, Y(e.y - fall) - 24, 8, 24);
         ctx.fillStyle = PAL.nodRed;
-        ctx.fillRect(e.x - ox - 2, e.y - oy - fall - 14, 4, 3);
+        ctx.fillRect(X(e.x) - 4, Y(e.y - fall) - 28, 8, 6);
         return;
       }
       case 'infdie': {
         const set = SPRITES.infantry[e.itype] && SPRITES.infantry[e.itype][e.side];
         if (set && set.die) {
           const img = set.die[Math.min(e.frame, set.die.length - 1)];
-          ctx.drawImage(img, Math.round(e.x - 12 - ox), Math.round(e.y - 12 - oy));
+          drawSpr(img, Math.round(X(e.x) - img.width * sca(img) / 2),
+            Math.round(Y(e.y) - img.height * sca(img) / 2));
         }
         return;
       }
@@ -287,108 +310,109 @@ const Render = (function () {
         const frames = SPRITES.fx[e.name];
         if (!frames || !frames.length) return;
         const img = frames[Math.min(e.frame, frames.length - 1)];
-        ctx.drawImage(img, Math.round(e.x - img.width / 2 - ox), Math.round(e.y - img.height / 2 - oy));
+        drawSpr(img, Math.round(X(e.x) - img.width * sca(img) / 2),
+          Math.round(Y(e.y) - img.height * sca(img) / 2));
       }
     }
   }
 
-  // ---- viewport -----------------------------------------------------------------------
+  // ---- viewport ------------------------------------------------------------------------------
 
   function _drawViewport(g) {
     if (!terrainCache || terrainCacheSeed !== g.seed) _buildTerrainCache(g);
 
-    // screen shake
     if (g.shake > 0 && g.tick !== shownTick) {
       shakeX = ((Math.random() * 2 - 1) * Math.min(6, g.shake / 3)) | 0;
       shakeY = ((Math.random() * 2 - 1) * Math.min(6, g.shake / 3)) | 0;
       g.shake--;
     } else if (!g.shake) { shakeX = 0; shakeY = 0; }
 
-    const ox = g.camera.x - shakeX, oy = g.camera.y - shakeY - C.TAB_H;
+    const ox = g.camera.x - shakeX, oy = g.camera.y - shakeY;
+    const X = w => (w - ox) * Z;
+    const Y = w => (w - oy) * Z + C.TAB_H;
+    const cs = C.CELL * Z;
 
     ctx.save();
     ctx.beginPath();
-    ctx.rect(0, C.TAB_H, C.VIEW_W, C.VIEW_H);
+    ctx.rect(0, C.TAB_H, C.VIEW_PW, C.VIEW_PH);
     ctx.clip();
 
-    // terrain
-    ctx.drawImage(terrainCache, -ox, -oy);
-    // animated terrain cells (water ripple, blossom pulse)
+    // terrain (cache is at screen scale)
+    ctx.drawImage(terrainCache, -ox * Z, C.TAB_H - oy * Z);
     for (const a of animCells) {
-      const sx = a.cx * C.CELL - ox, sy = a.cy * C.CELL - oy;
-      if (sx < -24 || sx > C.VIEW_W || sy < -8 || sy > C.SCREEN_H) continue;
+      const sx = X(a.cx * C.CELL), sy = Y(a.cy * C.CELL);
+      if (sx < -cs || sx > C.VIEW_PW || sy < -cs || sy > C.SCREEN_H) continue;
       const variants = SPRITES.terrain[a.t];
-      ctx.drawImage(variants[((g.tick >> 3) + a.cx) % variants.length], sx, sy);
+      ctx.drawImage(variants[((g.tick >> 3) + a.cx) % variants.length], sx, sy, cs, cs);
     }
 
-    // ground marks (scorch/crater) below everything else
+    // ground marks below everything else
     for (const e of g.effects) {
-      if (e.name === 'scorch' || e.name === 'crater') _drawEffect(g, e, ox, oy);
+      if (e.name === 'scorch' || e.name === 'crater') _drawEffect(g, e, X, Y);
     }
 
     // tiberium
     const c0x = Math.max(0, worldToCell(ox)), c1x = Math.min(C.MAP_W - 1, worldToCell(ox + C.VIEW_W) + 1);
-    const c0y = Math.max(0, worldToCell(oy)), c1y = Math.min(C.MAP_H - 1, worldToCell(oy + C.SCREEN_H) + 1);
+    const c0y = Math.max(0, worldToCell(oy)), c1y = Math.min(C.MAP_H - 1, worldToCell(oy + C.VIEW_H) + 1);
     for (let cy = c0y; cy <= c1y; cy++) {
       for (let cx = c0x; cx <= c1x; cx++) {
         const v = g.tib[cellIdx(cx, cy)];
         if (v <= 0) continue;
         const density = v > 200 ? 2 : v > 100 ? 1 : 0;
-        ctx.drawImage(SPRITES.tiberium[density], cx * C.CELL - ox, cy * C.CELL - oy);
+        ctx.drawImage(SPRITES.tiberium[density], X(cx * C.CELL), Y(cy * C.CELL), cs, cs);
       }
     }
 
-    // buildings (sorted by cy)
+    // buildings sorted by cy
     const blds = Array.from(g.buildings.values()).sort((a, b) => a.cy - b.cy);
-    for (const b of blds) _drawBuilding(g, b, ox, oy);
+    for (const b of blds) _drawBuilding(g, b, X, Y);
 
     // rally flag for selected factory
     for (const id of g.selection) {
       const b = g.buildings.get(id);
       if (b && b.rally && b.owner === g.humanSide) {
-        const rx = cellCenterX(b.rally.cx) - ox, ry = cellCenterY(b.rally.cy) - oy;
+        const rx = X(cellCenterX(b.rally.cx)), ry = Y(cellCenterY(b.rally.cy));
         ctx.fillStyle = PAL.uiGold;
-        ctx.fillRect(rx, ry - 8, 1, 8);
-        ctx.fillRect(rx, ry - 8, 5, 3);
+        ctx.fillRect(rx, ry - 16, 2, 16);
+        ctx.fillRect(rx, ry - 16, 10, 6);
       }
     }
 
     // ground units then air units
     const units = Array.from(g.units.values()).sort((a, b) => a.y - b.y);
-    for (const u of units) if (!DATA.units[u.type].air) _drawUnit(g, u, ox, oy);
+    for (const u of units) if (!DATA.units[u.type].air) _drawUnit(g, u, X, Y);
 
     // bullets
     for (const b of g.bullets) {
-      const bx = b.x - ox, by = b.y - oy - (b.z || 0);
-      if (b.w.arc && b.z > 1) { // shadow for lobbed shells
+      const bx = X(b.x), by = Y(b.y) - (b.z || 0) * Z;
+      if (b.w.arc && b.z > 1) {
         ctx.fillStyle = 'rgba(0,0,0,0.25)';
-        ctx.fillRect(b.x - ox - 1, b.y - oy - 1, 2, 2);
+        ctx.fillRect(X(b.x) - 2, Y(b.y) - 2, 4, 4);
       }
       ctx.fillStyle = b.w.warhead === 'ap' ? '#e8e0c0' : '#f8b830';
-      ctx.fillRect(bx - 1, by - 1, b.w.homing ? 4 : 3, b.w.homing ? 2 : 3);
+      ctx.fillRect(bx - 2, by - 2, b.w.homing ? 8 : 6, b.w.homing ? 4 : 6);
       if (b.w.homing && (game.tick & 1)) {
         ctx.fillStyle = 'rgba(160,160,160,0.6)';
-        ctx.fillRect(bx - 4, by - 1, 2, 2);
+        ctx.fillRect(bx - 8, by - 2, 4, 4);
       }
     }
 
     // effects (non-ground)
     for (const e of g.effects) {
-      if (e.name !== 'scorch' && e.name !== 'crater') _drawEffect(g, e, ox, oy);
+      if (e.name !== 'scorch' && e.name !== 'crater') _drawEffect(g, e, X, Y);
     }
 
     // air units on top
-    for (const u of units) if (DATA.units[u.type].air) _drawUnit(g, u, ox, oy);
+    for (const u of units) if (DATA.units[u.type].air) _drawUnit(g, u, X, Y);
 
     // shroud
     ctx.fillStyle = '#000';
     for (let cy = c0y; cy <= c1y; cy++) {
       for (let cx = c0x; cx <= c1x; cx++) {
         if (g.shroud[cellIdx(cx, cy)] === 1) continue;
-        ctx.fillRect(cx * C.CELL - ox, cy * C.CELL - oy, C.CELL, C.CELL);
+        ctx.fillRect(X(cx * C.CELL), Y(cy * C.CELL), cs, cs);
       }
     }
-    // shroud edges on explored cells adjacent to hidden ones
     if (SPRITES.shroudEdge && SPRITES.shroudEdge.length === 8) {
       const NDX = [0, 1, 1, 1, 0, -1, -1, -1], NDY = [-1, -1, 0, 1, 1, 1, 0, -1];
       for (let cy = c0y; cy <= c1y; cy++) {
@@ -397,7 +421,7 @@ const Render = (function () {
           for (let d = 0; d < 8; d++) {
             const nx = cx + NDX[d], ny = cy + NDY[d];
             if (inMap(nx, ny) && g.shroud[cellIdx(nx, ny)] === 0) {
-              ctx.drawImage(SPRITES.shroudEdge[d], cx * C.CELL - ox, cy * C.CELL - oy);
+              ctx.drawImage(SPRITES.shroudEdge[d], X(cx * C.CELL), Y(cy * C.CELL), cs, cs);
             }
           }
         }
@@ -409,17 +433,18 @@ const Render = (function () {
       const e = getEnt(id);
       if (!e) continue;
       if (e.kind === 'unit') {
-        const x = e.x - 12 - ox, y = e.y - 12 - oy - (DATA.units[e.type].air ? 8 : 0);
-        _drawBrackets(x, y, 24, 24);
-        _drawHealthBar(x, y - 5, 24, e.hp / e.maxHp);
+        const air = DATA.units[e.type].air;
+        const x = X(e.x) - cs / 2, y = Y(e.y) - cs / 2 - (air ? 16 : 0);
+        _drawBrackets(x, y, cs, cs);
+        _drawHealthBar(x, y - 10, cs, e.hp / e.maxHp);
       } else {
-        const x = e.cx * C.CELL - ox, y = e.cy * C.CELL - oy;
-        _drawBrackets(x, y, e.w * C.CELL, e.h * C.CELL);
-        _drawHealthBar(x, y - 5, e.w * C.CELL, e.hp / e.maxHp);
+        const x = X(e.cx * C.CELL), y = Y(e.cy * C.CELL);
+        _drawBrackets(x, y, e.w * cs, e.h * cs);
+        _drawHealthBar(x, y - 10, e.w * cs, e.hp / e.maxHp);
       }
     }
     // group numbers
-    ctx.font = '8px monospace';
+    ctx.font = '14px monospace';
     ctx.textBaseline = 'top';
     for (const n in g.groups) {
       for (const id of g.groups[n]) {
@@ -427,7 +452,7 @@ const Render = (function () {
         const e = g.units.get(id);
         if (!e) continue;
         ctx.fillStyle = '#fff';
-        ctx.fillText(n, e.x - 12 - ox, e.y - 22 - oy);
+        ctx.fillText(n, X(e.x) - cs / 2, Y(e.y) - cs / 2 - 22);
       }
     }
 
@@ -442,15 +467,16 @@ const Render = (function () {
           for (let xx = 0; xx < d.w; xx++) {
             const ok = Production.cellOk(g, g.human, pcx + xx, pcy + yy) && overall;
             ctx.fillStyle = ok ? 'rgba(80,240,80,0.4)' : 'rgba(240,60,40,0.4)';
-            ctx.fillRect((pcx + xx) * C.CELL - ox, (pcy + yy) * C.CELL - oy, C.CELL, C.CELL);
+            ctx.fillRect(X((pcx + xx) * C.CELL), Y((pcy + yy) * C.CELL), cs, cs);
             ctx.strokeStyle = ok ? '#8f8' : '#f88';
-            ctx.strokeRect((pcx + xx) * C.CELL - ox + 0.5, (pcy + yy) * C.CELL - oy + 0.5, C.CELL - 1, C.CELL - 1);
+            ctx.lineWidth = 1;
+            ctx.strokeRect(X((pcx + xx) * C.CELL) + 0.5, Y((pcy + yy) * C.CELL) + 0.5, cs - 1, cs - 1);
           }
         }
       }
     }
 
-    // drag rectangle
+    // drag rectangle (already in screen coords)
     if (Input.dragRect) {
       const r = Input.dragRect;
       ctx.strokeStyle = '#fff';
@@ -463,33 +489,33 @@ const Render = (function () {
     if (g.flash > 0) {
       if (g.tick !== shownTick) g.flash--;
       ctx.fillStyle = `rgba(255,255,255,${g.flash / 14})`;
-      ctx.fillRect(0, C.TAB_H, C.VIEW_W, C.VIEW_H);
+      ctx.fillRect(0, C.TAB_H, C.VIEW_PW, C.VIEW_PH);
     }
 
     ctx.restore();
   }
 
-  // ---- tab bar -------------------------------------------------------------------------
+  // ---- tab bar ------------------------------------------------------------------------------
 
   function _bevel(x, y, w, h, lit) {
     ctx.fillStyle = lit ? PAL.uiMetalLight : PAL.uiMetal;
     ctx.fillRect(x, y, w, h);
     ctx.fillStyle = PAL.uiMetalLight;
-    ctx.fillRect(x, y, w, 1);
-    ctx.fillRect(x, y, 1, h);
+    ctx.fillRect(x, y, w, 2);
+    ctx.fillRect(x, y, 2, h);
     ctx.fillStyle = PAL.uiMetalDark;
-    ctx.fillRect(x, y + h - 1, w, 1);
-    ctx.fillRect(x + w - 1, y, 1, h);
+    ctx.fillRect(x, y + h - 2, w, 2);
+    ctx.fillRect(x + w - 2, y, 2, h);
   }
 
   function _drawTabBar(g) {
     ctx.fillStyle = PAL.uiMetalDark;
     ctx.fillRect(0, 0, C.SCREEN_W, C.TAB_H);
-    _bevel(0, 0, 60, C.TAB_H);
-    ctx.font = '8px monospace';
+    _bevel(0, 0, 120, C.TAB_H);
+    ctx.font = '16px monospace';
     ctx.textBaseline = 'top';
     ctx.fillStyle = PAL.uiText;
-    ctx.fillText('Options', 8, 4);
+    ctx.fillText('Options', 16, 8);
 
     // credits ticker
     const target = Math.floor(g.human.credits);
@@ -500,72 +526,73 @@ const Render = (function () {
       if (Math.abs(diff) > 2) AUDIO.tickCredits();
     }
     ctx.fillStyle = PAL.uiGold;
-    ctx.fillText('$ ' + creditsShown, C.VIEW_W - 90, 4);
+    ctx.fillText('$ ' + creditsShown, C.VIEW_PW - 180, 8);
 
-    // mission timer
+    // mission timer + side
     const secs = Math.floor(g.tick / C.TPS);
     const mm = String(Math.floor(secs / 60)).padStart(2, '0');
     const ss = String(secs % 60).padStart(2, '0');
     ctx.fillStyle = PAL.uiText;
-    ctx.fillText(mm + ':' + ss, C.SIDEBAR_X + 110, 4);
-    ctx.fillText(g.humanSide.toUpperCase(), C.SIDEBAR_X + 8, 4);
+    ctx.fillText(mm + ':' + ss, C.SIDEBAR_X + 220, 8);
+    ctx.fillText(g.humanSide.toUpperCase(), C.SIDEBAR_X + 16, 8);
   }
 
-  // ---- sidebar --------------------------------------------------------------------------
+  // ---- sidebar -------------------------------------------------------------------------------
 
   function _drawSidebar(g) {
     const p = g.human;
     ctx.fillStyle = PAL.uiMetal;
     ctx.fillRect(C.SIDEBAR_X, C.TAB_H, C.SIDEBAR_W, C.SCREEN_H - C.TAB_H);
 
-    // power bar along the left edge of the sidebar
+    // power bar along the sidebar's left edge
     const pb = p.power;
     const barTop = C.RADAR_Y + C.RADAR_H, barH = C.SCREEN_H - barTop;
     ctx.fillStyle = PAL.uiMetalDark;
-    ctx.fillRect(C.SIDEBAR_X, barTop, 4, barH);
+    ctx.fillRect(C.SIDEBAR_X, barTop, 8, barH);
     const scale = Math.max(pb.out, pb.drain, 100) * 1.2;
     const outH = Math.round(pb.out / scale * barH);
     const low = pb.drain > pb.out;
     ctx.fillStyle = low ? PAL.uiRed : (pb.drain > pb.out * 0.8 ? '#d8c020' : PAL.uiGreen);
-    ctx.fillRect(C.SIDEBAR_X, barTop + barH - outH, 4, outH);
+    ctx.fillRect(C.SIDEBAR_X, barTop + barH - outH, 8, outH);
     const drainY = barTop + barH - Math.round(pb.drain / scale * barH);
     ctx.fillStyle = '#fff';
-    ctx.fillRect(C.SIDEBAR_X, drainY, 4, 2);
+    ctx.fillRect(C.SIDEBAR_X, drainY, 8, 4);
 
     // radar
     ctx.fillStyle = '#000';
-    ctx.fillRect(C.RADAR_X + 4, C.RADAR_Y, C.RADAR_W - 4, C.RADAR_H);
+    ctx.fillRect(C.RADAR_X + 8, C.RADAR_Y, C.RADAR_W - 8, C.RADAR_H);
     if (p.radar) {
       if (g.tick - minimapTick >= 8) { _updateMinimap(g); minimapTick = g.tick; }
-      const rx = C.RADAR_X + (C.RADAR_W - 128) / 2, ry = C.RADAR_Y + (C.RADAR_H - 128) / 2;
-      ctx.drawImage(minimap, rx, ry);
-      // viewport rectangle
+      ctx.drawImage(minimap, C.MM_X, C.MM_Y);
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 1;
       ctx.strokeRect(
-        rx + g.camera.x / (C.MAP_W * C.CELL) * 128 + 0.5,
-        ry + g.camera.y / (C.MAP_H * C.CELL) * 128 + 0.5,
-        C.VIEW_W / (C.MAP_W * C.CELL) * 128,
-        C.VIEW_H / (C.MAP_H * C.CELL) * 128);
+        C.MM_X + g.camera.x / (C.MAP_W * C.CELL) * C.MM_S + 0.5,
+        C.MM_Y + g.camera.y / (C.MAP_H * C.CELL) * C.MM_S + 0.5,
+        C.VIEW_W / (C.MAP_W * C.CELL) * C.MM_S,
+        C.VIEW_H / (C.MAP_H * C.CELL) * C.MM_S);
     } else {
       const logo = SPRITES.logo[g.humanSide];
       if (logo) {
-        ctx.drawImage(logo, C.RADAR_X + (C.RADAR_W - logo.width) / 2 + 2, C.RADAR_Y + (C.RADAR_H - logo.height) / 2);
+        const lw = logo.width * 2, lh = logo.height * 2;
+        ctx.drawImage(logo, C.RADAR_X + (C.RADAR_W - lw) / 2 + 4,
+          C.RADAR_Y + (C.RADAR_H - lh) / 2, lw, lh);
       }
     }
 
     // buttons
-    const btns = [['REPAIR', 484, 'repair'], ['SELL', 536, 'sell'], ['MAP', 588, 'map']];
-    ctx.font = '8px monospace';
+    const btns = [['REPAIR', 968, 'repair'], ['SELL', 1072, 'sell'], ['MAP', 1176, 'map']];
+    ctx.font = '16px monospace';
     for (const [label, bx, which] of btns) {
       const active = Input.mode === which;
-      _bevel(bx, C.BTN_Y + 2, 48, C.BTN_H - 4, active);
+      _bevel(bx, C.BTN_Y + 4, 96, C.BTN_H - 8, active);
       ctx.fillStyle = which === 'map' ? '#7a7a70' : (active ? PAL.uiGold : PAL.uiText);
-      ctx.fillText(label, bx + 24 - label.length * 2.5, C.BTN_Y + 7);
+      ctx.fillText(label, bx + 48 - label.length * 5, C.BTN_Y + 14);
     }
 
     // strips
     const it = Production.items(p);
+    ctx.font = '14px monospace';
     for (const strip of ['b', 'u']) {
       const sx = strip === 'b' ? C.STRIP_BX : C.STRIP_UX;
       const list = strip === 'b' ? it.buildings : it.units;
@@ -576,92 +603,97 @@ const Render = (function () {
         const item = list[scroll + i];
         if (!item) {
           ctx.fillStyle = PAL.uiMetalDark;
-          ctx.fillRect(sx, iy, C.CAMEO_W, C.CAMEO_H);
+          ctx.fillRect(sx, iy, C.CAMEO_PW, C.CAMEO_PH);
           continue;
         }
         const cameo = SPRITES.cameo[item.super ? item.key + 'Strike' : item.key];
-        if (cameo) ctx.drawImage(cameo, sx, iy);
-        // state overlays
+        if (cameo) ctx.drawImage(cameo, sx, iy, C.CAMEO_PW, C.CAMEO_PH);
         if (item.state === 'building' || item.state === 'hold' || item.state === 'charging') {
           ctx.fillStyle = 'rgba(0,0,0,0.5)';
-          ctx.fillRect(sx, iy, C.CAMEO_W, C.CAMEO_H);
+          ctx.fillRect(sx, iy, C.CAMEO_PW, C.CAMEO_PH);
           // clock sweep
           ctx.fillStyle = 'rgba(255,255,255,0.35)';
           ctx.beginPath();
-          ctx.moveTo(sx + 32, iy + 24);
-          ctx.arc(sx + 32, iy + 24, 40, -Math.PI / 2, -Math.PI / 2 + item.frac * Math.PI * 2);
+          ctx.moveTo(sx + C.CAMEO_PW / 2, iy + C.CAMEO_PH / 2);
+          ctx.arc(sx + C.CAMEO_PW / 2, iy + C.CAMEO_PH / 2, 80,
+            -Math.PI / 2, -Math.PI / 2 + item.frac * Math.PI * 2);
           ctx.closePath();
           ctx.save();
           ctx.beginPath();
-          ctx.rect(sx, iy, C.CAMEO_W, C.CAMEO_H);
+          ctx.rect(sx, iy, C.CAMEO_PW, C.CAMEO_PH);
           ctx.clip();
           ctx.fill();
           ctx.restore();
           if (item.state === 'hold') {
             ctx.fillStyle = '#f0d020';
-            ctx.fillText('ON HOLD', sx + 14, iy + 20);
+            ctx.fillText('ON HOLD', sx + 33, iy + 42);
           } else if (item.state === 'building' && item.eta > 0) {
-            // time remaining, dark-boxed so it reads over the clock sweep
             const t = Math.floor(item.eta / 60) + ':' + String(item.eta % 60).padStart(2, '0');
             ctx.fillStyle = 'rgba(0,0,0,0.65)';
-            ctx.fillRect(sx + 20, iy + 18, 24, 11);
+            ctx.fillRect(sx + 40, iy + 38, 48, 20);
             ctx.fillStyle = '#fff';
-            ctx.fillText(t, sx + 23, iy + 20);
+            ctx.fillText(t, sx + 46, iy + 41);
           }
           if (item.state === 'charging') {
             const p2 = g.human.super;
             const s = Math.ceil(p2.timer / C.TPS);
             const t = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
             ctx.fillStyle = '#fff';
-            ctx.fillText(t, sx + 22, iy + 20);
+            ctx.fillText(t, sx + 44, iy + 41);
           }
         } else if (item.state === 'ready') {
           if ((g.tick >> 3) & 1) {
             ctx.fillStyle = '#fff';
-            ctx.fillText('READY', sx + 19, iy + 20);
+            ctx.fillText('READY', sx + 42, iy + 41);
           }
         }
         // queued-unit count badge
         if (item.count > 1 || (item.count === 1 && item.state === 'idle')) {
           ctx.fillStyle = 'rgba(0,0,0,0.7)';
-          ctx.fillRect(sx + C.CAMEO_W - 16, iy + 1, 15, 10);
+          ctx.fillRect(sx + C.CAMEO_PW - 34, iy + 2, 32, 20);
           ctx.fillStyle = PAL.uiGold;
-          ctx.fillText('x' + item.count, sx + C.CAMEO_W - 14, iy + 2);
+          ctx.fillText('x' + item.count, sx + C.CAMEO_PW - 30, iy + 5);
         }
         // hover highlight
-        if (Input.mouse.x >= sx && Input.mouse.x < sx + C.CAMEO_W &&
-            Input.mouse.y >= iy && Input.mouse.y < iy + C.CAMEO_H) {
+        if (Input.mouse.x >= sx && Input.mouse.x < sx + C.CAMEO_PW &&
+            Input.mouse.y >= iy && Input.mouse.y < iy + C.CAMEO_PH) {
           ctx.strokeStyle = PAL.uiGold;
-          ctx.strokeRect(sx + 0.5, iy + 0.5, C.CAMEO_W - 1, C.CAMEO_H - 1);
+          ctx.lineWidth = 1;
+          ctx.strokeRect(sx + 0.5, iy + 0.5, C.CAMEO_PW - 1, C.CAMEO_PH - 1);
         }
       }
       // scroll arrows
+      const ay = C.STRIP_Y + C.STRIP_VISIBLE * C.STRIP_SPACING;
       const canUp = scroll > 0, canDown = scroll < list.length - C.STRIP_VISIBLE;
-      _bevel(sx, 372, 30, 12);
-      _bevel(sx + 34, 372, 30, 12);
+      _bevel(sx, ay, 60, 24);
+      _bevel(sx + 68, ay, 60, 24);
       ctx.fillStyle = canUp ? PAL.uiText : '#6a6a60';
-      ctx.fillText('▲', sx + 11, 374);
+      ctx.fillText('▲', sx + 23, ay + 5);
       ctx.fillStyle = canDown ? PAL.uiText : '#6a6a60';
-      ctx.fillText('▼', sx + 45, 374);
+      ctx.fillText('▼', sx + 91, ay + 5);
     }
 
     // low power warning
     if (p.power.drain > p.power.out && (g.tick >> 3) & 1) {
       ctx.fillStyle = PAL.uiRed;
-      ctx.fillText('LOW POWER', C.SIDEBAR_X + 48, C.BTN_Y - 10);
+      ctx.font = '16px monospace';
+      ctx.fillText('LOW POWER', C.SIDEBAR_X + 96, C.BTN_Y - 22);
     }
   }
 
-  // ---- cursor ---------------------------------------------------------------------------
+  // ---- cursor ---------------------------------------------------------------------------------
 
   function _drawCursor() {
     const kind = Input.cursorKind || 'default';
     const cur = SPRITES.cursor[kind] || SPRITES.cursor.default;
     if (!cur) return;
-    ctx.drawImage(cur.c, Math.round(Input.mouse.x - cur.hx), Math.round(Input.mouse.y - cur.hy));
+    ctx.drawImage(cur.c,
+      Math.round(Input.mouse.x - cur.hx * Z),
+      Math.round(Input.mouse.y - cur.hy * Z),
+      cur.c.width * Z, cur.c.height * Z);
   }
 
-  // ---- frame ----------------------------------------------------------------------------
+  // ---- frame ----------------------------------------------------------------------------------
 
   function frame(g) {
     if (!ctx) return;
