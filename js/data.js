@@ -73,7 +73,7 @@ DATA.units = {
 
 // buildings. w,h in cells. power +out, drain -.
 DATA.buildings = {
-  fact: { name: 'Construction Yard', cost: 5000, hp: 500, w: 3, h: 2, armor: 'wood', sight: 4, power: 0, drain: 15, side: null, prereq: [] },
+  fact: { name: 'Construction Yard', cost: 5000, hp: 500, w: 3, h: 2, armor: 'wood', sight: 4, power: 30, drain: 0, side: null, prereq: [] },
   nuke: { name: 'Power Plant', cost: 300, hp: 300, w: 2, h: 2, armor: 'wood', sight: 2, power: 100, drain: 0, side: null, prereq: [] },
   nuk2: { name: 'Adv. Power Plant', cost: 700, hp: 400, w: 2, h: 2, armor: 'wood', sight: 2, power: 200, drain: 0, side: null, prereq: ['nuke'] },
   proc: { name: 'Tiberium Refinery', cost: 2000, hp: 450, w: 3, h: 2, armor: 'wood', sight: 4, power: 0, drain: 30, side: null, prereq: ['nuke'], storage: 1000, freeUnit: 'harv' },
@@ -121,6 +121,7 @@ DATA.eva = {
   nukeReady: 'Nuclear weapon available',
   nukeLaunched: 'Nuclear weapon launched',
   unitLost: 'Unit lost',
+  buildingCaptured: 'Building captured',
   cancelled: 'Cancelled',
   onHold: 'On hold',
   repairing: 'Repairing',
