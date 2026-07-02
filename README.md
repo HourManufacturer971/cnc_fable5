@@ -35,7 +35,8 @@ Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1`.
 | Shift+click | Add/remove from selection |
 | Double-click | Select all visible units of that type |
 | Click selected MCV (or `D`) | Deploy into Construction Yard |
-| Ctrl+1..9 / 1..9 | Assign / recall control group (double-tap to center) |
+| Alt+1..9 (or Ctrl+1..9) | Assign control group — Alt is the reliable one; browsers steal Ctrl+1..8 for tab switching |
+| 1..9 | Recall group (double-tap to center camera, Shift adds the group to the selection) |
 | `H` | Center on Construction Yard |
 | `S` / `G` | Stop / guard |
 | `T` | Select same type on screen |
@@ -43,10 +44,13 @@ Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1`.
 | `Esc` | Options menu / cancel placement, sell, repair, targeting |
 
 Sidebar: left icon strip is structures, right strip is units. Click an icon to
-start building (cost drains as it builds); click a finished structure icon to
-place it; left-click an in-progress icon to pause, right-click to cancel and
-refund. REPAIR and SELL buttons toggle wrench/sell cursor modes. The radar
-comes online with a powered Communications Center.
+start building (cost drains as it builds, remaining time shows on the icon);
+click a finished structure icon to place it. Unit icons can be clicked
+repeatedly to **queue up to 20 units** (the badge shows the count) — a
+deliberate departure from the original. Left-click an in-progress structure
+icon to pause it, right-click any icon to cancel/dequeue with refund. REPAIR
+and SELL buttons toggle wrench/sell cursor modes. The radar comes online with
+a powered Communications Center.
 
 ## What's simulated
 

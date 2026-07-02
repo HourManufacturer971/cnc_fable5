@@ -21,7 +21,8 @@ const C = {
   HARV_CAP: 700,
   BAIL: 25,
   TIB_MAX: 300,
-  BUILD_TPC: 0.9,          // ticks per credit at full power
+  BUILD_TPC: 0.4,          // ticks per credit at full power
+  QUEUE_MAX: 20,           // max units queued per production line
   ADJACENCY: 1,            // max cell gap to friendly building for placement
   REPAIR_HP: 1,            // hp per tick while repairing
   REPAIR_COST: 0.3,        // fraction of cost/maxHp paid per hp repaired
@@ -156,6 +157,7 @@ function makePlayer(side, isAI) {
     storage: 0,
     power: { out: 0, drain: 0 },
     queues: { building: null, unit: null }, // Job {key, spent, total, ticksLeft, ticksTotal, hold}
+    unitQueue: [],                          // pending unit keys behind the active job (max C.QUEUE_MAX total)
     ready: { building: null },              // finished building key awaiting placement
     scroll: { b: 0, u: 0 },                 // sidebar strip scroll offsets
     radar: false,

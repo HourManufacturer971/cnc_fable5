@@ -163,12 +163,24 @@ const Input = (function () {
     return game.selection.map(id => game.units.get(id)).filter(Boolean);
   }
 
+  // voice class of the current selection's lead unit
+  function _selClass(ids) {
+    for (const id of ids || game.selection) {
+      const u = game.units.get(id);
+      if (u && u.owner === game.humanSide) {
+        const d = DATA.units[u.type];
+        return d.air ? 'air' : d.infantry ? 'inf' : 'veh';
+      }
+    }
+    return 'veh';
+  }
+
   function _select(ids, silent) {
     game.selection = ids;
     if (!silent && ids.some(id => {
       const u = game.units.get(id);
       return u && u.owner === game.humanSide;
-    })) AUDIO.ack('select');
+    })) AUDIO.ack('select', _selClass(ids));
   }
 
   function _boxSelect(shift) {
@@ -276,7 +288,7 @@ const Input = (function () {
       // engineer heal own damaged building
       if (ent.kind === 'building' && ownSel.some(u => DATA.units[u.type].engineer) && ent.hp < ent.maxHp) {
         for (const u of ownSel) if (DATA.units[u.type].engineer) orderEnter(u, ent);
-        AUDIO.ack('move');
+        AUDIO.ack('move', _selClass());
         return;
       }
       // select it
@@ -307,7 +319,7 @@ const Input = (function () {
           if (d.engineer && ent.kind === 'building') { orderEnter(u, ent); acted = true; }
           else if (orderAttack(u, ent)) acted = true;
         }
-        if (acted) AUDIO.ack('attack');
+        if (acted) AUDIO.ack('attack', _selClass());
         else AUDIO.play('buzz');
       } else {
         _select([ent.id], true); // inspect enemy
@@ -324,7 +336,7 @@ const Input = (function () {
       if (harvs.length && g.tib[cellIdx(cx, cy)] > 0) {
         for (const h of harvs) orderHarvest(h, cx, cy);
         for (const u of ownSel) if (!DATA.units[u.type].harvester) orderMove(u, cx, cy);
-        AUDIO.ack('move');
+        AUDIO.ack('move', _selClass());
         return;
       }
       if (terrainPassable(g.terrain[cellIdx(cx, cy)]) || ownSel.some(u => DATA.units[u.type].air)) {
@@ -333,7 +345,7 @@ const Input = (function () {
           const s = spots[Math.min(i, spots.length - 1)];
           orderMove(u, s.cx, s.cy);
         });
-        AUDIO.ack('move');
+        AUDIO.ack('move', _selClass());
       } else {
         AUDIO.play('buzz');
       }
@@ -361,7 +373,9 @@ const Input = (function () {
       AUDIO.play('click');
       return;
     }
-    if (hit.state === 'building' || hit.state === 'hold') {
+    // units always queue on click; buildings keep the classic hold toggle
+    if (Production.categoryOf(hit.key) === 'building' &&
+        (hit.state === 'building' || hit.state === 'hold')) {
       Production.toggleHold(p, hit.key);
       return;
     }
@@ -391,18 +405,30 @@ const Input = (function () {
   function _hotkeys(ev) {
     const g = game;
     const k = ev.key;
-    if (k >= '1' && k <= '9') {
-      const n = +k;
-      if (ev.ctrlKey) {
-        g.groups[n] = g.selection.slice();
+    // use ev.code for digits so Shift/Alt combos still read as 1..9
+    const dm = /^(?:Digit|Numpad)([1-9])$/.exec(ev.code || '');
+    if (dm) {
+      const n = +dm[1];
+      // Ctrl+digit OR Alt+digit assigns (browsers reserve Ctrl+1..8 for tabs,
+      // so Alt is the reliable one; we still take Ctrl when the page gets it)
+      if (ev.ctrlKey || ev.altKey) {
+        if (g.selection.length) {
+          g.groups[n] = g.selection.slice();
+          AUDIO.play('click');
+        }
         ev.preventDefault();
       } else if (g.groups[n] && g.groups[n].length) {
         const ids = g.groups[n].filter(id => g.units.get(id) || g.buildings.get(id));
         g.groups[n] = ids;
-        _select(ids.slice(), true);
-        const now = Date.now();
-        if (lastGroupTap.n === n && now - lastGroupTap.t < 400) _centerOnSelection();
-        lastGroupTap = { t: now, n };
+        if (!ids.length) return;
+        if (ev.shiftKey) {
+          _select([...new Set(g.selection.concat(ids))], true); // add group to selection
+        } else {
+          _select(ids.slice(), true);
+          const now = Date.now();
+          if (lastGroupTap.n === n && now - lastGroupTap.t < 400) _centerOnSelection();
+          lastGroupTap = { t: now, n };
+        }
       }
       return;
     }

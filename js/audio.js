@@ -1,26 +1,32 @@
 'use strict';
 // audio.js — the AUDIO global: fully synthesized WebAudio SFX + speech-synthesis EVA.
-// Everything is built at play time from oscillators and looping noise buffers — no samples.
+// No samples: every effect is layered at play time from (a) a 2-8ms noise transient,
+// (b) a filtered-noise body with a downward filter sweep, (c) a pitch-dropping sine
+// 'thump' sub layer, and (d) an echo-tap send for the big booms — so weapons read as
+// physical impacts instead of beeps. Combat sounds are randomly detuned ~±10% per play.
 // Every public function is a safe no-op when disabled, before init(), or when
 // WebAudio / speechSynthesis are unavailable. Audio is cosmetic, so Math.random() is fine.
 
 const AUDIO = (function () {
   const MASTER_GAIN = 0.35;
+  const MASTER_LP_HZ = 9000;  // gentle master lowpass to take the digital edge off
   const MAX_VOICES = 12;      // cap on simultaneously sounding source nodes
   const TICK_MIN_MS = 30;     // credit-counter tick rate limit
   const ACK_MIN_MS = 1000;    // at most one voice acknowledgment per second
 
   let ctx = null;             // AudioContext, created lazily by init()
-  let master = null;          // master gain
+  let master = null;          // master gain (-> lowpass -> destination)
+  let echoIn = null;          // input of the shared echo/delay tap for big booms
   let inited = false;
   let enabled = true;
   let activeVoices = 0;
   let noiseBuf = null;        // shared 1s white-noise buffer
+  let pinkBuf = null;         // shared 2s pink-ish noise buffer (warmer roars/rumbles)
   let lastTickAt = -1e9;
   let lastAckAt = -1e9;
 
   // EVA / speech state
-  let evaVoice = null;        // preferred English female voice
+  let evaVoice = null;        // preferred English female voice (higher-quality if present)
   let ackVoice = null;        // distinct voice for unit acks when available
   const evaQueue = [];        // pending EVA line texts
   const EVA_QUEUE_MAX = 5;    // drop new lines when badly backlogged
@@ -40,6 +46,13 @@ const AUDIO = (function () {
 
   function audioReady() { return enabled && inited && !!ctx && !!master; }
 
+  // random helpers (per-play variation so repeated combat sounds don't grate)
+  function rnd(a, b) { return a + Math.random() * (b - a); }
+  function vr(v, pct) { // v varied by ±pct (default ±8%)
+    const p = pct === undefined ? 0.08 : pct;
+    return v * (1 + (Math.random() * 2 - 1) * p);
+  }
+
   // ---- WebAudio primitives ---------------------------------------------------
 
   function getNoise() {
@@ -52,8 +65,31 @@ const AUDIO = (function () {
     return noiseBuf;
   }
 
+  // Pink-ish noise (Paul Kellet filter) — softer top end for roars, rumbles, tails.
+  function getPink() {
+    if (!pinkBuf) {
+      const len = (ctx.sampleRate * 2) | 0; // 2 seconds
+      pinkBuf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = pinkBuf.getChannelData(0);
+      let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+      for (let i = 0; i < len; i++) {
+        const w = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + w * 0.0555179;
+        b1 = 0.99332 * b1 + w * 0.0750759;
+        b2 = 0.96900 * b2 + w * 0.1538520;
+        b3 = 0.86650 * b3 + w * 0.3104856;
+        b4 = 0.55000 * b4 + w * 0.5329522;
+        b5 = -0.7616 * b5 - w * 0.0168980;
+        d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11;
+        b6 = w * 0.115926;
+      }
+    }
+    return pinkBuf;
+  }
+
   // Schedule a piecewise curve on an AudioParam. pts = [[dtSeconds, value], ...].
-  // First point is set, the rest ramp exponentially (floored so expo ramps are legal).
+  // First point is set, the rest ramp exponentially (floored so expo ramps are legal
+  // and envelopes land at ~0.001, never a hard 0 jump mid-buffer).
   function curve(param, t0, pts) {
     param.setValueAtTime(Math.max(0.0001, pts[0][1]), t0 + pts[0][0]);
     for (let i = 1; i < pts.length; i++) {
@@ -76,25 +112,45 @@ const AUDIO = (function () {
     setTimeout(fin, waitMs);
   }
 
+  // Post-fader send from a voice's gain node into the echo bus (size on big booms).
+  function sendEcho(g, amt) {
+    if (!echoIn || !g) return;
+    const s = ctx.createGain();
+    s.gain.value = amt;
+    g.connect(s); s.connect(echoIn);
+  }
+
   // Oscillator voice: fPts / vPts are [[dt, hz], ...] / [[dt, gain], ...] curves.
-  // Returns the gain node (for extra modulation) or null when at the voice cap.
-  function tone(t0, dur, type, fPts, vPts) {
+  // opts: {filt: [type, Q, fPts], dest, send}. Returns the gain node (for extra
+  // modulation) or null when at the voice cap.
+  function tone(t0, dur, type, fPts, vPts, opts) {
     if (activeVoices >= MAX_VOICES) return null;
     const o = ctx.createOscillator();
     o.type = type;
     curve(o.frequency, t0, fPts);
+    let head = o;
+    if (opts && opts.filt) {
+      const f = ctx.createBiquadFilter();
+      f.type = opts.filt[0];
+      f.Q.value = opts.filt[1] || 1;
+      curve(f.frequency, t0, opts.filt[2]);
+      o.connect(f); head = f;
+    }
     const g = ctx.createGain();
     curve(g.gain, t0, vPts);
-    o.connect(g); g.connect(master);
+    head.connect(g);
+    g.connect((opts && opts.dest) || master);
+    if (opts && opts.send) sendEcho(g, opts.send);
     startSrc(o, t0, dur);
     return g;
   }
 
   // Filtered-noise voice. filtType null = raw noise. fPts drives the filter frequency.
-  function noiseHit(t0, dur, filtType, fPts, q, vPts) {
+  // opts: {pink, send, dest}.
+  function noiseHit(t0, dur, filtType, fPts, q, vPts, opts) {
     if (activeVoices >= MAX_VOICES) return null;
     const s = ctx.createBufferSource();
-    s.buffer = getNoise();
+    s.buffer = (opts && opts.pink) ? getPink() : getNoise();
     s.loop = true;
     let head = s;
     if (filtType) {
@@ -106,204 +162,287 @@ const AUDIO = (function () {
     }
     const g = ctx.createGain();
     curve(g.gain, t0, vPts);
-    head.connect(g); g.connect(master);
+    head.connect(g);
+    g.connect((opts && opts.dest) || master);
+    if (opts && opts.send) sendEcho(g, opts.send);
     startSrc(s, t0, dur, Math.random() * 0.5);
     return g;
   }
 
+  // (a) transient: 2-8ms high-frequency noise snap — the 'attack' of an impact.
+  function snap(t0, hz, vol) {
+    noiseHit(t0, 0.02, 'highpass', [[0, hz]], 0.7,
+      [[0, 0.001], [0.002, vol], [0.02, 0.001]]);
+  }
+
+  // (c) sub layer: pitch-dropping sine 'thump' (sine starts at zero-crossing: click-free).
+  function thump(t0, f0, f1, dur, vol, send) {
+    return tone(t0, dur, 'sine', [[0, f0], [dur * 0.85, f1]],
+      [[0, 0.001], [0.006, vol], [dur, 0.001]],
+      send ? { send: send } : undefined);
+  }
+
   // ---- SFX library -------------------------------------------------------------
-  // Each entry builds a short graph with sharp envelopes at time t (ctx.currentTime).
+  // Each entry builds a short layered graph at time t (ctx.currentTime).
 
   const SFX = {
-    // short UI blip
+    // soft short UI tick (quiet — UI must never bark)
     click(t) {
-      tone(t, 0.05, 'square', [[0, 1150], [0.05, 750]], [[0, 0.001], [0.004, 0.22], [0.05, 0.001]]);
+      noiseHit(t, 0.03, 'bandpass', [[0, 2300], [0.03, 1300]], 2,
+        [[0, 0.001], [0.003, 0.09], [0.03, 0.001]]);
+      tone(t, 0.045, 'sine', [[0, 940], [0.045, 700]],
+        [[0, 0.001], [0.005, 0.06], [0.045, 0.001]]);
     },
 
-    // error: low dissonant square pair
+    // error: low dissonant pair, softened with a lowpass'd noise floor
     buzz(t) {
-      tone(t, 0.22, 'square', [[0, 110]], [[0, 0.001], [0.01, 0.18], [0.16, 0.14], [0.22, 0.001]]);
-      tone(t, 0.22, 'square', [[0, 149]], [[0, 0.001], [0.01, 0.13], [0.22, 0.001]]);
+      tone(t, 0.22, 'square', [[0, 108]], [[0, 0.001], [0.012, 0.12], [0.16, 0.09], [0.22, 0.001]],
+        { filt: ['lowpass', 1, [[0, 1400]]] });
+      tone(t, 0.22, 'square', [[0, 147]], [[0, 0.001], [0.012, 0.09], [0.22, 0.001]],
+        { filt: ['lowpass', 1, [[0, 1400]]] });
+      noiseHit(t, 0.22, 'lowpass', [[0, 380]], 1,
+        [[0, 0.001], [0.02, 0.07], [0.22, 0.001]], { pink: true });
     },
 
-    // one credit-counter tick: very short high click
+    // one credit-counter tick: tiny filtered-noise click, not a beep
     tick(t) {
-      tone(t, 0.022, 'square', [[0, 2450]], [[0, 0.13], [0.022, 0.001]]);
+      noiseHit(t, 0.018, 'bandpass', [[0, 3100]], 4,
+        [[0, 0.001], [0.002, 0.09], [0.018, 0.001]]);
     },
 
-    // heavy metallic thunk + clank
+    // heavy placement thunk: snap + sub + body, then ringing metal (high-Q noise pings)
     place(t) {
-      tone(t, 0.18, 'sine', [[0, 145], [0.15, 44]], [[0, 0.5], [0.18, 0.001]]);
-      noiseHit(t, 0.1, 'lowpass', [[0, 900], [0.1, 200]], 1, [[0, 0.32], [0.1, 0.001]]);
-      // inharmonic clank a beat later
-      tone(t + 0.1, 0.12, 'square', [[0, 623]], [[0, 0.11], [0.12, 0.001]]);
-      tone(t + 0.1, 0.14, 'square', [[0, 941]], [[0, 0.09], [0.14, 0.001]]);
-      tone(t + 0.1, 0.1, 'triangle', [[0, 1560]], [[0, 0.11], [0.1, 0.001]]);
-    },
-
-    // reverse-ish rising zip + coin pings
-    sell(t) {
-      tone(t, 0.3, 'sawtooth', [[0, 180], [0.3, 1500]], [[0, 0.03], [0.24, 0.2], [0.3, 0.001]]);
-      for (let i = 0; i < 4; i++) {
-        const tt = t + 0.28 + i * 0.05 + Math.random() * 0.02;
-        tone(tt, 0.06, 'sine', [[0, 1800 + Math.random() * 900]], [[0, 0.16], [0.06, 0.001]]);
+      snap(t, 700, 0.2);
+      thump(t, 150, 42, 0.2, 0.5);
+      noiseHit(t, 0.14, 'lowpass', [[0, 1100], [0.14, 180]], 1,
+        [[0, 0.001], [0.005, 0.3], [0.14, 0.001]], { pink: true });
+      const pings = [[0.09, 620, 0.32], [0.10, 1130, 0.24], [0.11, 1880, 0.16]];
+      for (let i = 0; i < pings.length; i++) {
+        noiseHit(t + pings[i][0], 0.13, 'bandpass', [[0, vr(pings[i][1], 0.04)]], 16,
+          [[0, 0.001], [0.004, pings[i][2]], [0.13, 0.001]]);
       }
     },
 
-    // short ratchet: rapid filtered clicks
+    // breathy rising zip + coin pings (deconstruct / refund)
+    sell(t) {
+      noiseHit(t, 0.3, 'bandpass', [[0, 300], [0.3, 2600]], 3,
+        [[0, 0.001], [0.05, 0.15], [0.26, 0.19], [0.3, 0.001]]);
+      tone(t, 0.3, 'triangle', [[0, 200], [0.3, 1400]],
+        [[0, 0.001], [0.05, 0.05], [0.3, 0.001]]);
+      for (let i = 0; i < 3; i++) {
+        const tt = t + 0.3 + i * 0.055 + Math.random() * 0.015;
+        tone(tt, 0.07, 'sine', [[0, 1500 + i * 350 + Math.random() * 180]],
+          [[0, 0.001], [0.006, 0.11], [0.07, 0.001]]);
+      }
+    },
+
+    // wrench ratchet: rapid resonant clicks, slightly detuned each play
     repair(t) {
       for (let i = 0; i < 4; i++) {
-        noiseHit(t + i * 0.05, 0.022, 'bandpass', [[0, 2200]], 6, [[0, 0.24], [0.022, 0.001]]);
+        noiseHit(t + i * rnd(0.046, 0.056), 0.024, 'bandpass', [[0, vr(2100, 0.1)]], 7,
+          [[0, 0.001], [0.003, 0.5], [0.024, 0.001]]);
       }
     },
 
     // wet low thump (tank squishing infantry)
     crush(t) {
-      noiseHit(t, 0.2, 'lowpass', [[0, 500], [0.2, 90]], 1, [[0, 0.38], [0.2, 0.001]]);
-      tone(t, 0.16, 'sine', [[0, 100], [0.14, 34]], [[0, 0.34], [0.16, 0.001]]);
-      noiseHit(t + 0.02, 0.1, 'bandpass', [[0, 900], [0.1, 400]], 1, [[0, 0.14], [0.1, 0.001]]);
+      noiseHit(t, 0.2, 'lowpass', [[0, vr(500)], [0.2, 90]], 1,
+        [[0, 0.001], [0.006, 0.36], [0.2, 0.001]], { pink: true });
+      thump(t, vr(100), 34, 0.16, 0.34);
+      noiseHit(t + 0.02, 0.1, 'bandpass', [[0, vr(900)], [0.1, 400]], 1,
+        [[0, 0.001], [0.008, 0.13], [0.1, 0.001]]);
     },
     squish(t) { SFX.crush(t); },
 
-    // 3-4 rapid noise-burst shots
+    // 3-4 rapid cracks, each randomly detuned ~±10%, over one shared sub knock
     mgun(t) {
-      for (let i = 0; i < 4; i++) {
-        const tt = t + i * 0.055;
-        noiseHit(tt, 0.045, 'bandpass', [[0, 1500], [0.045, 600]], 1.2, [[0, 0.28], [0.045, 0.001]]);
+      const n = 3 + ((Math.random() * 2) | 0);
+      for (let i = 0; i < n; i++) {
+        const tt = t + i * rnd(0.05, 0.062);
+        const f = vr(1500, 0.1);
+        noiseHit(tt, 0.05, 'bandpass', [[0, f], [0.05, f * 0.35]], 1.1,
+          [[0, 0.001], [0.003, vr(0.5, 0.12)], [0.05, 0.001]]);
       }
-      tone(t, 0.05, 'square', [[0, 210], [0.05, 90]], [[0, 0.1], [0.05, 0.001]]);
+      thump(t, 130, 62, 0.09, 0.16);
     },
 
-    // single crack
+    // single crack: snap-shaped noise body with downward sweep + small knock
     pistol(t) {
-      noiseHit(t, 0.07, 'highpass', [[0, 900]], 1, [[0, 0.33], [0.07, 0.001]]);
-      tone(t, 0.06, 'square', [[0, 250], [0.06, 80]], [[0, 0.14], [0.06, 0.001]]);
+      const f = vr(1900, 0.1);
+      noiseHit(t, 0.07, 'bandpass', [[0, f], [0.07, f * 0.3]], 0.9,
+        [[0, 0.001], [0.002, 0.46], [0.07, 0.001]]);
+      thump(t, vr(160), 60, 0.08, 0.2);
     },
 
-    // deep boom with noise tail
+    // tank gun: 2ms snap, punchy 60-80Hz sub thump, mid crack, pink rumble tail + echo
     cannon(t) {
-      tone(t, 0.35, 'sine', [[0, 160], [0.3, 40]], [[0, 0.5], [0.35, 0.001]]);
-      noiseHit(t, 0.45, 'lowpass', [[0, 1400], [0.45, 120]], 1, [[0, 0.38], [0.45, 0.001]]);
+      snap(t, 1200, 0.28);
+      thump(t, rnd(62, 80), 40, vr(0.3), 0.55, 0.5);
+      noiseHit(t, 0.09, 'bandpass', [[0, vr(1000)], [0.09, 340]], 1,
+        [[0, 0.001], [0.003, 0.38], [0.09, 0.001]], { send: 0.4 });
+      const d = vr(0.55);
+      noiseHit(t + 0.02, d, 'lowpass', [[0, 620], [d, 90]], 1,
+        [[0, 0.001], [0.02, 0.28], [d, 0.001]], { pink: true });
     },
 
-    // whoosh: filtered noise sweep up then down
+    // breathy launch: filter sweeps up fast then falls away (doppler-ish), soft kick
     rocket(t) {
-      noiseHit(t, 0.5, 'bandpass', [[0, 300], [0.2, 1900], [0.5, 350]], 2,
-        [[0, 0.001], [0.05, 0.3], [0.35, 0.24], [0.5, 0.001]]);
-      tone(t, 0.35, 'sawtooth', [[0, 140], [0.35, 60]], [[0, 0.001], [0.05, 0.06], [0.35, 0.001]]);
+      const d = vr(0.55);
+      const fpk = vr(1900, 0.12);
+      noiseHit(t, d, 'bandpass', [[0, 350], [d * 0.3, fpk], [d, 230]], 1.6,
+        [[0, 0.001], [0.05, 0.62], [d * 0.6, 0.44], [d, 0.001]], { pink: true });
+      noiseHit(t, d * 0.8, 'highpass', [[0, 2800], [d * 0.8, 900]], 0.8,
+        [[0, 0.001], [0.06, 0.12], [d * 0.8, 0.001]]);
+      thump(t, vr(120), 55, 0.12, 0.14);
     },
 
-    // breathy noise roar ~0.4s
+    // pink-noise roar with a slow amplitude wobble + airy hiss on top
     flame(t) {
-      noiseHit(t, 0.42, 'lowpass', [[0, 500], [0.15, 1000], [0.42, 300]], 0.8,
-        [[0, 0.02], [0.08, 0.3], [0.3, 0.23], [0.42, 0.001]]);
-      noiseHit(t, 0.4, 'bandpass', [[0, 2600]], 2, [[0, 0.001], [0.1, 0.07], [0.4, 0.001]]);
+      const d = vr(0.5);
+      const g = noiseHit(t, d, 'lowpass', [[0, 400], [0.1, vr(1000)], [d, 260]], 0.7,
+        [[0, 0.001], [0.07, 0.5], [d * 0.7, 0.4], [d, 0.001]], { pink: true });
+      if (g) { // wobble LFO summed into the roar's gain
+        const lfo = ctx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.setValueAtTime(rnd(5, 8), t);
+        const lg = ctx.createGain();
+        lg.gain.value = 0.12;
+        lfo.connect(lg); lg.connect(g.gain);
+        startSrc(lfo, t, d);
+      }
+      noiseHit(t, d, 'bandpass', [[0, 2400]], 1.5,
+        [[0, 0.001], [0.12, 0.09], [d, 0.001]], { pink: true });
     },
 
-    // descending zap saw
+    // descending saw kept synthetic, but tamed by a tracking lowpass + noise sizzle
     laser(t) {
-      tone(t, 0.28, 'sawtooth', [[0, 1900], [0.28, 180]], [[0, 0.001], [0.006, 0.26], [0.28, 0.001]]);
-      tone(t, 0.2, 'square', [[0, 950], [0.2, 120]], [[0, 0.11], [0.2, 0.001]]);
+      const f0 = vr(1900, 0.08);
+      tone(t, 0.28, 'sawtooth', [[0, f0], [0.28, 170]],
+        [[0, 0.001], [0.005, 0.24], [0.28, 0.001]],
+        { filt: ['lowpass', 2, [[0, f0 * 2.2], [0.28, 320]]] });
+      noiseHit(t, 0.26, 'highpass', [[0, 3400], [0.26, 700]], 1,
+        [[0, 0.001], [0.004, 0.13], [0.26, 0.001]]);
+      thump(t, 300, 90, 0.12, 0.1);
     },
 
-    // rising sine ~1.5s with tremolo (obelisk power-up)
+    // rising sine ~1.5s with tremolo + rising static shimmer (obelisk power-up)
     obeliskCharge(t) {
       const g = tone(t, 1.5, 'sine', [[0, 170], [1.4, 880]],
-        [[0, 0.02], [1.15, 0.28], [1.5, 0.001]]);
-      if (g) {
-        // tremolo LFO summed into the gain param
+        [[0, 0.02], [1.15, 0.24], [1.5, 0.001]]);
+      if (g) { // tremolo LFO summed into the gain param
         const lfo = ctx.createOscillator();
         lfo.type = 'sine';
         lfo.frequency.setValueAtTime(7, t);
         lfo.frequency.linearRampToValueAtTime(19, t + 1.5);
         const lg = ctx.createGain();
-        lg.gain.value = 0.11;
+        lg.gain.value = 0.09;
         lfo.connect(lg); lg.connect(g.gain);
         startSrc(lfo, t, 1.5);
       }
+      noiseHit(t, 1.5, 'bandpass', [[0, 500], [1.4, 3300]], 3,
+        [[0, 0.001], [0.9, 0.06], [1.5, 0.001]]);
     },
 
-    // short explosion: noise burst + low sine drop
+    // small explosion: pure shaped noise + sub thump, no audible oscillator tone
     expS(t) {
-      noiseHit(t, 0.35, 'lowpass', [[0, 2200], [0.35, 150]], 1, [[0, 0.42], [0.35, 0.001]]);
-      tone(t, 0.3, 'sine', [[0, 130], [0.28, 35]], [[0, 0.42], [0.3, 0.001]]);
+      const d = vr(0.4);
+      snap(t, 900, 0.3);
+      noiseHit(t, d, 'lowpass', [[0, vr(2400)], [d, 130]], 1,
+        [[0, 0.001], [0.006, 0.44], [d, 0.001]], { pink: true, send: 0.25 });
+      thump(t, vr(110), 36, d * 0.8, 0.4);
     },
 
-    // bigger, longer explosion
+    // big explosion: snap, long pink body, deep sub drop, mid debris band + echo tap
     expL(t) {
-      noiseHit(t, 0.8, 'lowpass', [[0, 2000], [0.8, 90]], 1, [[0, 0.52], [0.8, 0.001]]);
-      tone(t, 0.7, 'sine', [[0, 110], [0.6, 28]], [[0, 0.52], [0.7, 0.001]]);
-      noiseHit(t + 0.05, 0.5, 'bandpass', [[0, 900], [0.5, 250]], 1.5, [[0, 0.22], [0.5, 0.001]]);
+      const d = vr(0.9);
+      snap(t, 700, 0.35);
+      noiseHit(t, d, 'lowpass', [[0, vr(2000)], [d, 75]], 1,
+        [[0, 0.001], [0.008, 0.54], [d, 0.001]], { pink: true, send: 0.5 });
+      thump(t, vr(85), 26, d * 0.85, 0.55, 0.3);
+      noiseHit(t + 0.04, d * 0.7, 'bandpass', [[0, vr(750)], [d * 0.7, 190]], 1.4,
+        [[0, 0.001], [0.02, 0.2], [d * 0.7, 0.001]]);
     },
 
-    // 2s wailing siren (two detuned saws sweeping up/down)
+    // 2s air-raid wail: two detuned saws behind a lowpass + faint breath
     nukeSiren(t) {
-      for (const det of [0, 4]) {
+      const dets = [0, 5];
+      for (let i = 0; i < dets.length; i++) {
+        const det = dets[i];
         tone(t, 2.1, 'sawtooth',
           [[0, 520 + det], [0.5, 980 + det], [1.0, 560 + det], [1.5, 980 + det], [2.1, 540 + det]],
-          [[0, 0.001], [0.15, 0.15], [1.85, 0.13], [2.1, 0.001]]);
+          [[0, 0.001], [0.15, 0.13], [1.85, 0.11], [2.1, 0.001]],
+          { filt: ['lowpass', 1, [[0, 2400]]] });
       }
+      noiseHit(t, 2.1, 'lowpass', [[0, 900]], 1,
+        [[0, 0.001], [0.3, 0.04], [2.1, 0.001]], { pink: true });
     },
 
-    // huge low boom + long rumble
+    // huge low boom: crack, big sub drop to 22Hz, pink blast body + long rumble, echo
     nukeBoom(t) {
-      tone(t, 1.4, 'sine', [[0, 70], [1.2, 24]], [[0, 0.65], [1.4, 0.001]]);
-      noiseHit(t, 0.25, 'lowpass', [[0, 1200], [0.25, 300]], 1, [[0, 0.48], [0.25, 0.001]]);
-      noiseHit(t, 2.6, 'lowpass', [[0, 400], [2.6, 50]], 1,
-        [[0, 0.4], [1.7, 0.16], [2.6, 0.001]]);
+      snap(t, 500, 0.4);
+      thump(t, 68, 22, 1.3, 0.65, 0.6);
+      noiseHit(t, 0.3, 'lowpass', [[0, 1300], [0.3, 250]], 1,
+        [[0, 0.001], [0.01, 0.5], [0.3, 0.001]], { pink: true, send: 0.6 });
+      noiseHit(t, 2.8, 'lowpass', [[0, 420], [2.8, 45]], 1,
+        [[0, 0.001], [0.05, 0.42], [1.8, 0.15], [2.8, 0.001]], { pink: true });
     },
 
     // airy high shimmer ~1s (ion cannon spin-up)
     ionHum(t) {
-      tone(t, 1.0, 'sine', [[0, 1244], [1.0, 1310]], [[0, 0.001], [0.3, 0.11], [1.0, 0.001]]);
-      tone(t, 1.0, 'sine', [[0, 1866], [1.0, 1800]], [[0, 0.001], [0.3, 0.07], [1.0, 0.001]]);
-      noiseHit(t, 1.0, 'highpass', [[0, 4200]], 1, [[0, 0.001], [0.4, 0.05], [1.0, 0.001]]);
+      tone(t, 1.0, 'sine', [[0, 1244], [1.0, 1350]], [[0, 0.001], [0.3, 0.09], [1.0, 0.001]]);
+      tone(t, 1.0, 'sine', [[0, 1866], [1.0, 1780]], [[0, 0.001], [0.3, 0.06], [1.0, 0.001]]);
+      noiseHit(t, 1.0, 'highpass', [[0, 3800], [1.0, 6500]], 1,
+        [[0, 0.001], [0.45, 0.07], [1.0, 0.001]]);
     },
 
-    // bright crack + boom (ion strike)
+    // sky-crack + boom (ion strike): bright transient, then sub + pink body with echo
     ionBlast(t) {
-      noiseHit(t, 0.08, 'highpass', [[0, 2500]], 1, [[0, 0.42], [0.08, 0.001]]);
-      tone(t + 0.05, 0.5, 'sine', [[0, 240], [0.45, 50]], [[0, 0.48], [0.5, 0.001]]);
-      noiseHit(t + 0.05, 0.6, 'lowpass', [[0, 1500], [0.6, 120]], 1, [[0, 0.38], [0.6, 0.001]]);
+      snap(t, 2600, 0.4);
+      noiseHit(t, 0.1, 'highpass', [[0, 2200], [0.1, 900]], 1,
+        [[0, 0.001], [0.003, 0.38], [0.1, 0.001]], { send: 0.4 });
+      thump(t + 0.04, 220, 44, 0.5, 0.5, 0.4);
+      noiseHit(t + 0.04, 0.7, 'lowpass', [[0, 1500], [0.7, 100]], 1,
+        [[0, 0.001], [0.01, 0.38], [0.7, 0.001]], { pink: true });
     },
 
-    // short crystal crunch
+    // short crystal crunch (harvester intake)
     harvest(t) {
-      noiseHit(t, 0.09, 'bandpass', [[0, 3200], [0.09, 1700]], 3, [[0, 0.2], [0.09, 0.001]]);
-      tone(t + 0.02, 0.06, 'triangle', [[0, 2100]], [[0, 0.09], [0.06, 0.001]]);
-      tone(t + 0.05, 0.06, 'triangle', [[0, 2700]], [[0, 0.07], [0.06, 0.001]]);
+      noiseHit(t, 0.09, 'bandpass', [[0, vr(3200)], [0.09, 1700]], 3,
+        [[0, 0.001], [0.005, 0.32], [0.09, 0.001]]);
+      tone(t + 0.02, 0.06, 'triangle', [[0, vr(2100, 0.06)]], [[0, 0.001], [0.006, 0.08], [0.06, 0.001]]);
+      tone(t + 0.05, 0.06, 'triangle', [[0, vr(2700, 0.06)]], [[0, 0.001], [0.006, 0.07], [0.06, 0.001]]);
     },
 
-    // two ascending beeps
+    // two soft ascending blips
     radarOn(t) {
-      tone(t, 0.09, 'square', [[0, 740]], [[0, 0.001], [0.006, 0.14], [0.09, 0.001]]);
-      tone(t + 0.12, 0.1, 'square', [[0, 1080]], [[0, 0.001], [0.006, 0.14], [0.1, 0.001]]);
+      tone(t, 0.07, 'triangle', [[0, 740]], [[0, 0.001], [0.007, 0.09], [0.07, 0.001]]);
+      tone(t + 0.1, 0.09, 'triangle', [[0, 1080]], [[0, 0.001], [0.007, 0.09], [0.09, 0.001]]);
     },
 
-    // two descending beeps
+    // two soft descending blips
     radarOff(t) {
-      tone(t, 0.09, 'square', [[0, 1080]], [[0, 0.001], [0.006, 0.14], [0.09, 0.001]]);
-      tone(t + 0.12, 0.1, 'square', [[0, 700]], [[0, 0.001], [0.006, 0.14], [0.1, 0.001]]);
+      tone(t, 0.07, 'triangle', [[0, 1080]], [[0, 0.001], [0.007, 0.09], [0.07, 0.001]]);
+      tone(t + 0.1, 0.09, 'triangle', [[0, 700]], [[0, 0.001], [0.007, 0.09], [0.09, 0.001]]);
     },
 
-    // pleasant two-tone ding
+    // gentle two-tone ding
     ready(t) {
-      tone(t, 0.25, 'sine', [[0, 880]], [[0, 0.001], [0.008, 0.22], [0.25, 0.001]]);
-      tone(t + 0.12, 0.35, 'sine', [[0, 1318]], [[0, 0.001], [0.008, 0.22], [0.35, 0.001]]);
+      tone(t, 0.22, 'sine', [[0, 880]], [[0, 0.001], [0.01, 0.13], [0.22, 0.001]]);
+      tone(t + 0.11, 0.3, 'sine', [[0, 1318]], [[0, 0.001], [0.01, 0.13], [0.3, 0.001]]);
     },
 
     // soft register cha-ching
     cashUp(t) {
-      noiseHit(t, 0.03, 'highpass', [[0, 3000]], 1, [[0, 0.11], [0.03, 0.001]]);
-      tone(t + 0.02, 0.12, 'sine', [[0, 1320]], [[0, 0.001], [0.008, 0.14], [0.12, 0.001]]);
-      tone(t + 0.08, 0.18, 'sine', [[0, 1760]], [[0, 0.001], [0.008, 0.14], [0.18, 0.001]]);
+      noiseHit(t, 0.03, 'highpass', [[0, 3000]], 1, [[0, 0.001], [0.003, 0.09], [0.03, 0.001]]);
+      tone(t + 0.02, 0.12, 'sine', [[0, 1320]], [[0, 0.001], [0.008, 0.11], [0.12, 0.001]]);
+      tone(t + 0.08, 0.18, 'sine', [[0, 1760]], [[0, 0.001], [0.008, 0.11], [0.18, 0.001]]);
     },
   };
 
-  // radio-static blip that precedes every EVA line (60ms noise burst)
+  // soft 40ms filtered-noise radio tick that precedes every EVA line
   function staticBlip(t) {
-    noiseHit(t, 0.06, 'bandpass', [[0, 1800], [0.06, 1200]], 0.8,
-      [[0, 0.22], [0.04, 0.13], [0.06, 0.001]]);
+    noiseHit(t, 0.04, 'bandpass', [[0, 1700], [0.04, 1100]], 1,
+      [[0, 0.001], [0.004, 0.08], [0.04, 0.001]]);
   }
 
   // ---- speech (EVA + acks) ----------------------------------------------------
@@ -314,13 +453,22 @@ const AUDIO = (function () {
       if (!vs || !vs.length) return;
       const en = vs.filter(function (v) { return /^en/i.test(v.lang || ''); });
       const pool = en.length ? en : vs;
+      // higher-quality engines first — they make EVA far less robotic
+      const hqRe = /natural|neural|online|google us english|aria|jenny|zira/i;
       const femaleRe = /female|woman|zira|hazel|susan|samantha|karen|moira|tessa|fiona|serena|victoria|allison|ava|joanna|salli|kendra|kimberly|amy|emma|aria|jenny|libby|sonia|michelle|natasha|catherine|nicky|kathy/i;
-      evaVoice = pool.find(function (v) { return femaleRe.test(v.name || ''); }) ||
-                 pool.find(function (v) { return v.default; }) || pool[0] || null;
       const maleRe = /\bmale\b|\bman\b|david|mark|daniel|alex|fred|george|guy|ryan|thomas|james|matthew|russell|brian|aaron|arthur/i;
-      ackVoice = pool.find(function (v) {
-        return maleRe.test(v.name || '') && !femaleRe.test(v.name || '');
-      }) || evaVoice;
+      function firstMatch(re) {
+        return pool.find(function (v) { return re.test(v.name || '') && hqRe.test(v.name || ''); }) ||
+               pool.find(function (v) { return re.test(v.name || ''); });
+      }
+      evaVoice = pool.find(function (v) { return femaleRe.test(v.name || '') && hqRe.test(v.name || ''); }) ||
+                 pool.find(function (v) { return hqRe.test(v.name || ''); }) ||
+                 pool.find(function (v) { return femaleRe.test(v.name || ''); }) ||
+                 pool.find(function (v) { return v.default; }) || pool[0] || null;
+      ackVoice = firstMatch(maleRe) || evaVoice;
+      if (ackVoice && femaleRe.test(ackVoice.name || '') && maleRe.test(ackVoice.name || '')) {
+        ackVoice = evaVoice; // ambiguous name matched both; fall back
+      }
     } catch (e) { /* voices stay null; utterances use the browser default */ }
   }
 
@@ -335,7 +483,8 @@ const AUDIO = (function () {
     if (!enabled || !hasSpeech()) { evaQueue.length = 0; evaBusy = false; return; }
     try {
       const u = new SpeechSynthesisUtterance(text);
-      u.rate = 1.05; u.pitch = 0.8; u.volume = 0.9;
+      // near-natural rate/pitch: deep-pitched synthesis is what sounds robotic
+      u.rate = 1.0; u.pitch = 0.95; u.volume = 0.9;
       if (evaVoice) u.voice = evaVoice;
       let finished = false;
       const done = function () {
@@ -387,7 +536,29 @@ const AUDIO = (function () {
           ctx = new AC();
           master = ctx.createGain();
           master.gain.value = enabled ? MASTER_GAIN : 0;
-          master.connect(ctx.destination);
+          // gentle master lowpass takes the digital edge off every voice
+          const lp = ctx.createBiquadFilter();
+          lp.type = 'lowpass';
+          lp.frequency.value = MASTER_LP_HZ;
+          lp.Q.value = 0.4;
+          master.connect(lp);
+          lp.connect(ctx.destination);
+          // shared short echo tap: big booms send here for a sense of size
+          echoIn = ctx.createGain();
+          echoIn.gain.value = 1;
+          const dly = ctx.createDelay(0.6);
+          dly.delayTime.value = 0.17;
+          const damp = ctx.createBiquadFilter();
+          damp.type = 'lowpass';
+          damp.frequency.value = 1400;
+          const fb = ctx.createGain();
+          fb.gain.value = 0.3;
+          const echoOut = ctx.createGain();
+          echoOut.gain.value = 0.55;
+          echoIn.connect(dly);
+          dly.connect(damp);
+          damp.connect(fb); fb.connect(dly);   // feedback loop (decays fast)
+          damp.connect(echoOut); echoOut.connect(master);
         }
       }
       if (ctx && ctx.state === 'suspended') {
@@ -395,7 +566,7 @@ const AUDIO = (function () {
         if (p && p.catch) p.catch(noop);
       }
     } catch (e) {
-      ctx = null; master = null;
+      ctx = null; master = null; echoIn = null;
     }
     if (hasSpeech()) {
       try {
@@ -453,9 +624,17 @@ const AUDIO = (function () {
     pumpEva();
   }
 
-  function ack(kind) {
+  function ack(kind, cls) {
     if (!enabled || !inited || !hasSpeech()) return;
-    const lines = (typeof DATA !== 'undefined' && DATA && DATA.acks) ? DATA.acks[kind] : null;
+    const acks = (typeof DATA !== 'undefined' && DATA && DATA.acks) ? DATA.acks : null;
+    if (!acks) return;
+    // 'select' picks a class-specific pool so infantry never say "vehicle reporting"
+    let lines;
+    if (kind === 'select') {
+      lines = cls === 'air' ? acks.selectAir : cls === 'inf' ? acks.selectInf : acks.selectVeh;
+    } else {
+      lines = acks[kind];
+    }
     if (!lines || !lines.length) return;
     const n = nowMs();
     if (n - lastAckAt < ACK_MIN_MS) return; // throttle: drop extras
@@ -463,7 +642,11 @@ const AUDIO = (function () {
     lastAckAt = n;
     try {
       const u = new SpeechSynthesisUtterance(lines[(Math.random() * lines.length) | 0]);
-      u.pitch = 0.5; u.rate = 1.15; u.volume = 0.8;
+      // infantry read higher and quicker than vehicle crews (kept clear of the
+      // robotic-sounding sub-0.6 pitch range)
+      u.pitch = cls === 'inf' ? 1.0 : 0.7;
+      u.rate = cls === 'inf' ? 1.1 : 1.0;
+      u.volume = 0.75;
       if (ackVoice) u.voice = ackVoice;
       u.onend = function () { if (ackUtter === u) ackUtter = null; };
       u.onerror = u.onend;

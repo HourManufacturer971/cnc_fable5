@@ -37,7 +37,7 @@ DATA.weapons = {
   gtwrMg:    { dmg: 22, range: 4.0, rof: 10, speed: 0, warhead: 'sa', splash: 0, sound: 'mgun' },
   atwrMissile: { dmg: 55, range: 5.0, rof: 30, speed: 8, warhead: 'he', splash: 10, homing: true, antiAir: true, sound: 'rocket' },
   gunTurret: { dmg: 45, range: 4.75, rof: 30, speed: 8, warhead: 'ap', splash: 8, sound: 'cannon' },
-  obelisk:   { dmg: 200, range: 5.5, rof: 90, speed: 0, warhead: 'laser', splash: 0, charge: 30, sound: 'laser' },
+  obelisk:   { dmg: 400, range: 7.0, rof: 90, speed: 0, warhead: 'laser', splash: 0, charge: 30, sound: 'laser' },
   samMissile: { dmg: 60, range: 5.5, rof: 25, speed: 9, warhead: 'he', splash: 8, homing: true, antiAir: true, airOnly: true, sound: 'rocket' },
 };
 
@@ -134,9 +134,11 @@ DATA.eva = {
   reinforcements: 'Reinforcements have arrived',
 };
 
-// unit voice acknowledgments (AUDIO.ack)
+// unit voice acknowledgments (AUDIO.ack(kind, cls)) — per unit class
 DATA.acks = {
-  select: ['Reporting', 'Yes sir?', 'Vehicle reporting', 'Awaiting orders', 'Ready and waiting'],
-  move: ['Acknowledged', 'Affirmative', 'Moving out', 'Right away sir'],
-  attack: ['Acknowledged', 'Affirmative', 'Attacking'],
+  selectInf: ['Yes sir?', 'Reporting', 'Awaiting orders', 'Ready and waiting', 'Sir?'],
+  selectVeh: ['Vehicle reporting', 'Reporting', 'Ready', 'Standing by'],
+  selectAir: ['Airborne and ready', 'Reporting'],
+  move: ['Acknowledged', 'Affirmative', 'Moving out', 'Right away sir', 'On my way'],
+  attack: ['Acknowledged', 'Affirmative', 'Attacking', 'Engaging'],
 };

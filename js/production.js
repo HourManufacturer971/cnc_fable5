@@ -53,20 +53,26 @@ const Production = (function () {
 
   function items(player) {
     const list = DATA.buildList[player.side];
+    const lowPower = _lowPower(player);
     const out = { buildings: [], units: [] };
     for (const strip of ['buildings', 'units']) {
       for (const key of list[strip]) {
         if (!prereqOk(player, key)) continue;
         const cat = strip === 'buildings' ? 'building' : 'unit';
         const job = player.queues[cat];
-        let state = 'idle', frac = 0;
+        let state = 'idle', frac = 0, eta = 0, count = 0;
         if (cat === 'building' && player.ready.building === key) {
           state = 'ready'; frac = 1;
         } else if (job && job.key === key) {
           state = job.hold ? 'hold' : 'building';
           frac = 1 - job.ticksLeft / job.ticksTotal;
+          eta = Math.ceil(job.ticksLeft * (lowPower ? 2 : 1) / C.TPS);
         }
-        out[strip].push({ key, state, frac });
+        if (cat === 'unit') {
+          count = (job && job.key === key ? 1 : 0) +
+            player.unitQueue.filter(k => k === key).length;
+        }
+        out[strip].push({ key, state, frac, eta, count });
       }
     }
     if (player.super.key) {
@@ -80,15 +86,31 @@ const Production = (function () {
     return out;
   }
 
+  function _startJob(player, key) {
+    const d = DATA.buildings[key] || DATA.units[key];
+    const cat = categoryOf(key);
+    const ticksTotal = Math.max(1, Math.ceil(d.cost * C.BUILD_TPC));
+    player.queues[cat] = { key, spent: 0, total: d.cost, ticksLeft: ticksTotal, ticksTotal, hold: false };
+  }
+
   function tryStart(player, key) {
     const human = _isHuman(player);
     const cat = categoryOf(key);
     if (!prereqOk(player, key)) { if (human) AUDIO.play('buzz'); return false; }
-    if (player.queues[cat]) { if (human) AUDIO.play('buzz'); return false; }
-    if (cat === 'building' && player.ready.building) { if (human) AUDIO.play('buzz'); return false; }
-    const d = DATA.buildings[key] || DATA.units[key];
-    const ticksTotal = Math.max(1, Math.ceil(d.cost * C.BUILD_TPC));
-    player.queues[cat] = { key, spent: 0, total: d.cost, ticksLeft: ticksTotal, ticksTotal, hold: false };
+    if (cat === 'building') {
+      if (player.queues.building || player.ready.building) { if (human) AUDIO.play('buzz'); return false; }
+      _startJob(player, key);
+      if (human) { AUDIO.eva('building'); AUDIO.play('click'); }
+      return true;
+    }
+    // units: one active job + a pending queue (departure from the original)
+    if (player.queues.unit) {
+      if (1 + player.unitQueue.length >= C.QUEUE_MAX) { if (human) AUDIO.play('buzz'); return false; }
+      player.unitQueue.push(key);
+      if (human) AUDIO.play('click');
+      return true;
+    }
+    _startJob(player, key);
     if (human) { AUDIO.eva('building'); AUDIO.play('click'); }
     return true;
   }
@@ -109,11 +131,28 @@ const Production = (function () {
       if (_isHuman(player)) AUDIO.eva('cancelled');
       return;
     }
+    if (cat === 'unit') {
+      // pending copies go first (no money spent on them yet)
+      const i = player.unitQueue.lastIndexOf(key);
+      if (i >= 0) {
+        player.unitQueue.splice(i, 1);
+        if (_isHuman(player)) AUDIO.play('click');
+        return;
+      }
+    }
     const job = player.queues[cat];
     if (!job || job.key !== key) return;
     player.credits += job.spent;
     player.queues[cat] = null;
+    if (cat === 'unit') _advanceQueue(player);
     if (_isHuman(player)) AUDIO.eva('cancelled');
+  }
+
+  function _advanceQueue(player) {
+    while (player.unitQueue.length && !player.queues.unit) {
+      const next = player.unitQueue.shift();
+      if (prereqOk(player, next)) _startJob(player, next);
+    }
   }
 
   function computePower(player) {
@@ -376,11 +415,13 @@ const Production = (function () {
           if (_spawnUnit(g, player, job.key)) {
             player.queues.unit = null;
             if (human) AUDIO.eva('unitReady');
+            _advanceQueue(player);
           } else {
             job.ticksLeft = 0; // retry next tick (spawn blocked / factory died)
             if (!_hasFactory(player, (DATA.units[job.key] || {}).factory)) {
               player.credits += job.spent;
               player.queues.unit = null;
+              _advanceQueue(player);
             }
           }
         }

@@ -580,6 +580,13 @@ const Render = (function () {
           if (item.state === 'hold') {
             ctx.fillStyle = '#f0d020';
             ctx.fillText('ON HOLD', sx + 14, iy + 20);
+          } else if (item.state === 'building' && item.eta > 0) {
+            // time remaining, dark-boxed so it reads over the clock sweep
+            const t = Math.floor(item.eta / 60) + ':' + String(item.eta % 60).padStart(2, '0');
+            ctx.fillStyle = 'rgba(0,0,0,0.65)';
+            ctx.fillRect(sx + 20, iy + 18, 24, 11);
+            ctx.fillStyle = '#fff';
+            ctx.fillText(t, sx + 23, iy + 20);
           }
           if (item.state === 'charging') {
             const p2 = g.human.super;
@@ -593,6 +600,13 @@ const Render = (function () {
             ctx.fillStyle = '#fff';
             ctx.fillText('READY', sx + 19, iy + 20);
           }
+        }
+        // queued-unit count badge
+        if (item.count > 1 || (item.count === 1 && item.state === 'idle')) {
+          ctx.fillStyle = 'rgba(0,0,0,0.7)';
+          ctx.fillRect(sx + C.CAMEO_W - 16, iy + 1, 15, 10);
+          ctx.fillStyle = PAL.uiGold;
+          ctx.fillText('x' + item.count, sx + C.CAMEO_W - 14, iy + 2);
         }
         // hover highlight
         if (Input.mouse.x >= sx && Input.mouse.x < sx + C.CAMEO_W &&
