@@ -34,6 +34,7 @@ const Input = (function () {
       const p = toInternal(ev);
       mouse.x = p.x; mouse.y = p.y;
       mouse.inside = true;
+      if (tGest || tTwo) mouseMovedInTouch = true; // don't clobber this on touch end
       if (dragStart && mode === 'normal') {
         if (Math.abs(p.x - dragStart.x) > 4 || Math.abs(p.y - dragStart.y) > 4) {
           dragRect = { x1: dragStart.x, y1: dragStart.y, x2: p.x, y2: p.y };
@@ -113,12 +114,16 @@ const Input = (function () {
     let wheelAcc = 0;
     canvas.addEventListener('wheel', ev => {
       if (!game) return;
-      const hit = Render.hitTest(mouse.x, mouse.y);
+      // the wheel event carries its own position — never hit-test coords a
+      // finished touch left behind in mouse.x/y
+      const p = toInternal(ev);
+      mouse.x = p.x; mouse.y = p.y;
+      const hit = Render.hitTest(p.x, p.y);
       if (hit.zone === 'icon' || hit.zone === 'arrow' || hit.zone === 'sidebar') {
         // accumulate so touchpads step one icon per deliberate swipe, not per event
         wheelAcc += ev.deltaY;
         if (Math.abs(wheelAcc) >= 140) {
-          const strip = mouse.x < C.STRIP_UX ? 'b' : 'u';
+          const strip = p.x < C.STRIP_UX ? 'b' : 'u';
           _scrollStrip(strip, wheelAcc > 0 ? 1 : -1);
           wheelAcc = 0;
         }
@@ -139,16 +144,22 @@ const Input = (function () {
     // Tap = left-click. One-finger drag pans the map (in place mode it moves
     // the ghost; with a wall selected it draws the line; on the radar it
     // scrubs the camera; on the build strips it scrolls them). Long-press
-    // then drag = box multi-select; long-press an icon = cancel production.
-    // Two-finger tap = right-click (deselect / cancel mode); two-finger drag
-    // pans in any mode. The in-canvas cursor and edge scrolling stay off
-    // while touching (mouse.inside false) — there is no hover on a phone.
+    // then drag = box multi-select (touch boxes ADD to the selection);
+    // long-press an icon = cancel production; long-press a group chip =
+    // assign the selection to it. Two-finger tap = right-click (deselect /
+    // cancel mode); two-finger drag pans in any mode. The in-canvas cursor
+    // and edge scrolling stay off while touching — there is no hover on a
+    // phone. Fingers are counted via targetTouches and tracked by
+    // identifier: a thumb resting on the letterbox bars around the canvas
+    // must never turn taps into two-finger gestures.
     const TAP_SLOP = 10;        // client px of movement that still counts as a tap
     const LONG_PRESS_MS = 400;
 
     let tGest = null;           // active one-finger gesture
     let tTwo = null;            // active two-finger gesture
     let tLpTimer = 0;
+    let preTouch = null;        // mouse state saved while fingers are down
+    let mouseMovedInTouch = false;
 
     function clientToWorld() {
       const r = canvas.getBoundingClientRect();
@@ -157,35 +168,92 @@ const Input = (function () {
 
     function _cancelOneFinger() {
       clearTimeout(tLpTimer);
+      const g = tGest;
       tGest = null;
-      dragStart = null; dragRect = null;
-      wallDrag = null; wallLine = null;
-      radarDrag = false;
+      if (!g) return;
+      // release only the state this touch gesture owns — a simultaneous
+      // mouse drag on a hybrid device must survive a stray touch
+      if (g.boxSelect) { dragStart = null; dragRect = null; }
+      if (g.wallDrag) { wallDrag = null; wallLine = null; }
+      if (g.radar) radarDrag = false;
+    }
+
+    // hybrid devices: once every canvas finger has lifted, put the mouse
+    // back where it really is so the cursor and edge scroll come back
+    function _restoreMouse(ev) {
+      if (ev && ev.targetTouches && ev.targetTouches.length) return;
+      if (preTouch && preTouch.inside && !mouseMovedInTouch) {
+        mouse.x = preTouch.x; mouse.y = preTouch.y; mouse.inside = true;
+      }
+      preTouch = null;
+    }
+
+    // forgiving tap targets: at phone scale several chrome controls are
+    // finger-hostile (the 32px tab bar is ~11 CSS px tall) — snap near-miss
+    // taps to their centers. Exact hits on anything interactive pass through.
+    function _touchSnap(p) {
+      const hit = Render.hitTest(p.x, p.y);
+      if (hit.zone !== 'viewport' && hit.zone !== 'sidebar' && hit.zone !== 'tab') return p;
+      if (p.y < C.TAB_H + 18) {
+        if (p.x < 130) return { x: 60, y: C.TAB_H / 2 };
+        if (p.x >= C.GROUP_X && p.x < C.GROUP_X + C.GROUP_N * C.GROUP_SPACING) {
+          const i = ((p.x - C.GROUP_X) / C.GROUP_SPACING) | 0;
+          return { x: C.GROUP_X + i * C.GROUP_SPACING + C.GROUP_W / 2, y: C.TAB_H / 2 };
+        }
+      }
+      if (p.x >= C.SIDEBAR_X && p.y >= C.BTN_Y - 12 && p.y < C.BTN_Y + C.BTN_H + 12) {
+        const b0 = C.SIDEBAR_X + 8;
+        if (p.x >= b0 - 8 && p.x < b0 + 100) return { x: b0 + 48, y: C.BTN_Y + C.BTN_H / 2 };
+        if (p.x >= b0 + 100 && p.x < b0 + 204) return { x: b0 + 152, y: C.BTN_Y + C.BTN_H / 2 };
+      }
+      const ay = C.STRIP_Y + C.STRIP_VISIBLE * C.STRIP_SPACING;
+      if (p.y >= ay - 10 && p.y < ay + 34) {
+        for (const sx of [C.STRIP_BX, C.STRIP_UX]) {
+          if (p.x >= sx - 6 && p.x < sx + C.CAMEO_PW + 6) {
+            return { x: p.x < sx + C.CAMEO_PW / 2 ? sx + C.CAMEO_PW / 4 : sx + C.CAMEO_PW * 3 / 4, y: ay + 12 };
+          }
+        }
+      }
+      return p;
     }
 
     canvas.addEventListener('touchstart', ev => {
       ev.preventDefault(); // also stops the browser synthesizing mouse events
       if (!audioUnlocked) { audioUnlocked = true; AUDIO.init(); }
+      if (!tGest && !tTwo) {
+        preTouch = { x: mouse.x, y: mouse.y, inside: mouse.inside };
+        mouseMovedInTouch = false;
+      }
       mouse.inside = false;
-      if (ev.touches.length === 1) {
-        const t = ev.touches[0];
+      const tt = ev.targetTouches; // only fingers that began on the canvas
+      if (tt.length === 1) {
+        const t = tt[0];
         const p = toInternal(t);
         mouse.x = p.x; mouse.y = p.y;   // place ghost + radar scrub track the finger
         const playing = game && !game.paused && game.status === 'playing';
         const hit = playing ? Render.hitTest(p.x, p.y) : { zone: 'none' };
         tGest = {
+          id: t.identifier, t0: Date.now(),
           start: p, startClient: { x: t.clientX, y: t.clientY },
           lastClient: { x: t.clientX, y: t.clientY },
-          zone: hit.zone, moved: false, consumed: false, boxSelect: false,
-          stripAcc: 0,
+          zone: hit.zone, moved: false, consumed: false,
+          boxSelect: false, wallDrag: false, radar: false, stripAcc: 0, anchor: null,
         };
         if (!playing) return;
         if (hit.zone === 'viewport' && mode === 'place' && modeArg &&
             DATA.buildings[modeArg] && DATA.buildings[modeArg].wall) {
           const w = Render.worldFromScreen(p.x, p.y);
-          if (w) { wallDrag = { cx: worldToCell(w.x), cy: worldToCell(w.y) }; wallLine = [wallDrag]; }
+          if (w) {
+            wallDrag = { cx: worldToCell(w.x), cy: worldToCell(w.y) };
+            wallLine = [wallDrag];
+            tGest.wallDrag = true;
+          }
         }
-        if (hit.zone === 'radar' && game.human.radar) { radarDrag = true; _radarJump(); }
+        if (hit.zone === 'radar' && game.human.radar) {
+          radarDrag = true;
+          tGest.radar = true;
+          _radarJump();
+        }
         clearTimeout(tLpTimer);
         tLpTimer = setTimeout(() => {
           if (!tGest || tGest.moved || tTwo) return;
@@ -193,27 +261,50 @@ const Input = (function () {
           const h = Render.hitTest(tGest.start.x, tGest.start.y);
           if (h.zone === 'viewport' && mode === 'normal') {
             tGest.boxSelect = true;
+            tGest.anchor = { x: tGest.start.x, y: tGest.start.y };
             dragStart = { x: tGest.start.x, y: tGest.start.y };
             if (navigator.vibrate) navigator.vibrate(20);
           } else if (h.zone === 'icon' && !h.super &&
                      (h.state === 'building' || h.state === 'hold' || h.state === 'ready')) {
             Production.cancel(game.human, h.key);
+            // cancelling the ready building while its ghost is up would
+            // strand place mode: every later tap would fail silently
+            if (mode === 'place' && modeArg === h.key) _setMode('normal');
             tGest.consumed = true;
+            if (navigator.vibrate) navigator.vibrate(20);
+          } else if (h.zone === 'tab-group') {
+            game.groups[h.n] = game.selection.slice(); // empty selection clears
+            tGest.consumed = true;
+            AUDIO.play('click');
             if (navigator.vibrate) navigator.vibrate(20);
           }
         }, LONG_PRESS_MS);
-      } else if (ev.touches.length === 2) {
+      } else if (tt.length === 2) {
+        // a second canvas finger turns the gesture two-finger. Two-finger
+        // TAP (deselect) stays armed only if the first contact was fresh
+        // and unmoved — a graze against a long pan must not wipe anything.
+        const wasQuickTap = tGest ? (!tGest.moved && Date.now() - tGest.t0 < 350)
+          : ev.changedTouches.length >= 2; // orphan finger + new finger: pan only
         _cancelOneFinger();
-        const a = ev.touches[0], b = ev.touches[1];
+        const a = tt[0], b = tt[1];
         const mid = { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
-        tTwo = { startMid: mid, lastMid: mid, t0: Date.now(), moved: false };
+        tTwo = {
+          idA: a.identifier, idB: b.identifier,
+          startMid: mid, lastMid: mid, t0: Date.now(), moved: false,
+          tapEligible: wasQuickTap,
+        };
       }
     }, { passive: false });
 
     canvas.addEventListener('touchmove', ev => {
       ev.preventDefault();
-      if (tTwo && ev.touches.length >= 2) {
-        const a = ev.touches[0], b = ev.touches[1];
+      const byId = id => {
+        for (const t of ev.targetTouches) if (t.identifier === id) return t;
+        return null;
+      };
+      if (tTwo) {
+        const a = byId(tTwo.idA), b = byId(tTwo.idB);
+        if (!a || !b) return;
         const mid = { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
         if (game && !game.paused && game.status === 'playing') {
           const s = clientToWorld();
@@ -224,8 +315,9 @@ const Input = (function () {
         tTwo.lastMid = mid;
         return;
       }
-      if (!tGest || !ev.touches.length) return;
-      const t = ev.touches[0];
+      if (!tGest) return;
+      const t = byId(tGest.id);
+      if (!t) return;
       const p = toInternal(t);
       mouse.x = p.x; mouse.y = p.y;
       if (!tGest.moved &&
@@ -238,11 +330,13 @@ const Input = (function () {
         return;
       }
       if (tGest.boxSelect) {
-        dragRect = { x1: dragStart.x, y1: dragStart.y, x2: p.x, y2: p.y };
-      } else if (wallDrag) {
+        // anchor lives on the gesture: a hybrid-device mouse click nulling
+        // the shared dragStart mid-gesture must not crash the box drag
+        dragRect = { x1: tGest.anchor.x, y1: tGest.anchor.y, x2: p.x, y2: p.y };
+      } else if (tGest.wallDrag && wallDrag) {
         const w = Render.worldFromScreen(p.x, p.y);
         if (w) wallLine = _wallCells(wallDrag, { cx: worldToCell(w.x), cy: worldToCell(w.y) });
-      } else if (radarDrag) {
+      } else if (tGest.radar && radarDrag) {
         _radarJump();
       } else if (tGest.zone === 'viewport' && tGest.moved && mode !== 'place') {
         const s = clientToWorld();
@@ -262,50 +356,63 @@ const Input = (function () {
 
     canvas.addEventListener('touchend', ev => {
       ev.preventDefault();
+      const lifted = id => {
+        for (const t of ev.changedTouches) if (t.identifier === id) return t;
+        return null;
+      };
       if (tTwo) {
-        if (ev.touches.length < 2) {
-          if (!tTwo.moved && Date.now() - tTwo.t0 < 350 &&
+        if (lifted(tTwo.idA) || lifted(tTwo.idB)) {
+          if (tTwo.tapEligible && !tTwo.moved && Date.now() - tTwo.t0 < 350 &&
               game && !game.paused && game.status === 'playing') {
             _rightClick();
           }
           tTwo = null; // a remaining finger is ignored until lifted
+          _restoreMouse(ev);
         }
         return;
       }
-      if (!tGest) return;
+      if (!tGest) { _restoreMouse(ev); return; }
+      const t = lifted(tGest.id);
+      if (!t) return; // some other finger lifted, not the gesture's
       clearTimeout(tLpTimer);
-      const t = ev.changedTouches[0];
-      const p = t ? toInternal(t) : { x: mouse.x, y: mouse.y };
+      const p = toInternal(t);
       mouse.x = p.x; mouse.y = p.y;
       const g = tGest;
       tGest = null;
-      radarDrag = false;
+      if (g.radar) radarDrag = false;
       if (!game || game.paused || game.status !== 'playing') {
-        dragStart = null; dragRect = null; wallDrag = null; wallLine = null;
+        if (g.boxSelect) { dragStart = null; dragRect = null; }
+        if (g.wallDrag) { wallDrag = null; wallLine = null; }
+        _restoreMouse(ev);
         return;
       }
-      if (wallDrag) {
+      if (g.wallDrag && wallDrag) {
         const cells = wallLine || [wallDrag];
         const placed = Production.placeWallLine(game, game.human, modeArg, cells);
         wallDrag = null; wallLine = null;
         if (placed && !game.human.ready.building) _setMode('normal');
         else if (!placed) AUDIO.play('buzz');
+        _restoreMouse(ev);
         return;
       }
       if (g.boxSelect && dragRect) {
-        _boxSelect(false);
+        _boxSelect(true); // touch boxes ADD to the selection (deselect = two-finger tap)
         dragStart = null; dragRect = null;
+        _restoreMouse(ev);
         return;
       }
-      dragStart = null; dragRect = null;
+      if (g.boxSelect) { dragStart = null; dragRect = null; } // armed but unused: plain tap
       if (!g.moved && !g.consumed && g.zone !== 'none') {
-        _leftClick(p.x, p.y, false, false);
+        const sp = _touchSnap(p);
+        _leftClick(sp.x, sp.y, false, false, true);
       }
+      _restoreMouse(ev);
     }, { passive: false });
 
-    canvas.addEventListener('touchcancel', () => {
+    canvas.addEventListener('touchcancel', ev => {
       _cancelOneFinger();
       tTwo = null;
+      _restoreMouse(ev);
     }, { passive: false });
 
     window.addEventListener('keydown', ev => {
@@ -454,7 +561,7 @@ const Input = (function () {
 
   // ---- click handling --------------------------------------------------------------
 
-  function _leftClick(x, y, shift, ctrl) {
+  function _leftClick(x, y, shift, ctrl, fromTouch) {
     const g = game;
     const hit = Render.hitTest(x, y);
 
@@ -462,6 +569,7 @@ const Input = (function () {
       if (typeof Main !== 'undefined') Main.togglePause();
       return;
     }
+    if (hit.zone === 'tab-group') { _recallGroup(hit.n, shift); return; }
     if (hit.zone === 'arrow') { _scrollStrip(hit.strip, hit.dir); return; }
     if (hit.zone === 'btn') {
       if (hit.which === 'repair') { _setMode(mode === 'repair' ? 'normal' : 'repair'); AUDIO.play('click'); }
@@ -548,9 +656,12 @@ const Input = (function () {
       // select it
       if (ent.kind === 'unit') {
         const now = Date.now();
+        // on touch, tapping a unit inside a multi-selection drops it from the
+        // group — the shift-click substitute for pruning a band-box sweep
+        const touchToggle = fromTouch && g.selection.length > 1 && g.selection.includes(ent.id);
         if (lastClick.id === ent.id && now - lastClick.t < 350) {
           _selectSameTypeOnScreen(ent.type);
-        } else if (shift) {
+        } else if (shift || touchToggle) {
           const has = g.selection.includes(ent.id);
           _select(has ? g.selection.filter(i => i !== ent.id) : g.selection.concat(ent.id));
         } else {
@@ -558,6 +669,12 @@ const Input = (function () {
         }
         lastClick = { t: now, id: ent.id };
       } else {
+        // second click on your already-selected factory makes it primary
+        const sole = g.selection.length === 1 && g.selection[0] === ent.id;
+        if (sole && DATA.buildings[ent.type].factory && Production.setPrimary(g.human, ent)) {
+          AUDIO.play('click');
+          return;
+        }
         _select([ent.id], true);
         AUDIO.play('click');
       }
@@ -671,18 +788,8 @@ const Input = (function () {
           AUDIO.play('click');
         }
         ev.preventDefault();
-      } else if (g.groups[n] && g.groups[n].length) {
-        const ids = g.groups[n].filter(id => g.units.get(id) || g.buildings.get(id));
-        g.groups[n] = ids;
-        if (!ids.length) return;
-        if (ev.shiftKey) {
-          _select([...new Set(g.selection.concat(ids))], true); // add group to selection
-        } else {
-          _select(ids.slice(), true);
-          const now = Date.now();
-          if (lastGroupTap.n === n && now - lastGroupTap.t < 400) _centerOnSelection();
-          lastGroupTap = { t: now, n };
-        }
+      } else {
+        _recallGroup(n, ev.shiftKey);
       }
       return;
     }
@@ -732,6 +839,22 @@ const Input = (function () {
         }
         break;
       }
+    }
+  }
+
+  function _recallGroup(n, shift) {
+    const g = game;
+    if (!g.groups[n] || !g.groups[n].length) return;
+    const ids = g.groups[n].filter(id => g.units.get(id) || g.buildings.get(id));
+    g.groups[n] = ids;
+    if (!ids.length) return;
+    if (shift) {
+      _select([...new Set(g.selection.concat(ids))], true); // add group to selection
+    } else {
+      _select(ids.slice(), true);
+      const now = Date.now();
+      if (lastGroupTap.n === n && now - lastGroupTap.t < 400) _centerOnSelection();
+      lastGroupTap = { t: now, n };
     }
   }
 
@@ -827,10 +950,19 @@ const Input = (function () {
     return 'default';
   }
 
-  // right-click on sidebar icons cancels production — wire via mouseup path
+  // right-click on sidebar icons cancels production; on a group chip it
+  // assigns the selection. Gated on the canvas being the target: the canvas
+  // mouseup (which bubbles first) has then refreshed mouse.x/y, so we never
+  // act on coordinates a touch gesture left behind.
   document.addEventListener('mouseup', ev => {
-    if (ev.button === 2 && game && !game.paused && game.status === 'playing') {
-      _iconRightClick();
+    if (ev.button === 2 && ev.target && ev.target.id === 'screen' &&
+        game && !game.paused && game.status === 'playing') {
+      if (_iconRightClick()) return;
+      const hit = Render.hitTest(mouse.x, mouse.y);
+      if (hit.zone === 'tab-group') {
+        game.groups[hit.n] = game.selection.slice(); // empty selection clears
+        AUDIO.play('click');
+      }
     }
   });
 

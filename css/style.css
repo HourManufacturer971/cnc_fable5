@@ -53,7 +53,7 @@ html, body {
   text-align: center;
   pointer-events: none;
 }
-@media (orientation: portrait) and (max-width: 760px) {
+@media (orientation: portrait) and (max-width: 760px) and (pointer: coarse) {
   #rotateHint { display: block; }
 }
 

@@ -44,6 +44,10 @@ const Render = (function () {
   function hitTest(x, y) {
     if (y < C.TAB_H) {
       if (x < 120) return { zone: 'tab-options' };
+      if (game && x >= C.GROUP_X && x < C.GROUP_X + C.GROUP_N * C.GROUP_SPACING) {
+        const i = ((x - C.GROUP_X) / C.GROUP_SPACING) | 0;
+        if (x - (C.GROUP_X + i * C.GROUP_SPACING) < C.GROUP_W) return { zone: 'tab-group', n: i + 1 };
+      }
       return { zone: 'tab' };
     }
     if (x < C.VIEW_PW) return { zone: 'viewport' };
@@ -576,6 +580,23 @@ const Render = (function () {
     ctx.textBaseline = 'top';
     ctx.fillStyle = PAL.uiText;
     ctx.fillText('Options', 16, 8);
+
+    // control-group chips: click/tap recalls (twice centers), right-click or
+    // long-press assigns the current selection — the touch path to groups
+    for (let i = 1; i <= C.GROUP_N; i++) {
+      const x = C.GROUP_X + (i - 1) * C.GROUP_SPACING;
+      const ids = g.groups[i];
+      const live = ids ? ids.filter(id => g.units.get(id) || g.buildings.get(id)).length : 0;
+      _bevel(x, 3, C.GROUP_W, C.TAB_H - 6, false);
+      ctx.fillStyle = live ? PAL.uiGold : '#6a6a60';
+      ctx.fillText(String(i), x + 10, 8);
+      if (live) {
+        ctx.font = '12px monospace';
+        ctx.fillStyle = PAL.uiText;
+        ctx.fillText('x' + live, x + 26, 11);
+        ctx.font = '16px monospace';
+      }
+    }
 
     // credits ticker
     const target = Math.floor(g.human.credits);

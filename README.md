@@ -49,6 +49,8 @@ Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1`.
 | Click the selected loaded APC (or `U`) | Unload its passengers |
 | Alt+1..9 (or Ctrl+1..9) | Assign control group — Alt is the reliable one; browsers steal Ctrl+1..8 for tab switching |
 | 1..9 | Recall group (double-tap to center camera, Shift adds the group to the selection) |
+| Tab-bar chips 1-5 | Click to recall that group (twice centers); right-click to assign the current selection |
+| Click the selected factory again | Make it the primary factory for its kind (same as `P`) |
 | `H` | Center on Construction Yard |
 | `S` / `G` | Stop / guard |
 | `T` | Select same type on screen |
@@ -65,15 +67,20 @@ The game is playable from a mobile browser — landscape strongly recommended:
 |---|---|
 | Tap | Same as left-click: select, order, tap icons and buttons |
 | One-finger drag | Pan the map (in placement mode it moves the building ghost instead; with a wall ready it draws the wall run; on the radar it scrubs the camera; on the build strips it scrolls them) |
-| Long-press, then drag | Band-box select multiple units |
+| Long-press, then drag | Band-box select — touch boxes **add** to the current selection |
+| Tap a unit already in a multi-selection | Drop it from the group (the Shift-click substitute) |
 | Long-press a sidebar icon | Cancel/dequeue production (the right-click equivalent) |
+| Tab-bar chips 1-5 | Tap to recall that control group (twice centers); long-press to assign the current selection |
 | Two-finger tap | Deselect / cancel mode (the right-click equivalent) |
 | Two-finger drag | Pan the map in any mode |
 | Tap selected MCV again | Deploy into Construction Yard |
 | Tap selected loaded APC again | Unload its passengers |
+| Tap selected factory again | Make it the primary factory for its kind |
 
-Edge scrolling and the in-game cursor are mouse-only; on touch the pan
-gesture replaces them.
+Small chrome controls (Options, REPAIR/SELL, strip arrows) accept
+near-miss taps — a slop zone snaps them to the target. Edge scrolling
+and the in-game cursor are mouse-only; on touch the pan gesture
+replaces them.
 
 Sidebar: left icon strip is structures, right strip is units — every icon
 shows its credit cost. Click an icon to start building (cost drains as it

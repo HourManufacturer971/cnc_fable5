@@ -20,6 +20,7 @@ const C = {
   SIDEBAR_X: 1280,
   SIDEBAR_W: 320,
   RADAR_X: 1280, RADAR_Y: 32, RADAR_W: 320, RADAR_H: 260,
+  GROUP_X: 140, GROUP_W: 60, GROUP_SPACING: 68, GROUP_N: 5, // tab-bar control-group chips
   MM_X: 1312, MM_Y: 34, MM_S: 256,      // radar minimap blit rect (4px/cell)
   BTN_Y: 292, BTN_H: 40,
   STRIP_BX: 1288, STRIP_UX: 1424, STRIP_Y: 344, STRIP_SPACING: 100, STRIP_VISIBLE: 6,

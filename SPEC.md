@@ -265,10 +265,21 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 - **Touch** (same `Input` module, listeners on the canvas): tap = left-click; one-finger
   drag pans the camera (place mode: moves the ghost; wall ready: draws the run; radar:
   scrubs; build strips: scrolls one row per icon-height); long-press (400ms) then drag =
-  box select; long-press an icon = cancel production; two-finger tap = right-click;
-  two-finger drag = pan in any mode. `mouse.inside` stays false during touch so the
-  in-canvas cursor and edge scroll never engage; `preventDefault` on touchstart stops
+  box select (touch boxes ADD to the selection; tapping a unit inside a multi-selection
+  drops it); long-press an icon = cancel production; long-press a group chip = assign;
+  two-finger tap = right-click; two-finger drag = pan in any mode. Fingers are counted
+  via `targetTouches` and tracked by identifier so a thumb resting on the letterbox bars
+  never corrupts gestures; touch-owned drag state is flagged on the gesture so hybrid
+  mouse+touch devices can't cross-abort each other's drags. Near-miss taps on small
+  chrome (Options, REPAIR/SELL, strip arrows, group chips) snap to the control.
+  `mouse.inside` stays false during touch so the in-canvas cursor and edge scroll never
+  engage (restored afterward on hybrid devices); `preventDefault` on touchstart stops
   synthesized mouse events; `touch-action: none` on the canvas kills browser gestures.
+- **Control-group chips** on the tab bar (`C.GROUP_X/W/SPACING/N`, hitTest zone
+  `tab-group`): click/tap recalls (twice centers), right-click or touch long-press
+  assigns the current selection (empty selection clears). Gold when the group has live
+  members, with an `xN` count. Second click on a sole-selected factory = set primary;
+  on a sole-selected loaded transport = unload; on the MCV = deploy.
 
 ### AI opponent (`ai.js`)
 - Skirmish AI. Starts with deployed base (see map/main setup) + same credits as player.
