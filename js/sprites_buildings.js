@@ -129,12 +129,23 @@
   }
 
   // south facade wall: rows y..y+fh; mid-shade, darker at the bottom, darkest
-  // 1px base line, east end darkest
+  // 1px base line, east end darkest. Wide walls get panel seams and a grime
+  // line under the parapet so big faces don't read as flat slabs.
   function facade(ctx, x, y, w, fh, m) {
     P(ctx, x, y, w, fh, m.face);
     P(ctx, x + w - 2, y, 2, fh, m.faceD);
     P(ctx, x, y + fh - 3, w, 2, m.faceD);
     P(ctx, x, y + fh - 1, w, 1, OUT);
+    if (fh >= 8 && w >= 16) {
+      ctx.fillStyle = 'rgba(0,0,0,0.14)';
+      for (let sx = x + 8; sx < x + w - 4; sx += 9) ctx.fillRect(sx, y + 1, 1, fh - 3);
+      ctx.fillStyle = 'rgba(0,0,0,0.12)';
+      ctx.fillRect(x, y + 1, w, 1);
+      // faint drip stains from the parapet
+      ctx.fillStyle = 'rgba(0,0,0,0.10)';
+      ctx.fillRect(x + 3, y + 1, 1, 3);
+      ctx.fillRect(x + w - 6, y + 1, 1, 4);
+    }
   }
 
   // full 3/4 box: bright roof rows y..y+rh, facade y+rh..y+rh+fh, parapet
@@ -147,6 +158,29 @@
     P(ctx, x, y, 1, rh, m.roofL);
     P(ctx, x + w - 2, y + 1, 2, rh - 1, m.roofD);
     P(ctx, x, y + rh - 1, w, 1, m.para);
+    // roomy roofs get panel seams and corner rivets (builders draw over them)
+    if (rh >= 10 && w >= 14) {
+      ctx.fillStyle = 'rgba(0,0,0,0.12)';
+      for (let sx = x + 7; sx < x + w - 3; sx += 8) ctx.fillRect(sx, y + 2, 1, rh - 4);
+      for (let sy = y + 6; sy < y + rh - 3; sy += 7) ctx.fillRect(x + 2, sy, w - 4, 1);
+      ctx.fillStyle = 'rgba(255,255,255,0.28)';
+      ctx.fillRect(x + 2, y + 2, 1, 1); ctx.fillRect(x + w - 4, y + 2, 1, 1);
+      ctx.fillRect(x + 2, y + rh - 3, 1, 1); ctx.fillRect(x + w - 4, y + rh - 3, 1, 1);
+    }
+    // big roofs also get furniture: an access hatch and a vent grille row
+    // (position keyed to the box size so it varies between buildings)
+    if (rh >= 14 && w >= 24) {
+      const hx = x + 3 + ((w * 13 + rh * 7) % Math.max(1, w - 12));
+      const hy = y + 3 + ((w * 5 + rh * 11) % Math.max(1, rh - 10));
+      P(ctx, hx - 1, hy - 1, 7, 6, OUT);
+      P(ctx, hx, hy, 5, 4, m.roofL);
+      P(ctx, hx, hy + 3, 5, 1, m.roofD);
+      P(ctx, hx + 1, hy + 1, 1, 1, m.roofD);
+      const vx = x + 3 + ((w * 3 + rh * 17) % Math.max(1, w - 14));
+      const vy = hy > y + rh / 2 ? y + 3 : y + rh - 6;
+      ctx.fillStyle = 'rgba(0,0,0,0.30)';
+      for (let k = 0; k < 3; k++) ctx.fillRect(vx + k * 3, vy, 2, 3);
+    }
     facade(ctx, x, y + rh, w, fh, m);
   }
 
@@ -205,6 +239,12 @@
     }
     P(ctx, cx - rx - 1, ty, 1, bh + 1, OUT);
     P(ctx, cx + rx + 1, ty, 1, bh + 1, OUT);
+    // weld-band seams around tall drums
+    if (bh >= 9) {
+      ctx.fillStyle = 'rgba(0,0,0,0.16)';
+      ctx.fillRect(cx - rx, ty + ry + (bh >> 1), rx * 2 + 1, 1);
+      if (bh >= 14) ctx.fillRect(cx - rx, ty + ry + 3, rx * 2 + 1, 1);
+    }
     ellipseFill(ctx, cx, ty, rx + 1, ry + 1, OUT);
     ellipseFill(ctx, cx, ty, rx, ry, cc[0]);
     ellipseFill(ctx, cx - 1, ty - 1, Math.max(1, rx - 2), Math.max(1, ry - 1), cc[1]);

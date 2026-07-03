@@ -15,8 +15,8 @@ No assets or code from the original game are used.
 - All randomness inside the simulation must use `game.rng()` (seeded) — never `Math.random()`
   inside sim/production/ai/map code. UI/audio/effects may use `Math.random()`.
 - Script load order (index.html): `core.js, data.js, sprites_terrain.js, terrain_paint.js,
-  sprites_units.js, sprites_infantry.js, sprites_buildings.js, audio.js, map.js, path.js, fog.js, sim.js,
-  production.js, ai.js, input.js, render.js, main.js`.
+  sprites_units.js, sprites_infantry.js, sprites_buildings.js, audio.js, music.js, map.js, path.js,
+  fog.js, sim.js, production.js, ai.js, input.js, render.js, main.js`.
 - Every file must pass `node --check`.
 
 ## Screen layout (all coordinates in internal 640×400 px)
@@ -67,6 +67,7 @@ define **exactly** the globals listed and may freely call any global listed for 
 | sprites_infantry.js | fills `SPRITES.infantry[key][side]` for every infantry type, and their `SPRITES.cameo[key]` |
 | sprites_buildings.js | fills `SPRITES.buildings[key][side]` for every building, and their `SPRITES.cameo[key]`, plus `SPRITES.cameo.ion` / `SPRITES.cameo.nuke` |
 | audio.js | `AUDIO` (`init, play, eva, ack, setEnabled, enabled, tickCredits`) |
+| music.js | `MUSIC` (`start, stop, setEnabled, enabled` — original procedural soundtrack) |
 | map.js | `MAPGEN` (`generate(game, seed)`) |
 | path.js | `findPath(unit, destCx, destCy, opts?) -> [{cx,cy},...]` |
 | fog.js | `Fog` (`init, revealCircle, update, isExplored`) |
@@ -104,8 +105,12 @@ rally {cx,cy}|null, spawnTick`.
 ## Terrain ids
 
 `0 grass, 1 dirt, 2 rock (impassable), 3 water (impassable), 4 tree (impassable),
-5 blossom tree (impassable, regrows tiberium around it)`. `game.tvar` picks sprite variants.
+5 blossom tree (impassable, regrows tiberium around it), 6 bridge deck (passable,
+drawn over water)`. `game.tvar` picks sprite variants.
 Tiberium lives in `game.tib` (0..C.TIB_MAX per cell) independent of terrain (only on 0/1).
+MAPGEN also fills `game.decor = { bridge, waterfall, village }`: bridge cells, the
+waterfall cell, and the neutral hamlet layout that main.js spawns as 'civ'-owned
+buildings/units (players include a `civ` stub owner nobody auto-targets).
 
 ## Core game rules (be faithful to the 1995 original)
 

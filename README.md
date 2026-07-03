@@ -41,6 +41,7 @@ Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1`.
 | Left-drag | Band-box select units |
 | Left-drag with a wall ready | Place a whole run of wall segments (extra segments charge on placement) |
 | **Right-click** | **Deselect / cancel mode** (no right-click orders — just like the original) |
+| Ctrl+click | Focus fire: force-attack ANY unit or building (friend, foe or neutral) |
 | Shift+click | Add/remove from selection |
 | Double-click | Select all visible units of that type |
 | Click selected MCV (or `D`) | Deploy into Construction Yard |
@@ -67,9 +68,16 @@ a powered Communications Center.
 - **A painted world** — the ground is rendered per-pixel with world-space
   noise, so grass, dirt, water and rock blend into each other with ragged
   organic edges instead of tile seams; maps get a meandering river with
-  fordable crossings, forests with closed canopies and clearings, boulder
-  outcrops, a rocky rim, and scattered doodads (grass tufts, flowers,
+  fordable crossings and a timber bridge, an animated waterfall at the
+  rocky rim, mesa cliffs with stratified faces, forests with closed
+  canopies and clearings, and scattered doodads (grass tufts, flowers,
   pebbles, cracks, bushes)
+- **A civilian hamlet** — farmhouse, cottages and a barn with villagers who
+  wander about and flee gunfire; nobody auto-targets them (except the
+  visceroids), but Ctrl+click will
+- **Original soundtrack** — two synthesized tracks in the dark mid-90s RTS
+  style, sequenced live with WebAudio; toggle with Music: ON/OFF in the
+  options menu
 - **Tiberium economy** — harvesters (700 credits a load), refineries with
   docking, silos, storage caps, spreading tiberium fields seeded by blossom
   trees, infantry take damage crossing fields
