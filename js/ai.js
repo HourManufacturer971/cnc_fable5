@@ -107,6 +107,23 @@ const AI = (function () {
     return spots;
   }
 
+  // would placing `key` at (cx,cy,w,h) violate a refinery's 1-cell clear
+  // ring? Harvesters need that ring free to dock — a hugging power plant can
+  // wall the refinery in and starve the economy. Checked in both directions:
+  // buildings near an existing refinery, AND a new refinery near existing
+  // buildings (the rect test is symmetric: it flags any pair with less than
+  // one empty cell between footprints).
+  function _crowdsRefinery(g, p, key, cx, cy, w, h) {
+    for (const id of p.buildingIds) {
+      const b = g.buildings.get(id);
+      if (!b) continue;
+      if (b.type !== 'proc' && key !== 'proc') continue;
+      if (cx <= b.cx + b.w && cx + w - 1 >= b.cx - 1 &&
+          cy <= b.cy + b.h && cy + h - 1 >= b.cy - 1) return true;
+    }
+    return false;
+  }
+
   // pick the best cell for `key` around the conyard, by role
   function _findSpot(g, p, key) {
     const cyd = _conyard(g, p);
@@ -125,6 +142,7 @@ const AI = (function () {
         if (r < 2 || r > 10) continue;
         const cx = acx + dx - ((d.w / 2) | 0), cy = acy + dy - ((d.h / 2) | 0);
         if (!Production.canPlace(g, p, key, cx, cy)) continue;
+        if (_crowdsRefinery(g, p, key, cx, cy, d.w, d.h)) continue;
         const nx = dx / r, ny = dy / r;
         let score = g.rng() * 0.6;
         if (role === 'power') {

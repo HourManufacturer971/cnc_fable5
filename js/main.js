@@ -49,6 +49,32 @@ const Main = (function () {
     }
   }
 
+  // On touch devices, match the internal layout to the device's real aspect
+  // so the battlefield uses the full screen width — no letterbox bars. The
+  // sidebar keeps its size on the right; the viewport absorbs the rest.
+  // Desktop keeps the classic fixed 16:10 canvas sized purely by CSS.
+  function _fitScreen() {
+    if (!matchMedia('(pointer: coarse)').matches) return;
+    const vv = window.visualViewport;
+    const vw = vv ? vv.width : window.innerWidth;
+    const vh = vv ? vv.height : window.innerHeight;
+    if (!vw || !vh) return;
+    applyScreenAspect(vw / vh);
+    Render.resize();
+    // CSS box: exact fill when the internal aspect matches the screen's;
+    // outside the clamp range, letterbox the leftover axis
+    const internal = C.SCREEN_W / C.SCREEN_H;
+    let cw, ch;
+    if (vw / vh >= internal) { ch = vh; cw = vh * internal; }
+    else { cw = vw; ch = vw / internal; }
+    canvas.style.width = cw + 'px';
+    canvas.style.height = ch + 'px';
+    if (game) {
+      game.camera.x = clamp(game.camera.x, 0, C.MAP_W * C.CELL - C.VIEW_W);
+      game.camera.y = clamp(game.camera.y, 0, C.MAP_H * C.CELL - C.VIEW_H);
+    }
+  }
+
   // the browser bar is visible when the document (sized to the LARGE
   // viewport by the coarse-pointer CSS) overflows the visible viewport
   function _barVisible() {
@@ -114,6 +140,15 @@ const Main = (function () {
     if (window.visualViewport) window.visualViewport.addEventListener('resize', _hideSwipeHintIfDone);
     window.addEventListener('resize', _hideSwipeHintIfDone);
     window.addEventListener('scroll', _hideSwipeHintIfDone);
+
+    // keep the internal layout matched to the real screen on touch devices —
+    // the bar collapsing, rotating, or entering fullscreen all change it
+    _fitScreen();
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', _fitScreen);
+    window.addEventListener('resize', _fitScreen);
+    window.addEventListener('orientationchange', _fitScreen);
+    document.addEventListener('fullscreenchange', _fitScreen);
+    document.addEventListener('webkitfullscreenchange', _fitScreen);
 
     // PWA install prompt (Android Chrome & friends): stash it, offer a button
     let installEv = null;

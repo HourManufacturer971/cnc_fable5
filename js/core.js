@@ -40,6 +40,23 @@ const C = {
   SCROLL_SPEED: 12,        // WORLD px per frame while scrolling
 };
 
+// Widen the fixed 16:10 layout to a device's real aspect (phones in landscape
+// are ~19.5:9): the sidebar keeps its width on the right edge and the
+// battlefield viewport absorbs every extra pixel. Every consumer reads these
+// constants live, so recomputing them re-flows the whole UI. The caller
+// (main.js _fitScreen) also resizes the canvas element to match.
+function applyScreenAspect(aspect) {
+  const w = Math.round(clamp(aspect, 1.6, 2.4) * C.SCREEN_H / 2) * 2;
+  C.SCREEN_W = w;
+  C.SIDEBAR_X = w - C.SIDEBAR_W;
+  C.VIEW_PW = C.SIDEBAR_X;
+  C.VIEW_W = C.VIEW_PW / C.ZOOM;
+  C.RADAR_X = C.SIDEBAR_X;
+  C.MM_X = C.SIDEBAR_X + 32;
+  C.STRIP_BX = C.SIDEBAR_X + 8;
+  C.STRIP_UX = C.SIDEBAR_X + 144;
+}
+
 // Shared palette — every sprite file draws from these so the art reads as one set.
 const PAL = {
   outline: '#101008',

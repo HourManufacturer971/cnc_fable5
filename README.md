@@ -82,6 +82,11 @@ near-miss taps — a slop zone snaps them to the target. Edge scrolling
 and the in-game cursor are mouse-only; on touch the pan gesture
 replaces them.
 
+On touch devices the layout adapts to the device's real aspect ratio:
+the sidebar keeps its size on the right edge and the battlefield
+viewport widens to use every pixel of screen width (desktop keeps the
+classic fixed 16:10 frame).
+
 **Getting rid of the mobile browser bar** works in three layers, since
 no single mechanism covers every phone:
 

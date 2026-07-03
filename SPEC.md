@@ -303,6 +303,15 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
      App` button wired to `beforeinstallprompt`, plus `apple-mobile-web-app-capable`/
      `apple-touch-icon` for iOS Add-to-Home-Screen. Installed launches have no browser
      chrome at all.
+- **Adaptive width on touch devices** (`core.js` `applyScreenAspect` + `main.js`
+  `_fitScreen` + `Render.resize`): `C.SCREEN_W` and every derived x-constant
+  (`SIDEBAR_X`, `VIEW_PW/W`, `RADAR_X`, `MM_X`, `STRIP_BX/UX`) are recomputed from the
+  visual viewport's aspect (clamped 1.6–2.4, sidebar keeps its 320px on the right, the
+  battlefield viewport absorbs the rest), the canvas bitmap is resized to match (which
+  resets context state — `Render.resize` re-asserts `imageSmoothingEnabled=false`), and
+  the CSS box fills the screen exactly. Every consumer reads `C.*` live so the whole UI
+  re-flows; re-run on visualViewport/window resize, orientationchange and
+  fullscreenchange. Fine-pointer devices keep the fixed 1600×1000 layout untouched.
 
 ### AI opponent (`ai.js`)
 - Skirmish AI. Starts with deployed base (see map/main setup) + same credits as player.
@@ -310,6 +319,9 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 - Loop (~every 30 ticks): maintain build order: power ahead of drain → proc (up to 2-3) →
   barracks/hand → weap/afld → hq → defenses near base perimeter facing player → tech (eye/
   tmpl) → superweapon use on player's densest building cluster.
+- Placement (`_findSpot`) keeps a 1-cell clear ring around every own refinery — checked
+  in both directions (buildings near an existing proc, and a new proc near existing
+  buildings) so harvesters can always dock and the economy never gets walled in.
 - Keep 2-4 harvesters; rebuild destroyed key buildings; repair buildings < 60% hp.
 - Military: continuous production alternating infantry/vehicles from DATA list weighted by
   personality; group attackers; first wave at ~3 min, then every ~2.5 min send everything

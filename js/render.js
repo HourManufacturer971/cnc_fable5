@@ -24,6 +24,14 @@ const Render = (function () {
     minimap = mkCanvas(C.MM_S, C.MM_S);
   }
 
+  // after applyScreenAspect changed C.SCREEN_W: resizing the bitmap resets
+  // the 2d context's state, so pixelated rendering must be re-asserted
+  function resize() {
+    if (!cv) return;
+    if (cv.width !== C.SCREEN_W) cv.width = C.SCREEN_W;
+    ctx.imageSmoothingEnabled = false;
+  }
+
   // scale factor for a sprite canvas (pre-rendered assets are already hi-res;
   // a few units carry a _scaleBoost to visibly outsize their footprint)
   function sca(img) { return img._hires ? 1 : Z * (img._scaleBoost || 1); }
@@ -811,5 +819,5 @@ const Render = (function () {
     shownTick = g.tick;
   }
 
-  return { init, frame, worldFromScreen, hitTest };
+  return { init, frame, resize, worldFromScreen, hitTest };
 })();
