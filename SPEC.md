@@ -262,6 +262,13 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 - Selected entities draw the classic **white corner brackets** + health bar (green >2/3,
   yellow >1/3, red below; buildings get wider bars). Hovering own selectable entity =
   `select` cursor.
+- **Touch** (same `Input` module, listeners on the canvas): tap = left-click; one-finger
+  drag pans the camera (place mode: moves the ghost; wall ready: draws the run; radar:
+  scrubs; build strips: scrolls one row per icon-height); long-press (400ms) then drag =
+  box select; long-press an icon = cancel production; two-finger tap = right-click;
+  two-finger drag = pan in any mode. `mouse.inside` stays false during touch so the
+  in-canvas cursor and edge scroll never engage; `preventDefault` on touchstart stops
+  synthesized mouse events; `touch-action: none` on the canvas kills browser gestures.
 
 ### AI opponent (`ai.js`)
 - Skirmish AI. Starts with deployed base (see map/main setup) + same credits as player.

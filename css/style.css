@@ -3,6 +3,7 @@ html, body {
   background: #000;
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: none;
   font-family: "Lucida Console", Monaco, monospace;
 }
 
@@ -10,6 +11,7 @@ html, body {
   position: relative;
   width: 100vw; height: 100vh;
   display: flex; align-items: center; justify-content: center;
+  touch-action: none;
 }
 
 #screen {
@@ -20,6 +22,39 @@ html, body {
   width: min(100vw, 160vh);
   height: min(62.5vw, 100vh);
   background: #000;
+  /* the game handles all touch gestures itself — no browser pan/zoom,
+     no long-press callout, no text selection */
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* mobile browsers: size against the DYNAMIC viewport, so the canvas isn't
+   cropped while the address bar is still showing (100vh is the large
+   viewport on iOS Safari) */
+@supports (height: 100dvh) {
+  #wrap { height: 100dvh; }
+  #screen {
+    width: min(100vw, 160dvh);
+    height: min(62.5vw, 100dvh);
+  }
+}
+
+#rotateHint {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 20;
+  background: rgba(20, 20, 16, 0.92);
+  color: #d8d0a8;
+  font-size: 12px;
+  letter-spacing: 1px;
+  padding: 10px;
+  text-align: center;
+  pointer-events: none;
+}
+@media (orientation: portrait) and (max-width: 760px) {
+  #rotateHint { display: block; }
 }
 
 .overlay {
@@ -72,6 +107,7 @@ button {
   display: block;
   width: 100%;
   letter-spacing: 1px;
+  touch-action: manipulation; /* no double-tap zoom or tap delay on menus */
 }
 button:hover { background: #5a5a50; color: #fff; }
 button:active { border-color: #2e2e28; border-top-color: #6a6a60; border-left-color: #6a6a60; }

@@ -135,6 +135,179 @@ const Input = (function () {
       }
     }, { passive: false });
 
+    // ---- touch controls ---------------------------------------------------------
+    // Tap = left-click. One-finger drag pans the map (in place mode it moves
+    // the ghost; with a wall selected it draws the line; on the radar it
+    // scrubs the camera; on the build strips it scrolls them). Long-press
+    // then drag = box multi-select; long-press an icon = cancel production.
+    // Two-finger tap = right-click (deselect / cancel mode); two-finger drag
+    // pans in any mode. The in-canvas cursor and edge scrolling stay off
+    // while touching (mouse.inside false) — there is no hover on a phone.
+    const TAP_SLOP = 10;        // client px of movement that still counts as a tap
+    const LONG_PRESS_MS = 400;
+
+    let tGest = null;           // active one-finger gesture
+    let tTwo = null;            // active two-finger gesture
+    let tLpTimer = 0;
+
+    function clientToWorld() {
+      const r = canvas.getBoundingClientRect();
+      return C.SCREEN_W / r.width / C.ZOOM;  // client px -> WORLD px
+    }
+
+    function _cancelOneFinger() {
+      clearTimeout(tLpTimer);
+      tGest = null;
+      dragStart = null; dragRect = null;
+      wallDrag = null; wallLine = null;
+      radarDrag = false;
+    }
+
+    canvas.addEventListener('touchstart', ev => {
+      ev.preventDefault(); // also stops the browser synthesizing mouse events
+      if (!audioUnlocked) { audioUnlocked = true; AUDIO.init(); }
+      mouse.inside = false;
+      if (ev.touches.length === 1) {
+        const t = ev.touches[0];
+        const p = toInternal(t);
+        mouse.x = p.x; mouse.y = p.y;   // place ghost + radar scrub track the finger
+        const playing = game && !game.paused && game.status === 'playing';
+        const hit = playing ? Render.hitTest(p.x, p.y) : { zone: 'none' };
+        tGest = {
+          start: p, startClient: { x: t.clientX, y: t.clientY },
+          lastClient: { x: t.clientX, y: t.clientY },
+          zone: hit.zone, moved: false, consumed: false, boxSelect: false,
+          stripAcc: 0,
+        };
+        if (!playing) return;
+        if (hit.zone === 'viewport' && mode === 'place' && modeArg &&
+            DATA.buildings[modeArg] && DATA.buildings[modeArg].wall) {
+          const w = Render.worldFromScreen(p.x, p.y);
+          if (w) { wallDrag = { cx: worldToCell(w.x), cy: worldToCell(w.y) }; wallLine = [wallDrag]; }
+        }
+        if (hit.zone === 'radar' && game.human.radar) { radarDrag = true; _radarJump(); }
+        clearTimeout(tLpTimer);
+        tLpTimer = setTimeout(() => {
+          if (!tGest || tGest.moved || tTwo) return;
+          if (!game || game.paused || game.status !== 'playing') return;
+          const h = Render.hitTest(tGest.start.x, tGest.start.y);
+          if (h.zone === 'viewport' && mode === 'normal') {
+            tGest.boxSelect = true;
+            dragStart = { x: tGest.start.x, y: tGest.start.y };
+            if (navigator.vibrate) navigator.vibrate(20);
+          } else if (h.zone === 'icon' && !h.super &&
+                     (h.state === 'building' || h.state === 'hold' || h.state === 'ready')) {
+            Production.cancel(game.human, h.key);
+            tGest.consumed = true;
+            if (navigator.vibrate) navigator.vibrate(20);
+          }
+        }, LONG_PRESS_MS);
+      } else if (ev.touches.length === 2) {
+        _cancelOneFinger();
+        const a = ev.touches[0], b = ev.touches[1];
+        const mid = { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
+        tTwo = { startMid: mid, lastMid: mid, t0: Date.now(), moved: false };
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchmove', ev => {
+      ev.preventDefault();
+      if (tTwo && ev.touches.length >= 2) {
+        const a = ev.touches[0], b = ev.touches[1];
+        const mid = { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
+        if (game && !game.paused && game.status === 'playing') {
+          const s = clientToWorld();
+          game.camera.x = clamp(game.camera.x - (mid.x - tTwo.lastMid.x) * s, 0, C.MAP_W * C.CELL - C.VIEW_W);
+          game.camera.y = clamp(game.camera.y - (mid.y - tTwo.lastMid.y) * s, 0, C.MAP_H * C.CELL - C.VIEW_H);
+        }
+        if (Math.hypot(mid.x - tTwo.startMid.x, mid.y - tTwo.startMid.y) > TAP_SLOP) tTwo.moved = true;
+        tTwo.lastMid = mid;
+        return;
+      }
+      if (!tGest || !ev.touches.length) return;
+      const t = ev.touches[0];
+      const p = toInternal(t);
+      mouse.x = p.x; mouse.y = p.y;
+      if (!tGest.moved &&
+          Math.hypot(t.clientX - tGest.startClient.x, t.clientY - tGest.startClient.y) > TAP_SLOP) {
+        tGest.moved = true;
+        if (!tGest.boxSelect) clearTimeout(tLpTimer);
+      }
+      if (!game || game.paused || game.status !== 'playing') {
+        tGest.lastClient = { x: t.clientX, y: t.clientY };
+        return;
+      }
+      if (tGest.boxSelect) {
+        dragRect = { x1: dragStart.x, y1: dragStart.y, x2: p.x, y2: p.y };
+      } else if (wallDrag) {
+        const w = Render.worldFromScreen(p.x, p.y);
+        if (w) wallLine = _wallCells(wallDrag, { cx: worldToCell(w.x), cy: worldToCell(w.y) });
+      } else if (radarDrag) {
+        _radarJump();
+      } else if (tGest.zone === 'viewport' && tGest.moved && mode !== 'place') {
+        const s = clientToWorld();
+        game.camera.x = clamp(game.camera.x - (t.clientX - tGest.lastClient.x) * s, 0, C.MAP_W * C.CELL - C.VIEW_W);
+        game.camera.y = clamp(game.camera.y - (t.clientY - tGest.lastClient.y) * s, 0, C.MAP_H * C.CELL - C.VIEW_H);
+      } else if (tGest.moved && tGest.start.x >= C.STRIP_BX &&
+                 (tGest.zone === 'icon' || tGest.zone === 'arrow' || tGest.zone === 'sidebar')) {
+        // swipe scrolls the build strips, one row per icon-height dragged
+        const r = canvas.getBoundingClientRect();
+        tGest.stripAcc += (tGest.lastClient.y - t.clientY) * (C.SCREEN_H / r.height);
+        const strip = tGest.start.x < C.STRIP_UX ? 'b' : 'u';
+        while (tGest.stripAcc >= C.STRIP_SPACING) { _scrollStrip(strip, 1); tGest.stripAcc -= C.STRIP_SPACING; }
+        while (tGest.stripAcc <= -C.STRIP_SPACING) { _scrollStrip(strip, -1); tGest.stripAcc += C.STRIP_SPACING; }
+      }
+      tGest.lastClient = { x: t.clientX, y: t.clientY };
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', ev => {
+      ev.preventDefault();
+      if (tTwo) {
+        if (ev.touches.length < 2) {
+          if (!tTwo.moved && Date.now() - tTwo.t0 < 350 &&
+              game && !game.paused && game.status === 'playing') {
+            _rightClick();
+          }
+          tTwo = null; // a remaining finger is ignored until lifted
+        }
+        return;
+      }
+      if (!tGest) return;
+      clearTimeout(tLpTimer);
+      const t = ev.changedTouches[0];
+      const p = t ? toInternal(t) : { x: mouse.x, y: mouse.y };
+      mouse.x = p.x; mouse.y = p.y;
+      const g = tGest;
+      tGest = null;
+      radarDrag = false;
+      if (!game || game.paused || game.status !== 'playing') {
+        dragStart = null; dragRect = null; wallDrag = null; wallLine = null;
+        return;
+      }
+      if (wallDrag) {
+        const cells = wallLine || [wallDrag];
+        const placed = Production.placeWallLine(game, game.human, modeArg, cells);
+        wallDrag = null; wallLine = null;
+        if (placed && !game.human.ready.building) _setMode('normal');
+        else if (!placed) AUDIO.play('buzz');
+        return;
+      }
+      if (g.boxSelect && dragRect) {
+        _boxSelect(false);
+        dragStart = null; dragRect = null;
+        return;
+      }
+      dragStart = null; dragRect = null;
+      if (!g.moved && !g.consumed && g.zone !== 'none') {
+        _leftClick(p.x, p.y, false, false);
+      }
+    }, { passive: false });
+
+    canvas.addEventListener('touchcancel', () => {
+      _cancelOneFinger();
+      tTwo = null;
+    }, { passive: false });
+
     window.addEventListener('keydown', ev => {
       keys[ev.key] = true;
       if (!game) return;
@@ -346,6 +519,14 @@ const Input = (function () {
       if (ent.kind === 'unit' && DATA.units[ent.type].deploysTo &&
           ownSel.length === 1 && ownSel[0].id === ent.id) {
         if (!orderDeploy(ent)) AUDIO.play('buzz');
+        return;
+      }
+      // loaded transport unloads on second click (like the original's
+      // deploy-click) — also the touch substitute for the U hotkey
+      if (ent.kind === 'unit' && DATA.units[ent.type].transport &&
+          ownSel.length === 1 && ownSel[0].id === ent.id &&
+          ent.cargo && ent.cargo.length) {
+        AUDIO.play(unloadCargo(ent) ? 'click' : 'buzz');
         return;
       }
       // engineer heal own damaged building
@@ -621,6 +802,10 @@ const Input = (function () {
     if (keys['Control'] && ent && sel.some(u => DATA.units[u.type].weapon)) return 'attack';
     if (ent && ent.owner === g.humanSide) {
       if (ent.kind === 'unit' && DATA.units[ent.type].deploysTo && sel.length === 1 && sel[0].id === ent.id) {
+        return 'deploy';
+      }
+      if (ent.kind === 'unit' && DATA.units[ent.type].transport && sel.length === 1 &&
+          sel[0].id === ent.id && ent.cargo && ent.cargo.length) {
         return 'deploy';
       }
       if (ent.kind === 'building' && sel.some(u => DATA.units[u.type].engineer) && ent.hp < ent.maxHp) return 'enter';

@@ -46,7 +46,7 @@ Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1`.
 | Double-click | Select all visible units of that type |
 | Click selected MCV (or `D`) | Deploy into Construction Yard |
 | Select infantry, click a friendly APC | Board it (up to 5 passengers) |
-| `U` | Unload the selected APC's passengers |
+| Click the selected loaded APC (or `U`) | Unload its passengers |
 | Alt+1..9 (or Ctrl+1..9) | Assign control group — Alt is the reliable one; browsers steal Ctrl+1..8 for tab switching |
 | 1..9 | Recall group (double-tap to center camera, Shift adds the group to the selection) |
 | `H` | Center on Construction Yard |
@@ -56,6 +56,24 @@ Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1`.
 | Arrow keys / screen edges | Scroll the map |
 | Two-finger touchpad scroll (or mouse wheel) | Pan the map |
 | `Esc` | Options menu / cancel placement, sell, repair, targeting |
+
+### Touch (phones & tablets)
+
+The game is playable from a mobile browser — landscape strongly recommended:
+
+| Gesture | Action |
+|---|---|
+| Tap | Same as left-click: select, order, tap icons and buttons |
+| One-finger drag | Pan the map (in placement mode it moves the building ghost instead; with a wall ready it draws the wall run; on the radar it scrubs the camera; on the build strips it scrolls them) |
+| Long-press, then drag | Band-box select multiple units |
+| Long-press a sidebar icon | Cancel/dequeue production (the right-click equivalent) |
+| Two-finger tap | Deselect / cancel mode (the right-click equivalent) |
+| Two-finger drag | Pan the map in any mode |
+| Tap selected MCV again | Deploy into Construction Yard |
+| Tap selected loaded APC again | Unload its passengers |
+
+Edge scrolling and the in-game cursor are mouse-only; on touch the pan
+gesture replaces them.
 
 Sidebar: left icon strip is structures, right strip is units — every icon
 shows its credit cost. Click an icon to start building (cost drains as it
