@@ -247,8 +247,9 @@ function makeGame(opts) {
     bullets: [],
     effects: [],
     // mut is a stub owner for tiberium creatures (visceroids): no base, no
-    // production, hostile to everyone, never checked for win/lose
-    players: { gdi: makePlayer('gdi', false), nod: makePlayer('nod', true), mut: makePlayer('mut', true) },
+    // production, hostile to everyone, never checked for win/lose.
+    // civ is the neutral village: bystanders no one auto-targets.
+    players: { gdi: makePlayer('gdi', false), nod: makePlayer('nod', true), mut: makePlayer('mut', true), civ: makePlayer('civ', true) },
     humanSide: (opts && opts.side) || 'gdi',
     human: null, ai: null,
     camera: { x: 0, y: 0 },
@@ -323,7 +324,7 @@ function clearOcc(cx, cy, id) {
   if (inMap(cx, cy) && game.occ[cellIdx(cx, cy)] === id) game.occ[cellIdx(cx, cy)] = 0;
 }
 
-function terrainPassable(t) { return t === 0 || t === 1; } // grass, dirt
+function terrainPassable(t) { return t === 0 || t === 1 || t === 6; } // grass, dirt, bridge
 
 // Is cell enterable by `unit` (or by any ground unit if unit omitted)?
 // Air units never call this. Occupied-by-self is passable.

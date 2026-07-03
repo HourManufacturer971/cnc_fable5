@@ -128,6 +128,21 @@ const Main = (function () {
     addBuilding(nukeB);
     _spawnEscort(game, aiSide, { cx: ap.cx + 2, cy: ap.cy }, false);
 
+    // neutral hamlet with its villagers (from map generation, if it found room)
+    if (game.decor && game.decor.village) {
+      for (const h of game.decor.village.houses) {
+        const b = makeBuilding(h.type, 'civ', h.cx, h.cy);
+        b.buildProgress = 1;
+        addBuilding(b);
+      }
+      for (const c of game.decor.village.civs) {
+        if (!terrainPassable(game.terrain[cellIdx(c.cx, c.cy)]) || game.occ[cellIdx(c.cx, c.cy)]) continue;
+        const u = makeUnit(c.type, 'civ', c.cx, c.cy);
+        u.guardAnchor = { x: u.x, y: u.y };  // home spot they wander around
+        addUnit(u);
+      }
+    }
+
     Production.computePower(game.human);
     Production.computePower(game.ai);
     AI.init(game);

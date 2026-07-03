@@ -111,8 +111,8 @@ const Render = (function () {
 
   // ---- minimap ---------------------------------------------------------------------
 
-  const TCOLOR = ['#3e5429', '#8f7a4e', '#6e6e66', '#1e4468', '#1e3416', '#c890b8'];
-  const OWNER_COLOR = { gdi: '#ffd23c', nod: '#ff2418', mut: '#4ce03c' };
+  const TCOLOR = ['#3e5429', '#8f7a4e', '#6e6e66', '#1e4468', '#1e3416', '#c890b8', '#8a6a42'];
+  const OWNER_COLOR = { gdi: '#ffd23c', nod: '#ff2418', mut: '#4ce03c', civ: '#e8e6da' };
   const MMC = C.MM_S / C.MAP_W;   // minimap px per cell
 
   function _updateMinimap(g) {
@@ -373,7 +373,7 @@ const Render = (function () {
     for (const a of animCells) {
       const sx = X(a.cx * C.CELL), sy = Y(a.cy * C.CELL);
       if (sx < -cs || sx > C.VIEW_PW || sy < -cs || sy > C.SCREEN_H) continue;
-      const f = a.frames[((g.tick >> 3) + a.phase) % a.frames.length];
+      const f = a.frames[((g.tick >> (a.rate || 3)) + a.phase) % a.frames.length];
       ctx.drawImage(f, sx, sy, f.width * Z, f.height * Z);
     }
 

@@ -69,6 +69,9 @@ DATA.units = {
   mcv:  { name: 'MCV', cost: 5000, hp: 600, speed: 1.4, sight: 2, armor: 'light', weapon: null, side: null, factory: 'vehicle', prereq: ['fix'], deploysTo: 'fact', turn: 1 },
   // creature — never buildable; spawns when infantry die on tiberium
   vice: { name: 'Visceroid', cost: 0, hp: 150, speed: 1.2, sight: 3, armor: 'light', weapon: 'slime', side: null, factory: null, prereq: [], creature: true, tibImmune: true, turn: 4 },
+  // neutral villagers — never buildable; wander the hamlet, flee gunfire
+  c1:   { name: 'Civilian', cost: 0, hp: 25, speed: 1.0, sight: 2, armor: 'none', weapon: null, side: null, factory: null, prereq: [], infantry: true, civilian: true },
+  c2:   { name: 'Civilian', cost: 0, hp: 25, speed: 1.0, sight: 2, armor: 'none', weapon: null, side: null, factory: null, prereq: [], infantry: true, civilian: true },
   // aircraft
   orca: { name: 'Orca', cost: 1200, hp: 125, speed: 4.0, sight: 5, armor: 'light', weapon: 'orcaRockets', side: 'gdi', factory: 'air', prereq: [], air: true, ammo: 6 },
   heli: { name: 'Apache', cost: 1200, hp: 125, speed: 3.6, sight: 5, armor: 'light', weapon: 'heliMg', side: 'nod', factory: 'air', prereq: [], air: true, ammo: 10 },
@@ -96,6 +99,10 @@ DATA.buildings = {
   gun:  { name: 'Gun Turret', cost: 600, hp: 400, w: 1, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 20, side: 'nod', prereq: ['hand'], weapon: 'gunTurret', turret: true, defense: true, threat: 0.5 },
   obli: { name: 'Obelisk of Light', cost: 1500, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 150, side: 'nod', prereq: ['hq'], weapon: 'obelisk', needsPower: true, defense: true, threat: 0.9 },
   sam:  { name: 'SAM Site', cost: 750, hp: 300, w: 2, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 25, side: 'nod', prereq: ['hand'], weapon: 'samMissile', needsPower: true, defense: true, threat: 0.3 },
+  // neutral village structures — never buildable, owned by 'civ'
+  vil1: { name: 'Farmhouse', cost: 0, hp: 250, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true },
+  vil2: { name: 'Cottage', cost: 0, hp: 200, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true },
+  vil3: { name: 'Barn', cost: 0, hp: 300, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true },
 };
 
 // sidebar ordering (filtered by prereqOk at runtime)

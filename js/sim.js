@@ -62,6 +62,9 @@ function _nearestEnemy(e, rangeCells, opts) {
   let best = null, bestD = Infinity;
   for (const u of g.units.values()) {
     if (u.owner === e.owner || u._dead) continue;
+    // nobody auto-guns bystanders — except tiberium creatures, which
+    // terrorise the village like everything else (explicit orders still work)
+    if (u.owner === 'civ' && e.owner !== 'mut') continue;
     if (u.cloaked && !opts.seeCloaked) continue;
     if (_isAir(u) && !opts.antiAir) continue;
     if (opts.airOnly && !_isAir(u)) continue;
@@ -71,6 +74,7 @@ function _nearestEnemy(e, rangeCells, opts) {
   if (!opts.airOnly && !opts.unitsOnly) {
     for (const b of g.buildings.values()) {
       if (b.owner === e.owner || b._dead) continue;
+      if (b.owner === 'civ' && e.owner !== 'mut') continue;
       if (DATA.buildings[b.type].wall) continue; // walls aren't worth auto-fire
       const d = _distTo(ex, ey, b);
       if (d > maxD) continue;
@@ -829,6 +833,14 @@ function _tickUnit(u) {
         const cy = worldToCell(u.y) + ((g.rng() * 7) | 0) - 3;
         if (inMap(cx, cy) && isPassable(cx, cy, u)) orderMove(u, cx, cy);
       }
+      // villagers potter about near home
+      if (d.civilian && (g.tick + u.id) % 75 === 0 && g.rng() < 0.6) {
+        const home = u.guardAnchor || { x: u.x, y: u.y };
+        const cx = worldToCell(home.x) + ((g.rng() * 7) | 0) - 3;
+        const cy = worldToCell(home.y) + ((g.rng() * 7) | 0) - 3;
+        const anchor = u.guardAnchor;
+        if (inMap(cx, cy) && isPassable(cx, cy, u)) { orderMove(u, cx, cy); u.guardAnchor = anchor; }
+      }
       break;
   }
 
@@ -917,7 +929,7 @@ function _tickTiberium(g) {
     const nx = cx + dx, ny = cy + dy;
     if (!inMap(nx, ny)) continue;
     const ni = cellIdx(nx, ny);
-    if (!terrainPassable(g.terrain[ni])) continue;
+    if (g.terrain[ni] > 1) continue; // only grass/dirt hold tiberium (not bridges)
     const o = g.occ[ni];
     if (o) { const e = getEnt(o); if (e && e.kind === 'building') continue; }
     g.tib[ni] = Math.min(C.TIB_MAX, g.tib[ni] + 25);
@@ -928,7 +940,7 @@ function _tickTiberium(g) {
       const nx = cx + ((g.rng() * 3) | 0) - 1, ny = cy + ((g.rng() * 3) | 0) - 1;
       if (!inMap(nx, ny)) continue;
       const ni = cellIdx(nx, ny);
-      if (!terrainPassable(g.terrain[ni])) continue;
+      if (g.terrain[ni] > 1) continue; // only grass/dirt hold tiberium (not bridges)
       const o = g.occ[ni];
       if (o) { const e = getEnt(o); if (e && e.kind === 'building') continue; }
       g.tib[ni] = Math.min(C.TIB_MAX, g.tib[ni] + 25);
@@ -1029,6 +1041,15 @@ EV.on('damaged', function (target, attacker) {
   }
   const d = DATA.units[target.type];
   if (d.stealth) target.decloakTicks = Math.max(target.decloakTicks, 30);
+  if (d.civilian) {
+    // panicked villager: run away from the shooter
+    const ax = _entX(attacker), ay = _entY(attacker);
+    const len = Math.max(1, dist(target.x, target.y, ax, ay));
+    const fx = worldToCell(target.x + (target.x - ax) / len * 6 * C.CELL);
+    const fy = worldToCell(target.y + (target.y - ay) / len * 6 * C.CELL);
+    orderMove(target, clamp(fx, 1, C.MAP_W - 2), clamp(fy, 1, C.MAP_H - 2));
+    return;
+  }
   if (d.harvester) {
     if (target.state !== 'return' && target.state !== 'unload') {
       const proc = _nearestProc(target);

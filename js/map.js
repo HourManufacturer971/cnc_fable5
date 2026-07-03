@@ -15,8 +15,9 @@
 
 const MAPGEN = (function () {
 
-  // terrain ids (see SPEC): 0 grass, 1 dirt, 2 rock, 3 water, 4 tree, 5 blossom
-  const T_GRASS = 0, T_DIRT = 1, T_ROCK = 2, T_WATER = 3, T_TREE = 4, T_BLOSSOM = 5;
+  // terrain ids (see SPEC): 0 grass, 1 dirt, 2 rock, 3 water, 4 tree,
+  // 5 blossom, 6 bridge deck (passable, drawn over water)
+  const T_GRASS = 0, T_DIRT = 1, T_ROCK = 2, T_WATER = 3, T_TREE = 4, T_BLOSSOM = 5, T_BRIDGE = 6;
 
   function isImpassId(t) { return t === T_ROCK || t === T_WATER || t === T_TREE || t === T_BLOSSOM; }
 
@@ -165,6 +166,33 @@ const MAPGEN = (function () {
         if (g.terrain[idx] === T_GRASS || g.terrain[idx] === T_DIRT) g.terrain[idx] = T_WATER;
       }
     }
+    return { yc, fordX1, fordX2 };
+  }
+
+  // Convert one river column into a bridge deck (passable id 6), well away
+  // from both fords so it forms a third, man-made crossing.
+  function placeBridge(g, rng, riv) {
+    const W = C.MAP_W, H = C.MAP_H;
+    const cand = [];
+    for (let x = 8; x < W - 8; x++) {
+      const dFord = Math.min(Math.abs(x - riv.fordX1), Math.abs(x - riv.fordX2));
+      if (dFord < 7) continue;
+      // column must actually hold water here
+      let n = 0;
+      for (let y = Math.max(1, Math.round(riv.yc[x]) - 4); y <= Math.min(H - 2, Math.round(riv.yc[x]) + 4); y++) {
+        if (g.terrain[cellIdx(x, y)] === T_WATER) n++;
+      }
+      if (n >= 2 && n <= 5) cand.push({ x, dFord });
+    }
+    if (!cand.length) return null;
+    cand.sort((a, b) => b.dFord - a.dFord);
+    const pick = cand[(rng() * Math.min(6, cand.length)) | 0];
+    const cells = [];
+    for (let y = Math.max(1, Math.round(riv.yc[pick.x]) - 4); y <= Math.min(H - 2, Math.round(riv.yc[pick.x]) + 4); y++) {
+      const idx = cellIdx(pick.x, y);
+      if (g.terrain[idx] === T_WATER) { g.terrain[idx] = T_BRIDGE; cells.push({ cx: pick.x, cy: y }); }
+    }
+    return cells.length ? cells : null;
   }
 
   // Ragged rocky rim, 1..3 cells deep, depth varying smoothly along each edge.
@@ -367,8 +395,13 @@ const MAPGEN = (function () {
     for (let i = 0; i < walks; i++) dirtWalk(g, rng);
 
     // --- river (most seeds) or extra ponds -------------------------------------
+    g.decor = { bridge: null, waterfall: null, village: null };
     const hasRiver = rng() < 0.62;
-    if (hasRiver) river(g, rng, hs, as);
+    let riv = null;
+    if (hasRiver) {
+      riv = river(g, rng, hs, as);
+      g.decor.bridge = placeBridge(g, rng, riv);
+    }
 
     // --- water ponds ------------------------------------------------------------
     const ponds = (hasRiver ? 1 : 3) + ((rng() * 2) | 0);
@@ -481,6 +514,59 @@ const MAPGEN = (function () {
     // harvester could ever reach
     const reach2 = reachMask(g, starts);
     for (let i = 0; i < n; i++) if (g.tib[i] > 0 && !reach2[i]) g.tib[i] = 0;
+
+    // --- waterfall: the westmost surviving river column, where the water
+    // spills out of the rocky rim (the fringe plugs the columns behind it)
+    if (hasRiver) {
+      outer:
+      for (let x = 1; x < 10; x++) {
+        for (let y = 1; y < H - 1; y++) {
+          if (g.terrain[cellIdx(x, y)] === T_WATER &&
+              (g.terrain[cellIdx(x - 1, y)] === T_ROCK || x === 1)) {
+            g.decor.waterfall = { cx: x, cy: y };
+            break outer;
+          }
+        }
+      }
+    }
+
+    // --- civilian hamlet: an 8x7 patch of open, tiberium-free ground well
+    // away from both bases (prefer close to the bridge — crossroads village)
+    {
+      let best = null, bestScore = -Infinity;
+      const bx = g.decor.bridge ? g.decor.bridge[(g.decor.bridge.length / 2) | 0] : null;
+      for (let a = 0; a < 90; a++) {
+        const vx = 4 + ((rng() * (W - 16)) | 0), vy = 4 + ((rng() * (H - 15)) | 0);
+        if (distC(vx + 4, vy + 3, hs.cx, hs.cy) < 18 || distC(vx + 4, vy + 3, as.cx, as.cy) < 18) continue;
+        let ok = true;
+        for (let dy = 0; dy < 7 && ok; dy++) {
+          for (let dx = 0; dx < 8; dx++) {
+            const idx = cellIdx(vx + dx, vy + dy);
+            const t = g.terrain[idx];
+            if ((t !== T_GRASS && t !== T_DIRT) || g.tib[idx] > 0 || !reach2[idx]) { ok = false; break; }
+          }
+        }
+        if (!ok) continue;
+        const score = bx ? -distC(vx + 4, vy + 3, bx.cx, bx.cy) : -Math.abs(vx - 32) - Math.abs(vy - 32);
+        if (score > bestScore) { bestScore = score; best = { vx, vy }; }
+      }
+      if (best) {
+        const { vx, vy } = best;
+        g.decor.village = {
+          houses: [
+            { type: 'vil1', cx: vx, cy: vy },
+            { type: 'vil2', cx: vx + 5, cy: vy + 1 },
+            { type: 'vil3', cx: vx + 1, cy: vy + 4 },
+            { type: 'vil2', cx: vx + 5, cy: vy + 4 },
+          ],
+          civs: [
+            { type: 'c1', cx: vx + 3, cy: vy + 2 },
+            { type: 'c2', cx: vx + 4, cy: vy + 3 },
+            { type: 'c1', cx: vx + 2, cy: vy + 3 },
+          ],
+        };
+      }
+    }
 
     // --- terrain variants for every cell -----------------------------------------
     for (let i = 0; i < n; i++) g.tvar[i] = (rng() * 4) | 0;

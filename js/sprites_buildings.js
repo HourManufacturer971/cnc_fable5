@@ -1700,6 +1700,7 @@
 
   for (const key of Object.keys(DATA.buildings)) {
     if (DATA.buildings[key].wall) continue; // walls have their own generator below
+    if (DATA.buildings[key].civ) continue;  // village houses too (end of file)
     SPRITES.buildings[key] = SPRITES.buildings[key] || {};
     for (const side of ['gdi', 'nod']) {
       const n = FRAME_COUNT[key] || 2;
@@ -1802,4 +1803,86 @@
   g.fillStyle = PAL.uiText; g.fillText('Concrete Wall', 32, 40, 62);
   g.fillStyle = PAL.uiGold; g.fillRect(0, 44, 64, 4);
   SPRITES.cameo.brik = cam;
+
+  // ==== CIVILIAN VILLAGE ========================================================
+  // Neutral houses (48x48, 2x2 cells): pitched roofs with a lit NW slope and a
+  // shaded SE slope, timber/plaster south facades, chimneys, SE cast shadows.
+
+  function _vilBase() {
+    const c = mkCanvas(48, 48);
+    const q = c.getContext('2d');
+    q.imageSmoothingEnabled = false;
+    return { c, q };
+  }
+  function VP(q, x, y, w, h, col) { q.fillStyle = col; q.fillRect(x, y, w, h); }
+
+  // gabled roof, ridge E-W: rows from ridge down to the eaves on both slopes
+  function _roof(q, x0, x1, ridgeY, depth, lit, mid, dark, ridgeCol) {
+    for (let i = 0; i < depth; i++) {
+      const w = x1 - x0 + i;                          // slight flare toward eaves
+      VP(q, x0 - (i >> 1), ridgeY - depth + i, w, 1, i < 2 ? lit : mid);       // north slope
+      VP(q, x0 - (i >> 1), ridgeY + i, w, 1, dark);                            // south slope
+    }
+    VP(q, x0 - (depth >> 1) + 1, ridgeY - 1, x1 - x0 + depth - 2, 1, ridgeCol); // ridge cap
+  }
+
+  function _houseFrame(kind, dmg) {
+    const { c, q } = _vilBase();
+    // cast shadow SE
+    q.fillStyle = 'rgba(10,12,8,0.35)';
+    q.fillRect(10, 38, 32, 5); q.fillRect(38, 16, 5, 24);
+
+    if (kind === 'vil1') {
+      // farmhouse: white plaster, terracotta roof, brick chimney
+      VP(q, 5, 26, 34, 14, '#101008');                       // outline mass
+      VP(q, 6, 27, 32, 12, '#d8d2c2');                       // plaster facade
+      VP(q, 6, 36, 32, 3, '#b6b0a0');                        // footing shade
+      _roof(q, 6, 38, 20, 9, '#c07858', '#a06048', '#7a4534', '#d8906c');
+      VP(q, 30, 8, 5, 10, '#7a746a'); VP(q, 30, 8, 5, 1, '#94908a'); // chimney
+      VP(q, 30, 8, 1, 10, '#8c887e');
+      VP(q, 19, 30, 6, 9, '#5a4530'); VP(q, 20, 31, 4, 7, '#6e563c'); // door
+      VP(q, 21, 34, 1, 1, '#c8a84c');                                  // handle
+      for (const wx of [9, 30]) {                                      // windows
+        VP(q, wx, 30, 6, 5, '#31414f'); VP(q, wx, 30, 2, 2, '#88a8c0');
+        VP(q, wx - 1, 35, 8, 1, '#b6b0a0');
+      }
+    } else if (kind === 'vil2') {
+      // cottage: stone footing, warm thatch roof, green door
+      VP(q, 8, 27, 30, 13, '#101008');
+      VP(q, 9, 28, 28, 11, '#c9c2ae');
+      VP(q, 9, 35, 28, 4, '#8e8878');                        // stone base
+      for (let k = 0; k < 6; k++) VP(q, 10 + k * 4, 36, 3, 1, '#7a7466');
+      _roof(q, 9, 37, 22, 8, '#b09a58', '#98803e', '#6f5c2c', '#c8b070');
+      VP(q, 26, 11, 4, 9, '#6e6a60'); VP(q, 26, 11, 4, 1, '#8a867c');
+      VP(q, 15, 31, 5, 8, '#3c5232'); VP(q, 16, 32, 3, 6, '#4c6840'); // door
+      VP(q, 24, 31, 5, 4, '#31414f'); VP(q, 24, 31, 2, 2, '#88a8c0'); // window
+    } else {
+      // barn: oxblood timber, grey roof, big X-braced door
+      VP(q, 4, 22, 38, 18, '#101008');
+      VP(q, 5, 23, 36, 16, '#8e3b2c');
+      VP(q, 5, 23, 36, 2, '#a54a38');
+      VP(q, 5, 36, 36, 3, '#6e2c20');
+      _roof(q, 5, 41, 16, 9, '#8a847a', '#787066', '#565048', '#9c968c');
+      VP(q, 17, 27, 12, 12, '#5f2418');                       // door
+      VP(q, 18, 28, 10, 10, '#7a3225');
+      q.strokeStyle = '#d8d2c2'; q.lineWidth = 1;              // white X braces
+      q.beginPath(); q.moveTo(18.5, 28.5); q.lineTo(27.5, 37.5);
+      q.moveTo(27.5, 28.5); q.lineTo(18.5, 37.5); q.stroke();
+      VP(q, 8, 27, 5, 4, '#31414f'); VP(q, 33, 27, 5, 4, '#31414f'); // side windows
+    }
+
+    if (dmg) {
+      // charring, roof holes, broken glass
+      q.fillStyle = 'rgba(16,12,8,0.45)';
+      q.fillRect(8, 14, 14, 8); q.fillRect(24, 30, 12, 8);
+      VP(q, 14, 16, 7, 4, '#14100c'); VP(q, 28, 12, 5, 3, '#14100c');
+      VP(q, 10, 32, 4, 3, '#1c1814'); VP(q, 30, 33, 4, 2, '#1c1814');
+    }
+    return c;
+  }
+
+  for (const key of ['vil1', 'vil2', 'vil3']) {
+    const entry = { normal: [_houseFrame(key, false)], damaged: [_houseFrame(key, true)] };
+    SPRITES.buildings[key] = { civ: entry, gdi: entry, nod: entry };
+  }
 })();

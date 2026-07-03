@@ -828,4 +828,30 @@
     };
     SPRITES.cameo[key] = buildCameo(key);
   }
+
+  // neutral villagers: plain clothes, bare heads, no weapon. Keyed by their
+  // 'civ' owner (never buildable, so no cameo needed).
+  function civCfg(kind) {
+    const cfg = makeCfg('e1', 'gdi');
+    cfg.type = kind;
+    cfg.weapon = 'none';
+    if (kind === 'c1') {
+      cfg.uniform = '#c8c4b8'; cfg.uniformHi = '#e8e4d8'; cfg.uniformDk = '#98948a';
+      cfg.pants = '#3a4a6a'; cfg.pantsDk = '#28344c';
+      cfg.hairTop = '#4a3624';
+      cfg.chest = '#c8c4b8';
+    } else {
+      cfg.uniform = '#9a4638'; cfg.uniformHi = '#c05a48'; cfg.uniformDk = '#6e3226';
+      cfg.pants = '#5a5348'; cfg.pantsDk = '#3e392f';
+      cfg.hairTop = '#6a5a2e';
+      cfg.chest = '#c05a48';
+    }
+    cfg.arm = cfg.uniform; cfg.armDk = cfg.uniformDk;
+    cfg.belt = '#4a3a28';
+    return cfg;
+  }
+  for (const kind of ['c1', 'c2']) {
+    const set = buildSet(civCfg(kind));
+    SPRITES.infantry[kind] = { civ: set, gdi: set, nod: set };
+  }
 })();

@@ -17,7 +17,7 @@
 // Math.random, never reads or writes game state besides terrain/tib/seed.
 
 const TERRAINPAINT = (function () {
-  const T_GRASS = 0, T_DIRT = 1, T_ROCK = 2, T_WATER = 3, T_TREE = 4, T_BLOSSOM = 5;
+  const T_GRASS = 0, T_DIRT = 1, T_ROCK = 2, T_WATER = 3, T_TREE = 4, T_BLOSSOM = 5, T_BRIDGE = 6;
 
   // ---- hashing / noise -------------------------------------------------------
 
@@ -292,6 +292,40 @@ const TERRAINPAINT = (function () {
     return out;
   }
 
+  // waterfall cascade (4 frames): falling streaks, boiling foam pool, mist
+  function waterfallFrames() {
+    const out = [];
+    for (let f = 0; f < 4; f++) {
+      const c = mkCanvas(24, 24); const q = c.getContext('2d');
+      q.imageSmoothingEnabled = false;
+      // translucent falling sheet
+      q.fillStyle = 'rgba(150,195,220,0.5)';
+      q.fillRect(4, 0, 16, 19);
+      // streaks race downward with the frame counter
+      for (let k = 0; k < 14; k++) {
+        const sx = 4 + ((h2(k, 3, 0xfa1) * 16) | 0);
+        const ph = (h2(k, 9, 0xfa2) * 4) | 0;
+        const y0 = ((f * 5 + ph * 6 + k * 3) % 22) - 4;
+        const len = 5 + ((h2(k, 5, 0xfa3) * 5) | 0);
+        q.fillStyle = k % 3 === 0 ? '#e2f2f8' : k % 3 === 1 ? '#b5d8e8' : '#8fc0d8';
+        q.fillRect(sx, Math.max(0, y0), 1, Math.min(len, 19 - Math.max(0, y0)));
+      }
+      // foam pool at the base, pulsing
+      for (let k = 0; k < 6; k++) {
+        const fx2 = 2 + ((h2(k, f, 0xfb1) * 19) | 0);
+        const fy2 = 18 + ((h2(f, k, 0xfb2) * 5) | 0);
+        ell(q, fx2, fy2, 2 + ((k + f) % 2), 1, k % 2 ? '#dceef2' : '#a8cfe0');
+      }
+      // drifting mist above the pool
+      q.globalAlpha = 0.45;
+      ell(q, 7 + f * 3, 15, 3, 1, '#eaf6fa');
+      ell(q, 17 - f * 2, 17, 2, 1, '#eaf6fa');
+      q.globalAlpha = 1;
+      out.push(c);
+    }
+    return out;
+  }
+
   // drifting glints for open-water cells (4 frames, transparent bg)
   function glintFrames(vs) {
     const marks = [];
@@ -329,9 +363,9 @@ const TERRAINPAINT = (function () {
     const rockF = new Float32Array(W * H);
     for (let i = 0; i < W * H; i++) {
       const t = g.terrain[i];
-      dirtF[i] = t === T_DIRT ? 1 : t === T_ROCK ? 0.9 : t === T_WATER ? 0.6 :
+      dirtF[i] = t === T_DIRT ? 1 : t === T_ROCK ? 0.9 : (t === T_WATER || t === T_BRIDGE) ? 0.6 :
                  t === T_BLOSSOM ? 0.5 : t === T_TREE ? 0.2 : 0;
-      waterF[i] = t === T_WATER ? 1 : 0;
+      waterF[i] = (t === T_WATER || t === T_BRIDGE) ? 1 : 0;   // water flows under decks
       rockF[i] = t === T_ROCK ? 1 : 0;
     }
 
@@ -379,8 +413,10 @@ const TERRAINPAINT = (function () {
           rampSel = dv > 0.55 ? DR : dv > 0.45 ? ((dv - 0.45) * 10 > gr ? DR : GR) : GR;
         }
         let t = 0.5 + (m - 0.5) * 0.85 + (gr - 0.5) * 0.34;
-        if (wv > 0.33) {
+        if (rampSel === RK && r > 0.8) t += 0.17;   // raised plateau tops read lighter
+        if (wv > 0.33 && rampSel !== RK) {
           // wet shoreline band on the land side, dither-blended
+          // (rock stays rock at the waterline — cliffs drop straight in)
           const k = (wv - 0.33) / 0.17;
           if (wv > 0.465 && gr > 0.8) { px[o] = U_FOAMD; continue; }
           if (gr < k) rampSel = WET;
@@ -432,7 +468,9 @@ const TERRAINPAINT = (function () {
       }
     }
 
-    // boulder outcrops on rock cells (+ scree spilling onto neighbours)
+    // rock zones read as raised mesas: sunlit north rims, west-lit and
+    // east-shaded flanks, and a stratified cliff wall on south-facing edges.
+    // Lone rock cells (no rocky neighbours) stay boulder piles.
     for (let cy = 0; cy < H; cy++) {
       for (let cx = 0; cx < W; cx++) {
         const i = cellIdx(cx, cy);
@@ -444,43 +482,87 @@ const TERRAINPAINT = (function () {
             else if (cx < W - 1 && g.terrain[i + 1] === T_ROCK) near = true;
             else if (cy > 0 && g.terrain[i - W] === T_ROCK) near = true;
             else if (cy < H - 1 && g.terrain[i + W] === T_ROCK) near = true;
-            if (near && h2(cx, cy, seed ^ 0x5c3e) < 0.5) {
+            if (near && h2(cx, cy, seed ^ 0x5c3e) < 0.4) {
               pebbles(q, cx * CS + 8 + ((h2(cy, cx, 0x71) * 8) | 0), cy * CS + 8 + ((h2(cx, cy, 0x72) * 8) | 0), h2(cx, cy, 0x73));
             }
           }
           continue;
         }
-        // count 8-neighbourhood rock to size the formation
-        let n8 = 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            if (!dx && !dy) continue;
-            const nx = cx + dx, ny = cy + dy;
-            if (inMap(nx, ny) && g.terrain[cellIdx(nx, ny)] === T_ROCK) n8++;
-          }
-        }
+        const rockAt = (x, y) => inMap(x, y) && g.terrain[cellIdx(x, y)] === T_ROCK;
+        const nN = rockAt(cx, cy - 1), nS = rockAt(cx, cy + 1);
+        const nW = rockAt(cx - 1, cy), nE = rockAt(cx + 1, cy);
         const bh = h2(cx, cy, seed ^ 0xb01d);
-        const jx = cx * CS + 10 + ((bh * 9) | 0) - 4;
-        const jy = cy * CS + 10 + ((h2(cy, cx, seed ^ 0xb02d) * 9) | 0) - 4;
-        // vary hard so outcrops don't read as bubble-wrap: some cells get one
-        // big slab, some a pair, some just bare rocky ground with rubble
-        if (n8 >= 6) {
-          if (bh < 0.35) boulder(q, jx + 1, jy + 1, 7 + ((bh * 9) | 0), bh);
-          else if (bh < 0.7) boulder(q, jx - 1, jy, 4 + ((bh * 4) | 0), bh);
-          else pebbles(q, jx, jy, bh);
-        } else if (n8 >= 3) {
-          if (bh < 0.55) {
-            boulder(q, jx - 2, jy - 2, 4 + ((bh * 4) | 0), bh);
-            if (bh < 0.25) boulder(q, jx + 6, jy + 5, 3, 1 - bh);
-          } else if (bh < 0.85) {
-            boulder(q, jx + 2, jy + 1, 3 + ((bh * 3) | 0), bh);
-          } else {
-            pebbles(q, jx, jy, bh); pebbles(q, jx + 5, jy + 6, 1 - bh);
-          }
-        } else {
-          boulder(q, jx, jy, 3 + ((bh * 3) | 0), bh);
-          if (bh > 0.6) pebbles(q, jx + 6, jy + 4, bh);
+        const bx = cx * CS, by = cy * CS;
+        if (!nN && !nS && !nW && !nE) {
+          // isolated crag: a boulder pile, not a mesa
+          boulder(q, bx + 11, by + 11, 5 + ((bh * 3) | 0), bh);
+          if (bh > 0.5) boulder(q, bx + 5 + ((bh * 4) | 0), by + 16, 3, 1 - bh);
+          continue;
         }
+        if (!nS) {
+          // south-facing cliff wall: sunlit lip, stratified face, dark footing
+          P(q, bx, by + 9, CS, 1, '#8a8a80');
+          P(q, bx, by + 10, CS, 1, '#6e6e64');
+          P(q, bx, by + 11, CS, 11, '#4a4a42');
+          P(q, bx, by + 14, CS, 1, '#3f3f38');           // strata bands
+          P(q, bx, by + 18, CS, 1, '#3b3b34');
+          for (let k = 0; k < 5; k++) {                   // vertical cracks + facets
+            const fx = bx + 1 + ((h2(cx * 5 + k, cy, seed ^ 0xcf1) * 22) | 0);
+            const fl = 4 + ((h2(k, cx + cy, seed ^ 0xcf2) * 7) | 0);
+            P(q, fx, by + 11, 1, fl, '#33332e');
+            if (k < 3) P(q, fx + 1, by + 11, 1, Math.max(2, fl - 3), '#57574e');
+          }
+          P(q, bx, by + 22, CS, 2, '#2d2d28');
+          pebbles(q, bx + 4 + ((bh * 12) | 0), by + 21, bh);
+        }
+        if (!nN) {
+          // sunlit top rim
+          P(q, bx, by, CS, 1, '#93938a');
+          P(q, bx, by + 1, CS, 1, '#7c7c74');
+        }
+        if (!nW) { P(q, bx, by, 1, CS, '#88887e'); P(q, bx + 1, by, 1, CS, '#70706a'); }
+        if (!nE) { P(q, bx + CS - 2, by, 1, CS, '#45453f'); P(q, bx + CS - 1, by, 1, CS, '#3a3a35'); }
+        if (nN && nS && nW && nE) {
+          // plateau top: sparse crags, cracks and rubble
+          if (bh < 0.18) boulder(q, bx + 8 + ((bh * 40) | 0), by + 9 + ((h2(cy, cx, 0xb03) * 8) | 0), 3 + ((bh * 16) | 0), bh);
+          else if (bh < 0.45) crack(q, bx + 4 + ((bh * 24) | 0), by + 6 + ((h2(cy, cx, 0xb04) * 12) | 0), bh);
+          else if (bh < 0.6) pebbles(q, bx + 6 + ((bh * 14) | 0), by + 8 + ((h2(cx, cy, 0xb05) * 10) | 0), bh);
+        }
+      }
+    }
+
+    // bridge decks over the water (planks run with the world grid, so decks
+    // join seamlessly across cells; rails and end aprons mark the crossings)
+    for (let cy = 0; cy < H; cy++) {
+      for (let cx = 0; cx < W; cx++) {
+        if (g.terrain[cellIdx(cx, cy)] !== T_BRIDGE) continue;
+        const bx = cx * CS, by = cy * CS;
+        const up = inMap(cx, cy - 1) && g.terrain[cellIdx(cx, cy - 1)] === T_BRIDGE;
+        const dn = inMap(cx, cy + 1) && g.terrain[cellIdx(cx, cy + 1)] === T_BRIDGE;
+        // under-deck shade on the visible waterline slivers
+        P(q, bx + 1, by, 1, CS, 'rgba(6,10,16,0.4)');
+        P(q, bx + 22, by, 1, CS, 'rgba(6,10,16,0.4)');
+        // timber deck
+        P(q, bx + 2, by, 20, CS, '#7d5f3c');
+        for (let y = 0; y < CS; y++) {
+          if ((by + y) % 4 === 3) P(q, bx + 3, by + y, 18, 1, '#67492c');   // plank seams
+        }
+        for (let k = 0; k < 6; k++) {                                       // worn grain
+          const gy2 = by + ((h2(cx * 7 + k, cy, seed ^ 0xbd1) * 22) | 0);
+          P(q, bx + 4 + ((h2(k, cx + cy, seed ^ 0xbd2) * 14) | 0), gy2, 2 + (k & 1), 1, '#8d6d46');
+        }
+        // edge beams + rail posts
+        P(q, bx + 2, by, 2, CS, '#5b452a');
+        P(q, bx + 20, by, 2, CS, '#4e3a23');
+        for (let y = 1; y < CS; y += 6) {
+          P(q, bx + 1, by + y, 2, 3, '#3d2e1c');
+          P(q, bx + 21, by + y, 2, 3, '#3d2e1c');
+          P(q, bx + 1, by + y, 2, 1, '#5b452a');
+          P(q, bx + 21, by + y, 2, 1, '#5b452a');
+        }
+        // end aprons flare onto the banks
+        if (!up) { P(q, bx, by, CS, 2, '#8a6a42'); P(q, bx, by, CS, 1, '#9c7a4e'); }
+        if (!dn) { P(q, bx, by + CS - 2, CS, 2, '#8a6a42'); P(q, bx, by + CS - 1, CS, 1, '#6a4f31'); }
       }
     }
 
@@ -540,6 +622,9 @@ const TERRAINPAINT = (function () {
     const anim = [];
     const bloF = blossomOverlay();
     const gliV = [glintFrames(0x31), glintFrames(0x62), glintFrames(0x93)];
+    if (g.decor && g.decor.waterfall) {
+      anim.push({ cx: g.decor.waterfall.cx, cy: g.decor.waterfall.cy, frames: waterfallFrames(), phase: 0, rate: 2 });
+    }
     for (let cy = 0; cy < H; cy++) {
       for (let cx = 0; cx < W; cx++) {
         const i = cellIdx(cx, cy);
