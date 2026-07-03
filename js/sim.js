@@ -298,6 +298,13 @@ function orderEnter(u, target) {
 }
 
 function stopUnit(u) {
+  // release a mid-transit cell commit; a stopped unit never steps again to
+  // heal its own bookkeeping
+  if (u._commit >= 0) {
+    clearOcc(u._commit % C.MAP_W, (u._commit / C.MAP_W) | 0, u.id);
+    u._commit = -1;
+    if (!DATA.units[u.type].air) setOcc(worldToCell(u.x), worldToCell(u.y), u.id);
+  }
   u.path = [];
   u.pathi = 0;
   u.targetId = 0;
@@ -319,6 +326,13 @@ function _stepAlongPath(u, d) {
   // commit to the next cell before physically entering it
   const wantIdx = cellIdx(wp.cx, wp.cy);
   if (u._commit !== wantIdx) {
+    // heal a stale commit left by an abandoned path (re-order mid-transit):
+    // release the old committed cell and re-anchor on the cell we stand in
+    if (u._commit >= 0) {
+      clearOcc(u._commit % C.MAP_W, (u._commit / C.MAP_W) | 0, u.id);
+      u._commit = -1;
+      if (!occAt(curCx, curCy)) setOcc(curCx, curCy, u.id);
+    }
     if (!isPassable(wp.cx, wp.cy, u)) {
       // occupied: repath toward final destination
       u._repathFails = (u._repathFails || 0) + 1;
@@ -780,9 +794,23 @@ function _tickUnit(u) {
 
   switch (u.state) {
     case 'move': {
+      // a unit jammed by traffic retries toward its ordered destination a few
+      // times (staggered) before giving up, instead of freezing on the spot
+      if (u._retryAt && u.moveTarget && u.pathi >= u.path.length) {
+        if (g.tick < u._retryAt) break;
+        u._retryAt = 0;
+        u.path = findPath(u, u.moveTarget.cx, u.moveTarget.cy);
+        u.pathi = 0;
+      }
       const r = _stepAlongPath(u, d);
+      if (r === 'blocked' && u.moveTarget && (u._blockRetries = (u._blockRetries || 0) + 1) <= 6) {
+        u._retryAt = g.tick + 12 + ((u.id * 7) % 10);
+        break;
+      }
       if (r === 'arrived' || r === 'blocked') {
+        if (u._retryAt && u.moveTarget) break; // retry pending — not done yet
         u.state = 'idle';
+        u._blockRetries = 0;
         if (!u.guardAnchor) u.guardAnchor = { x: u.x, y: u.y };
       }
       break;

@@ -371,6 +371,9 @@ function removeUnit(u) {
   const ids = game.players[u.owner].unitIds;
   const i = ids.indexOf(u.id); if (i >= 0) ids.splice(i, 1);
   clearOcc(worldToCell(u.x), worldToCell(u.y), u.id);
+  // a unit removed mid-step still holds its committed next cell — release it,
+  // or the cell stays marked with a dead id forever (a phantom wall)
+  if (u._commit >= 0) clearOcc(u._commit % C.MAP_W, (u._commit / C.MAP_W) | 0, u.id);
   if (game.selection.includes(u.id)) game.selection = game.selection.filter(id => id !== u.id);
 }
 
