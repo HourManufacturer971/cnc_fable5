@@ -32,6 +32,14 @@ const Main = (function () {
       AUDIO.setEnabled(!AUDIO.enabled);
       $('btnSound').textContent = 'Sound: ' + (AUDIO.enabled ? 'ON' : 'OFF');
     });
+    // soundtrack toggle, persisted across sessions
+    if (localStorage.getItem('td_music') === '0') MUSIC.setEnabled(false);
+    $('btnMusic').textContent = 'Music: ' + (MUSIC.enabled ? 'ON' : 'OFF');
+    $('btnMusic').addEventListener('click', () => {
+      MUSIC.setEnabled(!MUSIC.enabled);
+      localStorage.setItem('td_music', MUSIC.enabled ? '1' : '0');
+      $('btnMusic').textContent = 'Music: ' + (MUSIC.enabled ? 'ON' : 'OFF');
+    });
     $('speedSlider').addEventListener('input', ev => {
       if (game) game.speed = ev.target.value / 100;
     });
@@ -52,7 +60,7 @@ const Main = (function () {
 
     // URL params for testing: ?side=&seed=&nomenu=1&mute=1
     const q = new URLSearchParams(location.search);
-    if (q.get('mute')) AUDIO.setEnabled(false);
+    if (q.get('mute')) { AUDIO.setEnabled(false); MUSIC.setEnabled(false); }
     if (q.get('nomenu')) {
       AUDIO.init();
       startGame(q.get('side') === 'nod' ? 'nod' : 'gdi',
@@ -101,6 +109,7 @@ const Main = (function () {
 
     game = makeGame({ side, seed: opts.seed });
     window.game = game;
+    MUSIC.start();
     MAPGEN.generate(game, game.seed);
     Fog.init(game);
 

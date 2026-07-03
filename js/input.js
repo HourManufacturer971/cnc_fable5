@@ -332,6 +332,15 @@ const Input = (function () {
     const sel = _selectedUnits();
     const ownSel = sel.filter(u => u.owner === g.humanSide);
 
+    // Ctrl+click: focus fire on ANY unit or building — friend, foe or neutral
+    if (ctrl && ent && ownSel.length) {
+      let acted = false;
+      for (const u of ownSel) if (orderAttack(u, ent)) acted = true;
+      if (acted) AUDIO.ack('attack', _selClass());
+      else AUDIO.play('buzz');
+      return;
+    }
+
     if (ent && ent.owner === g.humanSide) {
       // MCV deploy on second click
       if (ent.kind === 'unit' && DATA.units[ent.type].deploysTo &&
@@ -581,6 +590,8 @@ const Input = (function () {
     }
 
     const sel = _selectedUnits().filter(u => u.owner === g.humanSide);
+    // Ctrl held = focus-fire mode: attack cursor over any entity
+    if (keys['Control'] && ent && sel.some(u => DATA.units[u.type].weapon)) return 'attack';
     if (ent && ent.owner === g.humanSide) {
       if (ent.kind === 'unit' && DATA.units[ent.type].deploysTo && sel.length === 1 && sel[0].id === ent.id) {
         return 'deploy';

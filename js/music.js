@@ -1,0 +1,291 @@
+'use strict';
+// music.js — procedural soundtrack. Defines exactly one global: MUSIC.
+// Two original tracks composed for this project, synthesized live with
+// WebAudio and sequenced on a lookahead clock: dark, driving electronic /
+// industrial in the spirit of mid-90s RTS scores. All note data here is
+// original. Mixed low and glued with a compressor so it sits under the SFX.
+//
+// MUSIC.start()            begin playback (creates the AudioContext lazily —
+//                          call from a user-gesture handler)
+// MUSIC.stop()             halt playback
+// MUSIC.setEnabled(bool)   user toggle; persisted by main.js
+// MUSIC.enabled            current toggle state
+
+const MUSIC = (function () {
+  let ctx = null, master = null, delaySend = null;
+  let enabled = true, running = false;
+  let timer = 0, nextTime = 0, step = 0, pos = 0, loops = 0, trackIdx = 0;
+  let noiseBuf = null;
+
+  const mf = m => 440 * Math.pow(2, (m - 69) / 12);   // midi -> Hz
+
+  // ---- voices -----------------------------------------------------------------
+
+  function _noise() {
+    if (noiseBuf) return noiseBuf;
+    const b = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+    const d = b.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    noiseBuf = b;
+    return b;
+  }
+
+  function kick(t, acc) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(42, t + 0.1);
+    g.gain.setValueAtTime(acc ? 1.0 : 0.8, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.16);
+    o.connect(g).connect(master);
+    o.start(t); o.stop(t + 0.18);
+  }
+
+  function snare(t) {
+    const n = ctx.createBufferSource(); n.buffer = _noise();
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1900; f.Q.value = 0.8;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.5, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.13);
+    n.connect(f).connect(g).connect(master);
+    n.start(t, Math.random()); n.stop(t + 0.15);
+    const o = ctx.createOscillator(); o.type = 'triangle';
+    o.frequency.setValueAtTime(210, t);
+    o.frequency.exponentialRampToValueAtTime(130, t + 0.06);
+    const og = ctx.createGain();
+    og.gain.setValueAtTime(0.32, t);
+    og.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    o.connect(og).connect(master);
+    o.start(t); o.stop(t + 0.1);
+  }
+
+  function hat(t, open) {
+    const n = ctx.createBufferSource(); n.buffer = _noise();
+    const f = ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 7600;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(open ? 0.22 : 0.15, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + (open ? 0.11 : 0.035));
+    n.connect(f).connect(g).connect(master);
+    n.start(t, Math.random()); n.stop(t + 0.13);
+  }
+
+  function tom(t, hz) {
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(hz, t);
+    o.frequency.exponentialRampToValueAtTime(hz * 0.55, t + 0.12);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.5, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    o.connect(g).connect(master);
+    o.start(t); o.stop(t + 0.22);
+  }
+
+  function bass(t, midi, len) {
+    const f0 = mf(midi);
+    const o1 = ctx.createOscillator(); o1.type = 'sawtooth'; o1.frequency.value = f0;
+    const o2 = ctx.createOscillator(); o2.type = 'square'; o2.frequency.value = f0 / 2;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 5;
+    lp.frequency.setValueAtTime(1100, t);
+    lp.frequency.exponentialRampToValueAtTime(320, t + Math.max(0.08, len * 0.7));
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.linearRampToValueAtTime(0.34, t + 0.008);
+    g.gain.setValueAtTime(0.34, t + len * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.001, t + len);
+    const g2 = ctx.createGain(); g2.gain.value = 0.5;
+    o1.connect(lp);
+    o2.connect(g2).connect(lp);
+    lp.connect(g).connect(master);
+    o1.start(t); o1.stop(t + len + 0.02);
+    o2.start(t); o2.stop(t + len + 0.02);
+  }
+
+  function lead(t, midi, len) {
+    const f0 = mf(midi);
+    for (const det of [-5, 5]) {
+      const o = ctx.createOscillator(); o.type = 'sawtooth';
+      o.frequency.value = f0; o.detune.value = det;
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.linearRampToValueAtTime(0.075, t + 0.02);
+      g.gain.setValueAtTime(0.075, t + len * 0.7);
+      g.gain.exponentialRampToValueAtTime(0.001, t + len + 0.05);
+      o.connect(lp).connect(g);
+      g.connect(master);
+      g.connect(delaySend);
+      o.start(t); o.stop(t + len + 0.1);
+    }
+  }
+
+  function pad(t, midis, len) {
+    for (const m of midis) {
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = mf(m);
+      const o2 = ctx.createOscillator(); o2.type = 'triangle'; o2.frequency.value = mf(m) * 1.005;
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 850;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.001, t);
+      g.gain.linearRampToValueAtTime(0.05, t + len * 0.35);
+      g.gain.setValueAtTime(0.05, t + len * 0.7);
+      g.gain.linearRampToValueAtTime(0.001, t + len);
+      o.connect(lp); o2.connect(lp);
+      lp.connect(g).connect(master);
+      o.start(t); o.stop(t + len + 0.05);
+      o2.start(t); o2.stop(t + len + 0.05);
+    }
+  }
+
+  // ---- tracks (original compositions) ------------------------------------------
+  // 16 steps per bar. Drum strings: '.' rest, '1' hit, '2' accent/open.
+  // bass/lead: arrays of [step, midi, lenInSteps]. pad: chords per bar.
+
+  // E minor. Relentless low riff, straight backbeat, sparse pentatonic calls.
+  const T1 = {
+    bpm: 114,
+    bars: {
+      // drums only — dry machine groove
+      a: { k: '1...1...1...1.1.', s: '....1.......1...', h: '1.1.1.1.1.1.1.1.' },
+      // main riff enters
+      b: {
+        k: '1...1...1...1.1.', s: '....1.......1...', h: '1.1.1.1.1.1.1.12',
+        bass: [[0, 28, 2], [3, 28, 1], [6, 31, 2], [8, 28, 2], [11, 33, 1], [12, 31, 2], [14, 28, 2]],
+      },
+      // riff + answer phrase up top
+      c: {
+        k: '1...1...1...1.1.', s: '....1.......1...', h: '1.1.1.1.1.1.1.12',
+        bass: [[0, 28, 2], [3, 28, 1], [6, 31, 2], [8, 28, 2], [11, 33, 1], [12, 31, 2], [14, 28, 2]],
+        lead: [[0, 52, 3], [6, 55, 2], [8, 57, 4], [14, 50, 2]],
+      },
+      // lift: riff walks up to A, second phrase
+      d: {
+        k: '1...1...1...1.1.', s: '....1.......1...', h: '1.1.1.1.1.1.1.12',
+        bass: [[0, 33, 2], [3, 33, 1], [6, 36, 2], [8, 33, 2], [11, 31, 1], [12, 28, 2], [14, 26, 2]],
+        lead: [[2, 59, 3], [8, 57, 3], [12, 55, 4]],
+      },
+      // breakdown — pad and hats, bass drops out
+      e: {
+        h: '..1...1...1...2.', pad: [[40, 47, 52]],
+        bass: [[0, 28, 12]],
+      },
+      f: { h: '..1...1...1...2.', pad: [[36, 43, 48]], bass: [[0, 24, 12]] },
+      // rebuild
+      g: {
+        k: '1.......1.......', s: '....1.......1..1', h: '1.1.1.1.1.1.1.12',
+        bass: [[0, 28, 2], [6, 31, 2], [8, 28, 2], [12, 31, 2], [14, 28, 2]],
+      },
+    },
+    order: ['a', 'b', 'b', 'c', 'd', 'b', 'c', 'd', 'e', 'f', 'g', 'b', 'c', 'c', 'd', 'd'],
+  };
+
+  // D minor, slower. Sub pulse, toms, a patient rising arpeggio. Night patrol.
+  const T2 = {
+    bpm: 96,
+    bars: {
+      a: {
+        k: '1.....1.1.......', h: '..1...1...1...1.',
+        bass: [[0, 26, 3], [8, 26, 3]],
+      },
+      b: {
+        k: '1.....1.1.......', s: '....1.......1...', h: '..1...1...1...1.',
+        bass: [[0, 26, 3], [8, 26, 2], [12, 29, 2]],
+        lead: [[0, 50, 1], [2, 53, 1], [4, 57, 1], [6, 60, 1], [8, 57, 1], [10, 53, 1], [12, 50, 3]],
+      },
+      c: {
+        k: '1.....1.1.......', s: '....1.......1...', h: '..1...1...1...1.',
+        toms: [[10, 130], [11, 110], [14, 90]],
+        bass: [[0, 24, 3], [8, 24, 2], [12, 26, 2]],
+        lead: [[0, 48, 1], [2, 51, 1], [4, 55, 1], [6, 58, 1], [8, 60, 2], [12, 58, 3]],
+      },
+      d: { pad: [[38, 45, 50]], h: '......1.......1.', bass: [[0, 26, 14]] },
+    },
+    order: ['a', 'a', 'b', 'b', 'c', 'b', 'c', 'c', 'd', 'a', 'b', 'b', 'c', 'c', 'd', 'd'],
+  };
+
+  const TRACKS = [T1, T2];
+
+  // ---- sequencer -----------------------------------------------------------------
+
+  function _scheduleBarStep(tr, barKey, s, t, stepDur) {
+    const b = tr.bars[barKey];
+    if (!b) return;
+    if (b.k && b.k[s] !== '.') kick(t, b.k[s] === '2');
+    if (b.s && b.s[s] !== '.') snare(t);
+    if (b.h && b.h[s] !== '.') hat(t, b.h[s] === '2');
+    if (b.toms) for (const [ts, hz] of b.toms) if (ts === s) tom(t, hz);
+    if (b.bass) for (const [bs, m, l] of b.bass) if (bs === s) bass(t, m, l * stepDur);
+    if (b.lead) for (const [ls, m, l] of b.lead) if (ls === s) lead(t, m, l * stepDur);
+    if (b.pad && s === 0) for (const chord of b.pad) pad(t, chord, 16 * stepDur);
+  }
+
+  function _tick() {
+    if (!running) return;
+    const tr = TRACKS[trackIdx];
+    const stepDur = 60 / tr.bpm / 4;
+    while (nextTime < ctx.currentTime + 0.28) {
+      _scheduleBarStep(tr, tr.order[pos], step, nextTime, stepDur);
+      nextTime += stepDur;
+      step++;
+      if (step >= 16) {
+        step = 0;
+        pos++;
+        if (pos >= tr.order.length) {
+          pos = 0;
+          loops++;
+          if (loops >= 2) {          // rotate tracks with a breather between
+            loops = 0;
+            trackIdx = (trackIdx + 1) % TRACKS.length;
+            nextTime += 2.5;
+          }
+        }
+      }
+    }
+  }
+
+  // ---- control --------------------------------------------------------------------
+
+  function _ensureCtx() {
+    if (ctx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    ctx = new AC();
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -22; comp.ratio.value = 3.5;
+    comp.attack.value = 0.006; comp.release.value = 0.2;
+    master = ctx.createGain();
+    master.gain.value = 0.15;
+    master.connect(comp).connect(ctx.destination);
+    // shared echo for the lead voice
+    delaySend = ctx.createGain(); delaySend.gain.value = 0.4;
+    const dl = ctx.createDelay(1.0); dl.delayTime.value = 0.29;
+    const fb = ctx.createGain(); fb.gain.value = 0.34;
+    const damp = ctx.createBiquadFilter(); damp.type = 'lowpass'; damp.frequency.value = 1800;
+    delaySend.connect(dl); dl.connect(damp); damp.connect(fb); fb.connect(dl);
+    damp.connect(master);
+  }
+
+  function start() {
+    if (!enabled || running) return;
+    _ensureCtx();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') ctx.resume();
+    running = true;
+    step = 0; pos = 0; loops = 0;
+    nextTime = ctx.currentTime + 0.1;
+    timer = setInterval(_tick, 60);
+  }
+
+  function stop() {
+    running = false;
+    if (timer) { clearInterval(timer); timer = 0; }
+  }
+
+  function setEnabled(on) {
+    enabled = !!on;
+    if (!enabled) stop();
+    else if (game && game.status === 'playing') start();
+  }
+
+  return {
+    start, stop, setEnabled,
+    get enabled() { return enabled; },
+  };
+})();

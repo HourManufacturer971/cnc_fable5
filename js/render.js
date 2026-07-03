@@ -355,7 +355,10 @@ const Render = (function () {
       g.shake--;
     } else if (!g.shake) { shakeX = 0; shakeY = 0; }
 
-    const ox = g.camera.x - shakeX, oy = g.camera.y - shakeY;
+    // integer draw origin: the camera can sit at fractional world coords
+    // (wheel pan, minimap drag) and per-cell fills at subpixel positions
+    // antialias into hairline seams — a visible grid inside the shroud
+    const ox = Math.round(g.camera.x - shakeX), oy = Math.round(g.camera.y - shakeY);
     const X = w => (w - ox) * Z;
     const Y = w => (w - oy) * Z + C.TAB_H;
     const cs = C.CELL * Z;
