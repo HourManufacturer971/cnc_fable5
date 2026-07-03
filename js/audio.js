@@ -370,6 +370,40 @@ const AUDIO = (function () {
         [[0, 0.001], [0.02, 0.2], [d * 0.7, 0.001]]);
     },
 
+    // infantry death: a soft body-drop thud + a very short downward vocal
+    // groan + a tiny gear/dogtag rattle. Tasteful, not gory — distinct from
+    // both weapon-impact sounds and the wet crush/squish cue.
+    infDeath(t) {
+      const d = vr(0.22);
+      noiseHit(t, d, 'lowpass', [[0, vr(500)], [d, 110]], 1,
+        [[0, 0.001], [0.008, 0.22], [d, 0.001]]);
+      thump(t, vr(190), 70, 0.16, 0.16);
+      // short breathy groan: a brief formant-ish downward tone, not a beep
+      tone(t + 0.02, 0.16, 'triangle', [[0, vr(240, 0.15)], [0.16, 120]],
+        [[0, 0.001], [0.015, 0.1], [0.16, 0.001]],
+        { filt: ['lowpass', 1, [[0, 900]]] });
+      noiseHit(t + 0.05, 0.05, 'highpass', [[0, 4200]], 4,
+        [[0, 0.001], [0.004, 0.05], [0.05, 0.001]]); // gear rattle
+    },
+
+    // vehicle destroyed: expL's boom plus a metallic ping (shrapnel) and a
+    // delayed smaller cook-off pop — reads as "wreck," not just "hit."
+    vehDeath(t) {
+      SFX.expL(t);
+      const f = vr(1900, 0.1);
+      tone(t + 0.03, 0.3, 'triangle', [[0, f], [0.3, f * 0.4]],
+        [[0, 0.001], [0.006, 0.1], [0.3, 0.001]],
+        { filt: ['bandpass', 3, [[0, f]]] });
+      tone(t + 0.05, 0.22, 'triangle', [[0, f * 1.4], [0.22, f * 0.5]],
+        [[0, 0.001], [0.006, 0.06], [0.22, 0.001]],
+        { filt: ['bandpass', 3, [[0, f * 1.4]]] });
+      const ct = t + rnd(0.16, 0.26); // secondary ammo cook-off
+      snap(ct, 1000, 0.22);
+      noiseHit(ct, 0.3, 'lowpass', [[0, vr(1600)], [0.3, 100]], 1,
+        [[0, 0.001], [0.006, 0.3], [0.3, 0.001]], { pink: true, send: 0.3 });
+      thump(ct, vr(90), 32, 0.26, 0.32);
+    },
+
     // 2s air-raid wail: two detuned saws behind a lowpass + faint breath
     nukeSiren(t) {
       const dets = [0, 5];

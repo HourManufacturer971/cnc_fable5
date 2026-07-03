@@ -168,16 +168,22 @@ const AI = (function () {
     }
     if (_planned(g, p, 'proc') < 1) return 'proc';
     if (_planned(g, p, inf) < 1) return inf;
+    // vehicle factory (weap/afld) checked BEFORE hq/defense, with a threshold
+    // no higher than either of theirs: a cheaper, lower-priority project must
+    // never be able to jump the queue just because the AI's credits happen to
+    // cross its lower bar first — the AI was going a whole game without ever
+    // building afld/weap this way, which meant no vehicles, ever.
+    if (_planned(g, p, veh) < 1 && p.credits > 1200) return veh;
     if (_planned(g, p, 'proc') < 2 && p.credits > 1800) return 'proc';
-    if (_planned(g, p, veh) < 1 && p.credits > 1400) return veh;
     if (_planned(g, p, 'hq') < 1 && p.credits > 1200) return 'hq';
 
-    // defense line grows with the war
+    // defense line grows with the war — but only once the vehicle factory
+    // exists, so early credits go toward unlocking tanks, not just walls
     const defWant = Math.min(2 + Math.floor(S.wave / 2) + (g.tick > 9000 ? 1 : 0), 6);
     const defHave = _defenseSpots(g, p).length +
       (p.queues.building && ROLE[p.queues.building.key] === 'defense' ? 1 : 0) +
       (p.ready.building && ROLE[p.ready.building] === 'defense' ? 1 : 0);
-    if (defHave < defWant && p.credits > 800) {
+    if (_planned(g, p, veh) >= 1 && defHave < defWant && p.credits > 800) {
       const want = DEF_PLAN[side][Math.min(defHave, DEF_PLAN[side].length - 1)];
       if (Production.prereqOk(p, want)) return want;
     }

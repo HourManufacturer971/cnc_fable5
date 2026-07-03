@@ -1099,12 +1099,14 @@ function killEntity(ent, attacker) {
           addUnit(v);
           _maybePlay('squish', ent.x, ent.y);
         }
+      } else {
+        _maybePlay('infDeath', ent.x, ent.y);
       }
     } else {
       const big = d.hp >= 300 || d.harvester;
       spawnEffect(big ? 'expL' : 'expS', ent.x, ent.y);
       if (!d.air) spawnEffect('scorch', ent.x, ent.y);
-      _maybePlay(big ? 'expL' : 'expS', ent.x, ent.y);
+      _maybePlay(d.air ? (big ? 'expL' : 'expS') : 'vehDeath', ent.x, ent.y);
     }
     if (ent.owner === human) {
       g.stats.losses++;

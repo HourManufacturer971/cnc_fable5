@@ -94,16 +94,22 @@
       toolbox: false,
       jet: null,              // 3 flame-jet colors used in fire pose
       backblast: false,       // rocket launcher blast behind tube
+      chestBand: false,       // wide 3px chest bandolier instead of a single dot
     };
     switch (type) {
-      case 'e2': // Grenadier: bulky backpack, throws in fire frames
+      case 'e2': // Grenadier: cool slate-blue beret + bandolier — a cold hue
+        // reads apart from e1's warm gold and e3's rust at a glance
+        cfg.helmet = '#3c4a5c'; cfg.helmetHi = '#5c7290'; cfg.helmetDk = '#242e3a';
+        cfg.chest = '#5c7ca0'; cfg.chestBand = true;
         cfg.weapon = 'throw';
         cfg.packStyle = 'box';
         cfg.pack = gdi ? '#8a7440' : '#565662';
         cfg.packHi = gdi ? '#ac9458' : '#787886';
         cfg.packDk = gdi ? '#5e4e28' : '#3a3a44';
         break;
-      case 'e3': // Rocket Soldier: big tube on the shoulder + backblast
+      case 'e3': // Rocket Soldier: rust helmet + red bandolier, tube + backblast
+        cfg.helmet = '#8a4a24'; cfg.helmetHi = '#b06e42'; cfg.helmetDk = '#5c3012';
+        cfg.chest = '#c83820'; cfg.chestBand = true;
         cfg.weapon = 'tube';
         cfg.backblast = true;
         break;
@@ -184,8 +190,14 @@
     const dx = DIR8[f][0], dy = DIR8[f][1];
     const [pdx, pdy] = perpOf(f);
     if (cfg.weapon === 'tube') {
-      // shoulder tube: rear behind the shoulder, tip past the head
-      return { x0: 12 + pdx - dx * 2, y0: 11 + bob + pdy - dy * 2, dx, dy, len: 5 };
+      // shoulder tube: rear behind the shoulder, tip past the head — but only
+      // rises above the head when facing away (dy<0). Facing the camera
+      // (dy>0) it stays short and at shoulder height instead of spearing
+      // through the face and torso, since the gun pass is drawn after the
+      // head (and the chest bandolier accent lives at row 13).
+      const towardCam = dy > 0;
+      const rise = towardCam ? 0 : -dy * 2;
+      return { x0: 12 + pdx - dx * 2, y0: 11 + bob + pdy - rise, dx, dy, len: towardCam ? 2 : 5 };
     }
     if (cfg.weapon === 'nozzle') {
       return { x0: 12 + pdx + dx, y0: 14 + bob + dy + (pdy > 0 ? 1 : 0), dx, dy, len: 2 };
@@ -304,7 +316,10 @@
     R(11, 12 + bob, 1, 4, cfg.uniformHi);
     R(13, 12 + bob, 1, 4, cfg.uniformDk);
     R(11, 16 + bob, 3, 1, cfg.belt);
-    if (cfg.chest && dy >= 0) px(12, 13 + bob, cfg.chest);
+    if (cfg.chest && dy >= 0) {
+      if (cfg.chestBand) R(11, 13 + bob, 3, 1, cfg.chest);
+      else px(12, 13 + bob, cfg.chest);
+    }
     if (cfg.packStyle === 'box' && cfg.pack && dy > 0) { // backpack straps seen from the front
       px(11, 12 + bob, cfg.packDk); px(13, 12 + bob, cfg.packDk);
     }

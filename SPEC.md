@@ -1,6 +1,6 @@
-# Tiberian Dawn Clone — Engineering Spec
+# Tiberian Dawn Homage — Engineering Spec
 
-A faithful-mechanics clone of the 1995 RTS *Command & Conquer* (Tiberian Dawn), built from
+A faithful-mechanics homage to the 1995 RTS *Command & Conquer* (Tiberian Dawn), built from
 scratch with **original code and original procedurally-generated pixel art / synthesized audio**.
 No assets or code from the original game are used.
 

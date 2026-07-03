@@ -1,6 +1,6 @@
-# Tiberian Dawn Clone
+# Tiberian Dawn Homage
 
-A from-scratch, browser-based clone of the 1995 RTS classic *Command & Conquer*
+A from-scratch, browser-based homage to the 1995 RTS classic *Command & Conquer*
 (Tiberian Dawn). All code, pixel art, and sound are **original** — the art is
 drawn procedurally on canvases at load time and the audio is synthesized with
 WebAudio (EVA and unit voices use the browser's speech synthesis). The game
