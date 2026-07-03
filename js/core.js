@@ -70,7 +70,7 @@ let game = null;
 // Sprite registry — filled by the sprites_*.js files at load time.
 const SPRITES = {
   terrain: {},    // terrain[id] = [canvas variants]
-  tiberium: [],   // [3 density canvases]
+  tiberium: [],   // [3 densities][3 variant canvases]
   units: {},      // units[type][side] = {body:[16], turret?:[16], anim?:[...]}
   infantry: {},   // infantry[type][side] = {stand:[8], walk:[8][4], fire:[8][2], die:[4]}
   buildings: {},  // buildings[type][side] = {normal:[frames], damaged:[frames]}

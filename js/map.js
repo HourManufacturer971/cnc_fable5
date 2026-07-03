@@ -7,6 +7,11 @@
 //   - sets game.startPos = { human:{cx,cy}, ai:{cx,cy} }
 // All randomness comes from a local mulberry(seed) stream so the same seed
 // always produces the same map regardless of prior game.rng() consumption.
+//
+// The layout aims for "a world, not a tile sheet": broad noise-driven dirt
+// regions, a meandering river with fords, forests with clearings, boulder
+// outcrops and a ragged rocky map rim. TERRAINPAINT renders all of it with
+// soft blended edges, so cell-level shapes here can stay coarse.
 
 const MAPGEN = (function () {
 
@@ -20,14 +25,42 @@ const MAPGEN = (function () {
     return Math.sqrt(dx * dx + dy * dy);
   }
 
+  // ---- cell-grid value noise ---------------------------------------------------
+
+  function hash2(x, y, s) {
+    let h = Math.imul(x, 0x27d4eb2d) ^ Math.imul(y, 0x165667b1) ^ s;
+    h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+    h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+    return (h >>> 0) / 4294967296;
+  }
+
+  function vnoise(x, y, period, s) {
+    const gx = x / period, gy = y / period;
+    const x0 = Math.floor(gx), y0 = Math.floor(gy);
+    let tx = gx - x0, ty = gy - y0;
+    tx = tx * tx * (3 - 2 * tx); ty = ty * ty * (3 - 2 * ty);
+    const a = hash2(x0, y0, s), b = hash2(x0 + 1, y0, s);
+    const c = hash2(x0, y0 + 1, s), d = hash2(x0 + 1, y0 + 1, s);
+    return a + (b - a) * tx + (c - a) * ty + (a - b - c + d) * tx * ty;
+  }
+
+  function fbm(x, y, period, oct, s) {
+    let v = 0, amp = 1, tot = 0, p = period;
+    for (let i = 0; i < oct; i++) {
+      v += vnoise(x, y, p, s + i * 131) * amp;
+      tot += amp; amp *= 0.5; p /= 2;
+    }
+    return v / tot;
+  }
+
   // ---- feature painters ------------------------------------------------------
 
-  // Blobby dirt patch via a random walk with a 3x3 brush.
+  // Short blobby dirt trail via a random walk with a 3x3 brush.
   function dirtWalk(g, rng) {
     const W = C.MAP_W, H = C.MAP_H;
     let x = 2 + ((rng() * (W - 4)) | 0);
     let y = 2 + ((rng() * (H - 4)) | 0);
-    const len = 30 + ((rng() * 50) | 0);
+    const len = 18 + ((rng() * 26) | 0);
     for (let i = 0; i < len; i++) {
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
@@ -43,6 +76,7 @@ const MAPGEN = (function () {
   }
 
   // Roundish blob of terrain id `tid` centered on (cx,cy) with radius ~r.
+  // Only converts open ground (grass/dirt), so features never eat each other.
   function blob(g, rng, cx, cy, r, tid) {
     const R = Math.ceil(r);
     for (let dy = -R; dy <= R; dy++) {
@@ -50,7 +84,26 @@ const MAPGEN = (function () {
         const px = cx + dx, py = cy + dy;
         if (px < 1 || py < 1 || px >= C.MAP_W - 1 || py >= C.MAP_H - 1) continue;
         const d = Math.sqrt(dx * dx + dy * dy) + rng() * 0.9;
-        if (d <= r) g.terrain[cellIdx(px, py)] = tid;
+        if (d > r) continue;
+        const idx = cellIdx(px, py);
+        if (g.terrain[idx] === T_GRASS || g.terrain[idx] === T_DIRT) g.terrain[idx] = tid;
+      }
+    }
+  }
+
+  // Forest: ragged tree blob with interior clearings.
+  function forest(g, rng, cx, cy, r) {
+    const R = Math.ceil(r);
+    for (let dy = -R; dy <= R; dy++) {
+      for (let dx = -R; dx <= R; dx++) {
+        const px = cx + dx, py = cy + dy;
+        if (px < 1 || py < 1 || px >= C.MAP_W - 1 || py >= C.MAP_H - 1) continue;
+        const d = Math.sqrt(dx * dx + dy * dy) + rng() * 1.4;
+        if (d > r) continue;
+        const idx = cellIdx(px, py);
+        if ((g.terrain[idx] === T_GRASS || g.terrain[idx] === T_DIRT) && rng() < 0.8) {
+          g.terrain[idx] = T_TREE;
+        }
       }
     }
   }
@@ -58,7 +111,6 @@ const MAPGEN = (function () {
   // Cluster of 3..8 tree cells around (cx,cy), only over grass/dirt.
   function treeClump(g, rng, cx, cy) {
     let want = 3 + ((rng() * 6) | 0); // 3..8
-    // Always try the center first, then random offsets within radius 2.
     let tries = want * 5;
     let px = cx, py = cy;
     while (want > 0 && tries-- > 0) {
@@ -71,6 +123,73 @@ const MAPGEN = (function () {
       }
       px = cx + (((rng() * 5) | 0) - 2);
       py = cy + (((rng() * 5) | 0) - 2);
+    }
+  }
+
+  // Meandering west->east river across mid-map with two fords. One ford is
+  // pinned where the river crosses the straight line between the two starts,
+  // so the classic centre route always survives (and carveCorridor never has
+  // to slice an ugly straight canal through the water).
+  function river(g, rng, hs, as) {
+    const W = C.MAP_W, H = C.MAP_H;
+    const y0 = 22 + rng() * 8;   // west entry 22..30
+    const y1 = 30 + rng() * 8;   // east exit 30..38
+    const ph = rng() * Math.PI * 2;
+    const amp = 2.5 + rng() * 2.5;
+
+    const yc = new Float32Array(W);
+    const segX0 = Math.min(hs.cx, as.cx), segX1 = Math.max(hs.cx, as.cx);
+    let fordX1 = (W / 2) | 0, best = 1e9;
+    for (let x = 0; x < W; x++) {
+      yc[x] = y0 + (y1 - y0) * (x / (W - 1)) +
+              Math.sin(x * 0.15 + ph) * amp + Math.sin(x * 0.33 + ph * 1.9) * 1.4;
+      if (x >= segX0 && x <= segX1) {
+        const t = (x - hs.cx) / ((as.cx - hs.cx) || 1);
+        const sy = hs.cy + (as.cy - hs.cy) * t;
+        const d = Math.abs(yc[x] - sy);
+        if (d < best) { best = d; fordX1 = x; }
+      }
+    }
+    let fordX2 = fordX1 + (rng() < 0.5 ? -1 : 1) * (10 + ((rng() * 8) | 0));
+    fordX2 = clamp(fordX2, 6, W - 7);
+
+    for (let x = 1; x < W - 1; x++) {
+      if (Math.abs(x - fordX1) <= 2 || Math.abs(x - fordX2) <= 2) continue; // fords
+      const hw = 1.2 + Math.sin(x * 0.23 + ph * 2.3) * 0.5 + rng() * 0.3;  // width wobble
+      for (let dy = -3; dy <= 3; dy++) {
+        const y = Math.round(yc[x]) + dy;
+        if (y < 1 || y >= H - 1) continue;
+        if (Math.abs(y - yc[x]) > hw) continue;
+        if (distC(x, y, hs.cx, hs.cy) < 13 || distC(x, y, as.cx, as.cy) < 13) continue;
+        const idx = cellIdx(x, y);
+        if (g.terrain[idx] === T_GRASS || g.terrain[idx] === T_DIRT) g.terrain[idx] = T_WATER;
+      }
+    }
+  }
+
+  // Ragged rocky rim, 1..3 cells deep, depth varying smoothly along each edge.
+  function borderFringe(g, rng) {
+    const W = C.MAP_W, H = C.MAP_H;
+    function series(n) {
+      const lat = [];
+      for (let i = 0; i <= Math.ceil(n / 8) + 1; i++) lat.push(rng());
+      const out = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const t = i / 8, i0 = t | 0, f = t - i0;
+        out[i] = lat[i0] + (lat[i0 + 1] - lat[i0]) * (f * f * (3 - 2 * f));
+      }
+      return out;
+    }
+    const top = series(W), bot = series(W), lef = series(H), rig = series(H);
+    for (let x = 0; x < W; x++) {
+      const dt = 1 + Math.round(top[x] * 2.2), db = 1 + Math.round(bot[x] * 2.2);
+      for (let y = 0; y < dt; y++) g.terrain[cellIdx(x, y)] = T_ROCK;
+      for (let y = 0; y < db; y++) g.terrain[cellIdx(x, H - 1 - y)] = T_ROCK;
+    }
+    for (let y = 0; y < H; y++) {
+      const dl = 1 + Math.round(lef[y] * 2.2), dr = 1 + Math.round(rig[y] * 2.2);
+      for (let x = 0; x < dl; x++) g.terrain[cellIdx(x, y)] = T_ROCK;
+      for (let x = 0; x < dr; x++) g.terrain[cellIdx(C.MAP_W - 1 - x, y)] = T_ROCK;
     }
   }
 
@@ -150,10 +269,32 @@ const MAPGEN = (function () {
 
   // ---- tiberium --------------------------------------------------------------
 
+  // Passable-cell reachability from both starts (4-connected BFS, matching
+  // no-corner-cutting movement). Forests/rivers can seal small grass pockets;
+  // tiberium seeded inside one would wedge every harvester that targets it,
+  // so placeField only accepts cells this mask can reach.
+  function reachMask(g, starts) {
+    const W = C.MAP_W, H = C.MAP_H;
+    const seen = new Uint8Array(W * H);
+    const q = new Int32Array(W * H);
+    let head = 0, tail = 0;
+    function visit(i) { if (!seen[i] && !isImpassId(g.terrain[i])) { seen[i] = 1; q[tail++] = i; } }
+    for (const st of starts) visit(cellIdx(st.cx, st.cy));
+    while (head < tail) {
+      const cur = q[head++];
+      const cx = cur % W, cy = (cur / W) | 0;
+      if (cx > 0) visit(cur - 1);
+      if (cx < W - 1) visit(cur + 1);
+      if (cy > 0) visit(cur - W);
+      if (cy < H - 1) visit(cur + W);
+    }
+    return seen;
+  }
+
   // Place a tiberium field of ~`count` cells centered at (fx,fy), denser at the
   // middle with radial falloff, plus a blossom tree at the heart.
-  // Only writes onto grass/dirt cells outside the start ±2 exclusion squares.
-  function placeField(g, rng, fx, fy, count, starts) {
+  // Only writes onto reachable grass/dirt cells outside the start ±2 squares.
+  function placeField(g, rng, fx, fy, count, starts, reach) {
     const R = Math.sqrt(count / Math.PI) + 2.5;
     const Ri = Math.ceil(R);
     const cand = [];
@@ -163,6 +304,7 @@ const MAPGEN = (function () {
         if (x < 1 || y < 1 || x >= C.MAP_W - 1 || y >= C.MAP_H - 1) continue;
         const t = g.terrain[cellIdx(x, y)];
         if (t !== T_GRASS && t !== T_DIRT) continue;
+        if (reach && !reach[cellIdx(x, y)]) continue;
         if (nearAnyStart(x, y, starts, 2)) continue;
         const d = Math.sqrt(dx * dx + dy * dy);
         if (d > R) continue;
@@ -201,6 +343,7 @@ const MAPGEN = (function () {
   function generate(g, seed) {
     const s = (seed === undefined || seed === null) ? g.seed : seed;
     const rng = mulberry(s >>> 0);
+    const hseed = (s >>> 0) ^ 0x3c6ef372;
     const W = C.MAP_W, H = C.MAP_H;
     const n = W * H;
 
@@ -214,37 +357,60 @@ const MAPGEN = (function () {
     g.startPos = { human: hs, ai: as };
     const starts = [hs, as];
 
-    // --- dirt patches: ~10 blobby random walks --------------------------------
-    const walks = 9 + ((rng() * 3) | 0); // 9..11
+    // --- dirt: broad noise regions + a few short worn trails ------------------
+    for (let cy = 1; cy < H - 1; cy++) {
+      for (let cx = 1; cx < W - 1; cx++) {
+        if (fbm(cx, cy, 15, 3, hseed) > 0.565) g.terrain[cellIdx(cx, cy)] = T_DIRT;
+      }
+    }
+    const walks = 2 + ((rng() * 2) | 0); // 2..3
     for (let i = 0; i < walks; i++) dirtWalk(g, rng);
 
-    // --- rock outcrops: 4-6 roundish blobs ------------------------------------
+    // --- river (most seeds) or extra ponds -------------------------------------
+    const hasRiver = rng() < 0.62;
+    if (hasRiver) river(g, rng, hs, as);
+
+    // --- water ponds ------------------------------------------------------------
+    const ponds = (hasRiver ? 1 : 3) + ((rng() * 2) | 0);
+    for (let i = 0; i < ponds; i++) {
+      const p = pickCenter(rng, starts, 15);
+      blob(g, rng, p.x, p.y, 1.8 + rng() * 1.8, T_WATER);
+    }
+
+    // --- rock outcrops: 4-6 roundish blobs --------------------------------------
     const rocks = 4 + ((rng() * 3) | 0); // 4..6
     for (let i = 0; i < rocks; i++) {
       const p = pickCenter(rng, starts, 14);
       blob(g, rng, p.x, p.y, 2 + rng() * 2.5, T_ROCK);
     }
 
-    // --- water ponds: 2-3 small blobs ------------------------------------------
-    const ponds = 2 + ((rng() * 2) | 0); // 2..3
-    for (let i = 0; i < ponds; i++) {
+    // --- woods: big forests with clearings, small clumps, lone trees ------------
+    const forests = 3 + ((rng() * 2) | 0); // 3..4
+    for (let i = 0; i < forests; i++) {
       const p = pickCenter(rng, starts, 15);
-      blob(g, rng, p.x, p.y, 1.5 + rng() * 1.5, T_WATER);
+      forest(g, rng, p.x, p.y, 3 + rng() * 2);
     }
-
-    // --- tree clumps: 8-12 clusters of 3-8 -------------------------------------
-    const clumps = 8 + ((rng() * 5) | 0); // 8..12
+    const clumps = 5 + ((rng() * 4) | 0); // 5..8
     for (let i = 0; i < clumps; i++) {
       const p = pickCenter(rng, starts, 14);
       treeClump(g, rng, p.x, p.y);
     }
+    const singles = 8 + ((rng() * 7) | 0); // 8..14
+    for (let i = 0; i < singles; i++) {
+      const p = pickCenter(rng, starts, 12);
+      const idx = cellIdx(p.x, p.y);
+      if (g.terrain[idx] === T_GRASS || g.terrain[idx] === T_DIRT) g.terrain[idx] = T_TREE;
+    }
+
+    // --- ragged rocky rim ---------------------------------------------------------
+    borderFringe(g, rng);
 
     // --- constraints: buildable start zones + guaranteed corridor --------------
     clearZone(g, hs.cx, hs.cy, 12);
     clearZone(g, as.cx, as.cy, 12);
     carveCorridor(g, hs, as, 1); // 3 cells wide
 
-    // --- map border ring = rock -------------------------------------------------
+    // --- hard map border ring = rock ---------------------------------------------
     for (let x = 0; x < W; x++) {
       g.terrain[cellIdx(x, 0)] = T_ROCK;
       g.terrain[cellIdx(x, H - 1)] = T_ROCK;
@@ -255,11 +421,14 @@ const MAPGEN = (function () {
     }
 
     // --- tiberium fields ---------------------------------------------------------
+    // Fields only grow on cells reachable from the starts (later passes just
+    // clear MORE terrain, so reachability can only widen after this point).
+    const reach = reachMask(g, starts);
     // One rich field 7-9 cells from each start, offset AWAY from the enemy so
     // your harvesters work the safe side of your base.
-    for (let s = 0; s < starts.length; s++) {
-      const st = starts[s];
-      const foe = starts[1 - s];
+    for (let si = 0; si < starts.length; si++) {
+      const st = starts[si];
+      const foe = starts[1 - si];
       let dx = st.cx - foe.cx, dy = st.cy - foe.cy;
       const len = Math.sqrt(dx * dx + dy * dy) || 1;
       dx /= len; dy /= len;
@@ -267,7 +436,7 @@ const MAPGEN = (function () {
       const fx = clamp(Math.round(st.cx + dx * off), 2, W - 3);
       const fy = clamp(Math.round(st.cy + dy * off), 2, H - 3);
       const count = 100 + ((rng() * 41) | 0); // 100..140
-      placeField(g, rng, fx, fy, count, starts);
+      placeField(g, rng, fx, fy, count, starts, reach);
     }
     // 2-3 medium fields around mid-map, spread apart.
     const fieldCenters = [];
@@ -285,7 +454,7 @@ const MAPGEN = (function () {
       }
       fieldCenters.push({ x: mx, y: my });
       const count = 50 + ((rng() * 31) | 0); // 50..80
-      placeField(g, rng, mx, my, count, starts);
+      placeField(g, rng, mx, my, count, starts, reach);
     }
 
     // --- scrub exact start cells ±2: passable terrain, no tiberium --------------
@@ -306,6 +475,12 @@ const MAPGEN = (function () {
       carveCorridor(g, hs, as, 2); // 5 wide
       if (!connected(g, hs, as)) carveCorridor(g, hs, as, 3); // 7 wide, cannot fail
     }
+
+    // --- final sweep: a blossom heart placed after the reach mask can seal a
+    // pocket behind it — recompute reachability and drop tiberium that no
+    // harvester could ever reach
+    const reach2 = reachMask(g, starts);
+    for (let i = 0; i < n; i++) if (g.tib[i] > 0 && !reach2[i]) g.tib[i] = 0;
 
     // --- terrain variants for every cell -----------------------------------------
     for (let i = 0; i < n; i++) g.tvar[i] = (rng() * 4) | 0;

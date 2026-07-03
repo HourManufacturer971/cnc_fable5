@@ -494,7 +494,12 @@
     return t.c;
   }
 
-  SPRITES.tiberium.push(tibCanvas(3, 3, false), tibCanvas(6, 3, false), tibCanvas(12, 4, true));
+  // 3 densities x 3 variants each, picked per cell by position hash so
+  // neighbouring field cells don't repeat the same crystal arrangement
+  SPRITES.tiberium.push(
+    [tibCanvas(3, 3, false), tibCanvas(3, 3, false), tibCanvas(4, 2, false)],
+    [tibCanvas(6, 3, false), tibCanvas(7, 3, false), tibCanvas(6, 4, false)],
+    [tibCanvas(12, 4, true), tibCanvas(11, 4, true), tibCanvas(13, 3, true)]);
 
   // ==== FX =====================================================================
 

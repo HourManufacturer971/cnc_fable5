@@ -64,6 +64,12 @@ a powered Communications Center.
 
 ## What's simulated
 
+- **A painted world** — the ground is rendered per-pixel with world-space
+  noise, so grass, dirt, water and rock blend into each other with ragged
+  organic edges instead of tile seams; maps get a meandering river with
+  fordable crossings, forests with closed canopies and clearings, boulder
+  outcrops, a rocky rim, and scattered doodads (grass tufts, flowers,
+  pebbles, cracks, bushes)
 - **Tiberium economy** — harvesters (700 credits a load), refineries with
   docking, silos, storage caps, spreading tiberium fields seeded by blossom
   trees, infantry take damage crossing fields

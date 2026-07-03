@@ -14,8 +14,8 @@ No assets or code from the original game are used.
   rendering runs on `requestAnimationFrame`.
 - All randomness inside the simulation must use `game.rng()` (seeded) — never `Math.random()`
   inside sim/production/ai/map code. UI/audio/effects may use `Math.random()`.
-- Script load order (index.html): `core.js, data.js, sprites_terrain.js, sprites_units.js,
-  sprites_infantry.js, sprites_buildings.js, audio.js, map.js, path.js, fog.js, sim.js,
+- Script load order (index.html): `core.js, data.js, sprites_terrain.js, terrain_paint.js,
+  sprites_units.js, sprites_infantry.js, sprites_buildings.js, audio.js, map.js, path.js, fog.js, sim.js,
   production.js, ai.js, input.js, render.js, main.js`.
 - Every file must pass `node --check`.
 
@@ -62,6 +62,7 @@ define **exactly** the globals listed and may freely call any global listed for 
 | core.js | `C`, `PAL`, `game`, `SPRITES`, `EV`, `uid`, `mulberry`, `clamp`, `lerp`, `dist`, `cellIdx`, `inMap`, `worldToCell`, `cellCenterX/Y`, `dirTo16`, `turnFacing`, `angleOf16`, `mkCanvas`, `rotFrames`, `makeGame`, `makePlayer`, `makeUnit`, `makeBuilding`, `addUnit`, `addBuilding`, `removeUnit`, `removeBuilding`, `getEnt`, `occAt`, `setOcc`, `clearOcc`, `terrainPassable`, `isPassable`, `footprintCells`, `applyDamage`, `enemyOf` |
 | data.js | `DATA` (warheads, weapons, units, buildings, build lists, EVA lines) |
 | sprites_terrain.js | fills `SPRITES.terrain`, `SPRITES.tiberium`, `SPRITES.fx`, `SPRITES.cursor`, `SPRITES.logo`, `SPRITES.shroudEdge` |
+| terrain_paint.js | `TERRAINPAINT` (`build(game) -> {canvas, anim}` — continuous full-map ground painter) |
 | sprites_units.js | fills `SPRITES.units[key][side]` for every vehicle & aircraft, and their `SPRITES.cameo[key]` |
 | sprites_infantry.js | fills `SPRITES.infantry[key][side]` for every infantry type, and their `SPRITES.cameo[key]` |
 | sprites_buildings.js | fills `SPRITES.buildings[key][side]` for every building, and their `SPRITES.cameo[key]`, plus `SPRITES.cameo.ion` / `SPRITES.cameo.nuke` |
@@ -71,7 +72,7 @@ define **exactly** the globals listed and may freely call any global listed for 
 | fog.js | `Fog` (`init, revealCircle, update, isExplored`) |
 | sim.js | `Sim` (`tick`), `orderMove`, `orderAttack`, `orderHarvest`, `orderDeploy`, `orderEnter`, `stopUnit`, `killEntity`, `fireIon`, `fireNuke`, `spawnEffect`, `spawnBullet` |
 | production.js | `Production` (`tick, tryStart, toggleHold, cancel, items, canPlace, place, sell, toggleRepair, computePower, categoryOf, prereqOk, superReady, launchSuper`) |
-| ai.js | `AI` (`init, tick`) |
+| ai.js | `AI` (`init, tick, _peek` — `_peek` is a read-only debug/test hook) |
 | input.js | `Input` (`init, tick, mouse, cursorKind, mode, modeArg`) |
 | render.js | `Render` (`init, frame, worldFromScreen, hitTest`) |
 | main.js | `Main` (`boot, startGame, endGame`), starts loop, menu DOM wiring |
@@ -301,8 +302,24 @@ Tiberium lives in `game.tib` (0..C.TIB_MAX per cell) independent of terrain (onl
 - Terrain (`SPRITES.terrain[id] = [variants...]` 24×24): grass = mottled olive greens; dirt
   = tan; rock = grey boulders on dirt; water = blue with light ripple dither (2 anim
   variants OK); tree = dark green canopy w/ shadow on grass base; blossom = white-pink
-  canopy pod. `SPRITES.tiberium = [3 densities]` — clusters of bright green crystals
-  (PAL.tib*), density by cell value thirds.
+  canopy pod. These tiles are the FALLBACK path only — the shipped ground comes from
+  `terrain_paint.js` (below). `SPRITES.tiberium = [3 densities][3 variants]` — clusters of
+  bright green crystals (PAL.tib*), density by cell value thirds, variant picked per cell by
+  position hash (render also jitters the draw a few px to break the cell grid).
+
+### Terrain painting (`terrain_paint.js`, global `TERRAINPAINT`)
+- `TERRAINPAINT.build(game) -> { canvas, anim }` — called by render when the terrain cache
+  is (re)built. Paints the whole map per-pixel at 24 px/cell in world space: bilinear-sampled
+  per-cell material fields (dirt/water/rock) + value-noise mottle and edge-raggedness fields
+  + per-pixel grain dithering, so ground types flow across cell borders with organic edges
+  (no tile seams). Water gets depth bands, foam and a wet-sand shore; rock cells get varied
+  boulder formations; tree cells get overlapping canopies (deciduous + conifer) over a
+  darkened forest floor; open land gets sparse doodads (tufts, flowers, pebbles, cracks,
+  bushes). The painting is nearest-upscaled ×2 into the screen-scale cache.
+- `anim` = `[{cx, cy, frames:[canvas...], phase}]`: transparent overlays render redraws live
+  (blossom pods, open-water glints). Frames are world-scale (drawn ×C.ZOOM).
+- Deterministic from `game.seed` only (hash/value-noise, no `game.rng`, no `Math.random`);
+  never mutates game state. Budget ~400ms, once per new map.
 - FX (`SPRITES.fx`): `expS` (6 frames, 24px fireball→smoke), `expL` (8 frames, 48px),
   `muzzle` (2 fr), `tracer` (drawn by render as line, no sprite needed), `smoke` (4 fr grey
   puffs), `flame` (3 fr), `scorch` (static dark splat), `ionBeam` (drawn procedurally in
@@ -314,9 +331,12 @@ Tiberium lives in `game.tib` (0..C.TIB_MAX per cell) independent of terrain (onl
   alpha.
 
 ### Map generation (`map.js`)
-- 64×64. Deterministic from seed via `mulberry`. Base terrain grass with dirt patches
-  (value-noise-ish via random blobs), a few rock outcrops and small water ponds (never
-  blocking the two base areas or the corridor between them), tree clumps.
+- 64×64. Deterministic from seed via `mulberry`. Base terrain grass with broad value-noise
+  dirt regions plus short worn trails, a meandering west→east river on most seeds (with two
+  fords — one pinned where the river crosses the start↔start segment), ponds, rock outcrops,
+  forests with clearings + small clumps + lone trees, and a ragged 1-3 cell rocky rim (never
+  blocking the two base areas or the corridor between them; BFS connectivity check widens the
+  corridor as a last resort).
 - Two start zones: player SW-ish (around 12,50), AI NE-ish (around 52,12) — keep a 12-cell
   radius buildable (grass/dirt only). 4-5 tiberium fields: one near each base (~120 cells
   rich), 2-3 mid-map, each with a blossom tree at heart. Fill `game.tib` values 75..300

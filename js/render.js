@@ -80,6 +80,16 @@ const Render = (function () {
   // ---- terrain cache -------------------------------------------------------------
 
   function _buildTerrainCache(g) {
+    if (typeof TERRAINPAINT !== 'undefined') {
+      // continuous painter: seamless noise-blended ground + transparent
+      // overlay frames for the animated bits (blossom pods, water glints)
+      const res = TERRAINPAINT.build(g);
+      terrainCache = res.canvas;
+      animCells = res.anim;
+      terrainCacheSeed = g.seed;
+      return;
+    }
+    // fallback: classic per-cell tile blits
     const cs = C.CELL * Z;
     terrainCache = mkCanvas(C.MAP_W * cs, C.MAP_H * cs);
     const tc = terrainCache.getContext('2d');
@@ -93,7 +103,7 @@ const Render = (function () {
         if (!variants || !variants.length) continue;
         const img = variants[g.tvar[i] % variants.length];
         tc.drawImage(img, cx * cs, cy * cs, cs, cs);
-        if (t === 3 || t === 5) animCells.push({ cx, cy, t });
+        if (t === 3 || t === 5) animCells.push({ cx, cy, frames: variants, phase: cx });
       }
     }
     terrainCacheSeed = g.seed;
@@ -360,8 +370,8 @@ const Render = (function () {
     for (const a of animCells) {
       const sx = X(a.cx * C.CELL), sy = Y(a.cy * C.CELL);
       if (sx < -cs || sx > C.VIEW_PW || sy < -cs || sy > C.SCREEN_H) continue;
-      const variants = SPRITES.terrain[a.t];
-      ctx.drawImage(variants[((g.tick >> 3) + a.cx) % variants.length], sx, sy, cs, cs);
+      const f = a.frames[((g.tick >> 3) + a.phase) % a.frames.length];
+      ctx.drawImage(f, sx, sy, f.width * Z, f.height * Z);
     }
 
     // ground marks below everything else
@@ -372,12 +382,19 @@ const Render = (function () {
     // tiberium
     const c0x = Math.max(0, worldToCell(ox)), c1x = Math.min(C.MAP_W - 1, worldToCell(ox + C.VIEW_W) + 1);
     const c0y = Math.max(0, worldToCell(oy)), c1y = Math.min(C.MAP_H - 1, worldToCell(oy + C.VIEW_H) + 1);
-    for (let cy = c0y; cy <= c1y; cy++) {
-      for (let cx = c0x; cx <= c1x; cx++) {
+    // one extra cell on the min side: the draw jitter below can push a
+    // sprite up to 4 world px into view from beyond the exact window
+    const t0x = Math.max(0, c0x - 1), t0y = Math.max(0, c0y - 1);
+    for (let cy = t0y; cy <= c1y; cy++) {
+      for (let cx = t0x; cx <= c1x; cx++) {
         const v = g.tib[cellIdx(cx, cy)];
         if (v <= 0) continue;
         const density = v > 200 ? 2 : v > 100 ? 1 : 0;
-        ctx.drawImage(SPRITES.tiberium[density], X(cx * C.CELL), Y(cy * C.CELL), cs, cs);
+        const tv = SPRITES.tiberium[density];
+        const timg = Array.isArray(tv) ? tv[(cx * 7 + cy * 13) % tv.length] : tv;
+        // per-cell jitter breaks the crystal clusters off the cell grid
+        const tj = (cx * 0x9e37 ^ cy * 0x85eb) & 63;
+        ctx.drawImage(timg, X(cx * C.CELL + (tj & 7) - 3), Y(cy * C.CELL + (tj >> 3) - 4), cs, cs);
       }
     }
 

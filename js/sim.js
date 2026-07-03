@@ -451,6 +451,7 @@ function _findTibCell(u, radius) {
     for (let x = r0; x <= r1; x++) {
       const i = cellIdx(x, y);
       if (g.tib[i] <= 0) continue;
+      if (u._noReach && u._noReach.has(i)) continue;   // known-unreachable cells
       if (human && g.shroud[i] !== 1) continue;
       const o = g.occ[i];
       if (o && o !== u.id) continue;
@@ -495,13 +496,22 @@ function _harvester(u, d) {
       }
       return;
     }
-    // find more tiberium nearby
+    // find more tiberium nearby; cells no path can reach (sealed forest
+    // pockets, walled-off fields) get blacklisted for a while so the sweep
+    // moves on instead of re-targeting them forever
+    let tries = 8;
     for (const r of [3, 6, 10, 16, 24, 40]) {
-      const c = _findTibCell(u, r);
-      if (c) {
-        u.path = findPath(u, c.cx, c.cy);
-        u.pathi = 0;
-        return;
+      let c;
+      while ((c = _findTibCell(u, r))) {
+        const path = findPath(u, c.cx, c.cy);
+        if (path.length) {
+          u.path = path;
+          u.pathi = 0;
+          return;
+        }
+        if (g.tick - (u._noReachAt || -1e9) > 900) { u._noReach = new Set(); u._noReachAt = g.tick; }
+        u._noReach.add(cellIdx(c.cx, c.cy));
+        if (--tries <= 0) return;  // resume next tick, blacklist kept
       }
     }
     if (u.tib > 0) { u.state = 'return'; u.path = []; }

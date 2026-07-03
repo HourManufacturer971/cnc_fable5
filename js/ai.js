@@ -257,6 +257,17 @@ const AI = (function () {
 
   function _stageCell(g, p) {
     const t = _threatDir(g, p);
+    // Gather on the attack route itself, ~14 cells short of the enemy base:
+    // any river ford or forest choke is crossed BEFORE the force masses up,
+    // so the strike arrives as one wave instead of a single-file trickle.
+    const hs = g.startPos.human;
+    const probe = { x: cellCenterX(t.from.cx), y: cellCenterY(t.from.cy), id: -1, owner: p.side, type: 'ltnk', r: 0.4 };
+    const route = findPath(probe, hs.cx, hs.cy);
+    if (route && route.length > 20) {
+      const c = route[route.length - 14];
+      if (c && isPassable(c.cx, c.cy)) return { cx: c.cx, cy: c.cy };
+    }
+    // fallback: a clear spot 9-14 cells out toward the threat
     for (let r = 9; r <= 14; r++) {
       const cx = Math.round(t.from.cx + t.x * r);
       const cy = Math.round(t.from.cy + t.y * r);
@@ -327,7 +338,7 @@ const AI = (function () {
       ids: force.map(u => u.id),
       target: target ? target.id : 0,
       cell,
-      launchAt: g.tick + 450,
+      launchAt: g.tick + 600,  // longer leash: crossing a ford takes time
     };
     // aircraft join the strike directly (they rearm on their own)
     for (const u of _military(g, p)) {
@@ -427,5 +438,8 @@ const AI = (function () {
     }
   }
 
-  return { init, tick };
+  // debug/test hook: read-only peek at the wave machine's internal state
+  function _peek() { return S; }
+
+  return { init, tick, _peek };
 })();
