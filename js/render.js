@@ -723,16 +723,16 @@ const Render = (function () {
           ctx.fillStyle = PAL.uiGold;
           ctx.fillText('x' + item.count, sx + C.CAMEO_PW - 30, iy + 5);
         }
-        // cost badge, always on top so it reads in every state
+        // cost badge, top-left, always on top so it reads in every state
         if (!item.super) {
           const cd = DATA.buildings[item.key] || DATA.units[item.key];
           if (cd) {
             const label = '$' + cd.cost;
             const w = ctx.measureText(label).width + 8;
             ctx.fillStyle = 'rgba(0,0,0,0.7)';
-            ctx.fillRect(sx + 2, iy + C.CAMEO_PH - 19, w, 17);
+            ctx.fillRect(sx + 2, iy + 2, w, 17);
             ctx.fillStyle = PAL.uiGold;
-            ctx.fillText(label, sx + 6, iy + C.CAMEO_PH - 16);
+            ctx.fillText(label, sx + 6, iy + 5);
           }
         }
         // hover highlight
