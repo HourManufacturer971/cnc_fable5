@@ -280,6 +280,15 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   assigns the current selection (empty selection clears). Gold when the group has live
   members, with an `xN` count. Second click on a sole-selected factory = set primary;
   on a sole-selected loaded transport = unload; on the MCV = deploy.
+- **Fullscreen** (`main.js`, cross-browser via standard + `webkit`-prefixed
+  `requestFullscreen`/`exitFullscreen`, feature-detected): picking a faction on a
+  coarse-pointer (touch) device calls it synchronously inside the click handler, before
+  `AUDIO.init()`, so it stays inside the user-gesture window — otherwise mobile Chrome
+  keeps its address bar docked and steals playfield height. Desktop (fine pointer) never
+  auto-requests it. A `Fullscreen: ON/OFF` button in the pause menu (hidden when the API
+  is unsupported) lets anyone toggle it by hand; a `fullscreenchange`/
+  `webkitfullscreenchange` listener keeps its label in sync if the OS/browser exits
+  fullscreen out from under the page (Android back gesture, Esc on desktop).
 
 ### AI opponent (`ai.js`)
 - Skirmish AI. Starts with deployed base (see map/main setup) + same credits as player.

@@ -10,9 +10,42 @@ const Main = (function () {
 
   function $(id) { return document.getElementById(id); }
 
+  // ---- fullscreen (mobile browsers keep an address bar otherwise) ------------------
+  // Cross-browser: standard API everywhere current, webkit-prefixed for older
+  // Safari/iOS. Feature-detected so the button only appears where it can work.
+  function _fsEl() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+  function _fsSupported() {
+    const el = document.documentElement;
+    return !!(el.requestFullscreen || el.webkitRequestFullscreen);
+  }
+  function _requestFullscreen() {
+    const el = document.documentElement;
+    const p = el.requestFullscreen ? el.requestFullscreen() : el.webkitRequestFullscreen();
+    if (p && p.catch) p.catch(() => {}); // denied/unsupported mid-gesture — fail quietly
+  }
+  function _exitFullscreen() {
+    if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  }
+  function _toggleFullscreen() {
+    if (_fsEl()) _exitFullscreen();
+    else _requestFullscreen();
+  }
+  function _updateFsButton() {
+    const btn = $('btnFullscreen');
+    if (btn) btn.textContent = 'Fullscreen: ' + (_fsEl() ? 'ON' : 'OFF');
+  }
+
   function boot() {
     canvas = $('screen');
     Render.init(canvas);
+
+    if (_fsSupported()) {
+      $('btnFullscreen').classList.remove('hidden');
+      $('btnFullscreen').addEventListener('click', _toggleFullscreen);
+      document.addEventListener('fullscreenchange', _updateFsButton);
+      document.addEventListener('webkitfullscreenchange', _updateFsButton);
+    }
 
     // faction logos on the menu
     for (const [slot, side] of [['logoGdi', 'gdi'], ['logoNod', 'nod']]) {
@@ -22,6 +55,10 @@ const Main = (function () {
 
     document.querySelectorAll('#menu button[data-side]').forEach(btn => {
       btn.addEventListener('click', () => {
+        // touch devices only: go fullscreen right away so mobile Chrome's
+        // address bar doesn't eat playfield height. Desktop mouse users get
+        // no surprise fullscreen — they have the pause-menu toggle instead.
+        if (matchMedia('(pointer: coarse)').matches) _requestFullscreen();
         AUDIO.init();
         startGame(btn.dataset.side);
       });

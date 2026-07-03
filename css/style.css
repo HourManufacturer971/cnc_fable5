@@ -63,6 +63,7 @@ html, body {
   background: rgba(0, 0, 0, 0.82);
   z-index: 10;
 }
+.hidden { display: none; }
 .overlay.hidden { display: none; }
 
 .panel {
