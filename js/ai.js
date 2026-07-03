@@ -198,12 +198,16 @@ const AI = (function () {
     nod: [['e1', 2], ['e3', 2], ['e4', 2], ['bggy', 2], ['bike', 2], ['ltnk', 5], ['arty', 2], ['ftnk', 2], ['stnk', 1], ['heli', 1]],
   };
 
-  function _pickUnit(g, p) {
-    const procs = _planned(g, p, 'proc');
-    const harvs = _unitCount(g, p, 'harv');
-    if (procs > 0 && harvs < Math.min(4, procs * 2) && p.credits > 1400 &&
-        Production.prereqOk(p, 'harv')) return 'harv';
-    const opts = WEIGHTS[p.side].filter(([k]) => Production.prereqOk(p, k));
+  // kind: 'infantry' | 'vehicle' | 'air' — each factory line picks only its
+  // own unit types, so the three lines can run concurrently
+  function _pickUnit(g, p, kind) {
+    if (kind === 'vehicle') {
+      const procs = _planned(g, p, 'proc');
+      const harvs = _unitCount(g, p, 'harv');
+      if (procs > 0 && harvs < Math.min(4, procs * 2) && p.credits > 1400 &&
+          Production.prereqOk(p, 'harv')) return 'harv';
+    }
+    const opts = WEIGHTS[p.side].filter(([k]) => DATA.units[k].factory === kind && Production.prereqOk(p, k));
     if (!opts.length) return null;
     let total = 0;
     for (const [, w] of opts) total += w;
@@ -409,10 +413,12 @@ const AI = (function () {
       if (want) Production.tryStart(p, want);
     }
 
-    // keep the unit line running
-    if (!p.queues.unit && p.credits > 400) {
-      const want = _pickUnit(g, p);
-      if (want) Production.tryStart(p, want);
+    // keep every unit line running — infantry/vehicle/air build concurrently
+    for (const kind of ['infantry', 'vehicle', 'air']) {
+      if (!p.queues[kind] && p.credits > 400) {
+        const want = _pickUnit(g, p, kind);
+        if (want) Production.tryStart(p, want);
+      }
     }
 
     // superweapon at the densest human cluster

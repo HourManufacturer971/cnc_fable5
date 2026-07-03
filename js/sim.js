@@ -103,8 +103,8 @@ function spawnBullet(shooter, w, target, opts) {
     tx += (game.rng() - 0.5) * 20;
     ty += (game.rng() - 0.5) * 20;
   }
-  const sx = shooter.kind === 'unit' ? shooter.x : _entX(shooter);
-  const sy = shooter.kind === 'unit' ? shooter.y : _entY(shooter);
+  const sx = opts.x !== undefined ? opts.x : (shooter.kind === 'unit' ? shooter.x : _entX(shooter));
+  const sy = opts.y !== undefined ? opts.y : (shooter.kind === 'unit' ? shooter.y : _entY(shooter));
   game.bullets.push({
     x: sx, y: sy, tx, ty,
     targetId: w.homing ? target.id : 0,
@@ -175,22 +175,20 @@ function _tickBullets(g) {
 
 // ---- firing ------------------------------------------------------------------
 
-function _muzzleXY(e, facing) {
+function _muzzleXY(e, facing, side) {
   const x = e.kind === 'unit' ? e.x : _entX(e);
   const y = e.kind === 'unit' ? e.y : _entY(e);
   const a = angleOf16(facing);
-  return { x: x + Math.sin(a) * 10, y: y - Math.cos(a) * 10 };
+  const px = x + Math.sin(a) * 10, py = y - Math.cos(a) * 10;
+  if (!side) return { x: px, y: py };
+  // perpendicular to facing, for a twin-barrel muzzle offset
+  const pa = a + Math.PI / 2;
+  return { x: px + Math.sin(pa) * side, y: py - Math.cos(pa) * side };
 }
 
-function _fireWeapon(shooter, w, target) {
+function _dischargeWeapon(shooter, w, target, m) {
   const d = _data(shooter);
-  const facing = shooter.kind === 'unit'
-    ? (d.turret ? shooter.turretFacing : shooter.facing)
-    : shooter.turretFacing;
-  const m = _muzzleXY(shooter, facing);
   const tx = _entX(target), ty = _entY(target);
-  if (shooter.kind === 'unit') shooter.decloakTicks = Math.max(shooter.decloakTicks || 0, 45);
-
   if (w.speed === 0) {
     // hitscan
     let dmg = w.dmg;
@@ -206,10 +204,29 @@ function _fireWeapon(shooter, w, target) {
     else if (w.key === 'obelisk') spawnEffect('laserBeam', m.x, m.y, { x1: m.x, y1: m.y - 14, x2: tx, y2: ty, ttl: 6 });
     else spawnEffect('tracer', m.x, m.y, { x1: m.x, y1: m.y, x2: tx, y2: ty, ttl: 3 });
   } else {
-    spawnBullet(shooter, w, target);
+    spawnBullet(shooter, w, target, { x: m.x, y: m.y });
   }
   spawnEffect('muzzle', m.x, m.y);
   _maybePlay(w.sound, m.x, m.y);
+}
+
+function _fireWeapon(shooter, w, target) {
+  const d = _data(shooter);
+  const facing = shooter.kind === 'unit'
+    ? (d.turret ? shooter.turretFacing : shooter.facing)
+    : shooter.turretFacing;
+  if (shooter.kind === 'unit') shooter.decloakTicks = Math.max(shooter.decloakTicks || 0, 45);
+
+  // twin-barrel turrets (Mammoth Tank) fire two half-damage rounds side by
+  // side from the main gun only — total volley damage matches a single shot,
+  // this is a visual/behavioral flourish, not a damage buff
+  if (shooter.kind === 'unit' && d.dualBarrel && w.key === d.weapon) {
+    const half = Object.assign({}, w, { dmg: w.dmg / 2 });
+    _dischargeWeapon(shooter, half, target, _muzzleXY(shooter, facing, -3));
+    _dischargeWeapon(shooter, half, target, _muzzleXY(shooter, facing, 3));
+    return;
+  }
+  _dischargeWeapon(shooter, w, target, _muzzleXY(shooter, facing));
 }
 
 // ---- orders ------------------------------------------------------------------
@@ -299,6 +316,56 @@ function orderEnter(u, target) {
   u.path = findPath(u, best.cx, best.cy);
   u.pathi = 0;
   return true;
+}
+
+// board a transport: infantry paths adjacent, then embarks automatically
+// (see _tickBoard). Returns false if the transport can't take it.
+function orderBoard(u, apc) {
+  const ud = DATA.units[u.type];
+  const cd = apc && DATA.units[apc.type];
+  if (!ud.infantry || !cd || !cd.transport || apc.owner !== u.owner) return false;
+  if (!apc.cargo || apc.cargo.length >= cd.transport) return false;
+  u.targetId = 0;
+  u.guardAnchor = null;
+  u.state = 'board';
+  u.boardTargetId = apc.id;
+  u.path = findPath(u, worldToCell(apc.x), worldToCell(apc.y), { range: 1 });
+  u.pathi = 0;
+  return true;
+}
+
+// free ground cell within `maxR` of (cx0,cy0), spiralling outward
+function _freeUnitCellNear(cx0, cy0, maxR) {
+  const g = game;
+  for (let r = 0; r <= maxR; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const cx = cx0 + dx, cy = cy0 + dy;
+        if (inMap(cx, cy) && isPassable(cx, cy) && g.tib[cellIdx(cx, cy)] === 0) return { cx, cy };
+      }
+    }
+  }
+  return null;
+}
+
+// disembark every passenger into free cells around the transport
+function unloadCargo(apc) {
+  if (!apc.cargo || !apc.cargo.length) return false;
+  const cx0 = worldToCell(apc.x), cy0 = worldToCell(apc.y);
+  let placed = 0;
+  while (apc.cargo.length) {
+    const spot = _freeUnitCellNear(cx0, cy0, 3);
+    if (!spot) break;
+    const u = apc.cargo.pop();
+    u.x = cellCenterX(spot.cx); u.y = cellCenterY(spot.cy);
+    u.state = 'idle'; u.path = []; u.pathi = 0; u.boardTargetId = 0; u._commit = -1;
+    u.guardAnchor = { x: u.x, y: u.y };
+    addUnit(u);
+    placed++;
+  }
+  if (placed) _maybePlay('place', apc.x, apc.y);
+  return placed > 0;
 }
 
 function stopUnit(u) {
@@ -779,6 +846,34 @@ function _engineer(u, d) {
   else orderEnter(u, t); // repath
 }
 
+// ---- transports ----------------------------------------------------------------
+
+function _tickBoard(u, d) {
+  const apc = getEnt(u.boardTargetId);
+  const cd = apc && DATA.units[apc.type];
+  if (!apc || apc._dead || !cd || !cd.transport || apc.owner !== u.owner) {
+    u.state = 'idle'; u.boardTargetId = 0; u.guardAnchor = { x: u.x, y: u.y };
+    return;
+  }
+  if (apc.cargo.length >= cd.transport) {
+    // filled up while en route — stand down where we are
+    u.state = 'idle'; u.boardTargetId = 0; u.guardAnchor = { x: u.x, y: u.y };
+    return;
+  }
+  if (dist(u.x, u.y, apc.x, apc.y) <= 1.5 * C.CELL) {
+    // embark: leave the world, kept alive as a passenger object
+    removeUnit(u);
+    u.state = 'boarded';
+    apc.cargo.push(u);
+    _maybePlay('place', apc.x, apc.y);
+    return;
+  }
+  if (u.pathi < u.path.length) { _stepAlongPath(u, d); return; }
+  // the transport moved on — repath toward its current position
+  u.path = findPath(u, worldToCell(apc.x), worldToCell(apc.y), { range: 1 });
+  u.pathi = 0;
+}
+
 // ---- per-unit tick -----------------------------------------------------------
 
 function _tickUnit(u) {
@@ -795,6 +890,7 @@ function _tickUnit(u) {
     return;
   }
   if (d.engineer && u.state === 'enter') { _engineer(u, d); return; }
+  if (d.infantry && u.state === 'board') { _tickBoard(u, d); return; }
 
   switch (u.state) {
     case 'move': {
@@ -985,6 +1081,14 @@ function killEntity(ent, attacker) {
     const d = DATA.units[ent.type];
     removeUnit(ent);
     _releasePad(ent);
+    // a destroyed transport takes its passengers with it
+    if (ent.cargo && ent.cargo.length) {
+      for (const pu of ent.cargo) {
+        spawnEffect('infdie', ent.x, ent.y, { itype: pu.type, side: pu.owner });
+        if (pu.owner === human) g.stats.losses++; else g.stats.kills++;
+      }
+      ent.cargo.length = 0;
+    }
     if (d.infantry) {
       spawnEffect('infdie', ent.x, ent.y, { itype: ent.type, side: ent.owner });
       // dying on a tiberium field mutates the body into a visceroid

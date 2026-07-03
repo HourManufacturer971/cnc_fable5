@@ -71,8 +71,8 @@ define **exactly** the globals listed and may freely call any global listed for 
 | map.js | `MAPGEN` (`generate(game, seed)`) |
 | path.js | `findPath(unit, destCx, destCy, opts?) -> [{cx,cy},...]` |
 | fog.js | `Fog` (`init, revealCircle, update, isExplored`) |
-| sim.js | `Sim` (`tick`), `orderMove`, `orderAttack`, `orderHarvest`, `orderDeploy`, `orderEnter`, `stopUnit`, `killEntity`, `fireIon`, `fireNuke`, `spawnEffect`, `spawnBullet` |
-| production.js | `Production` (`tick, tryStart, toggleHold, cancel, items, canPlace, place, sell, toggleRepair, computePower, categoryOf, prereqOk, superReady, launchSuper`) |
+| sim.js | `Sim` (`tick`), `orderMove`, `orderAttack`, `orderHarvest`, `orderDeploy`, `orderEnter`, `orderBoard`, `unloadCargo`, `stopUnit`, `killEntity`, `fireIon`, `fireNuke`, `spawnEffect`, `spawnBullet` |
+| production.js | `Production` (`tick, tryStart, toggleHold, cancel, items, canPlace, place, sell, toggleRepair, computePower, categoryOf, prereqOk, superReady, launchSuper, setPrimary`) |
 | ai.js | `AI` (`init, tick, _peek` — `_peek` is a read-only debug/test hook) |
 | input.js | `Input` (`init, tick, mouse, cursorKind, mode, modeArg`) |
 | render.js | `Render` (`init, frame, worldFromScreen, hitTest`) |
@@ -88,15 +88,27 @@ status ('playing'|'won'|'lost'), speed (tick multiplier 1), stats {kills, losses
 buildingsKilled, buildingsLost, harvested}, evaCooldowns {}`.
 
 Player fields (`makePlayer`): `side ('gdi'|'nod'), isAI, credits, storage (recomputed),
-power {out, drain}, queues {building:null|Job, unit:null|Job}, ready {building: key|null},
-scroll {b:0,u:0}, radar (bool, recomputed), super {key:null|'ion'|'nuke', timer, max},
-unitIds [], buildingIds [], primaryWF, primaryBar` .
-Job = `{key, spent, total, ticksLeft, ticksTotal, hold}`.
+power {out, drain}, queues {building:null|Job, infantry:null|Job, vehicle:null|Job,
+air:null|Job} (each factory kind builds concurrently on its own line), unitQueue
+{infantry:[], vehicle:[], air:[]} (pending keys per line, max C.QUEUE_MAX each),
+ready {building: key|null}, scroll {b:0,u:0}, radar (bool, recomputed),
+super {key:null|'ion'|'nuke', timer, max}, unitIds [], buildingIds [],
+primary {infantry:0, vehicle:0, air:0} (building ids; set by Production.setPrimary)`.
+Job = `{key, spent, total, ticksLeft, ticksTotal, hold}`. `categoryOf(key)` returns
+`'building'` for structures or the factory kind (`'infantry'|'vehicle'|'air'`) for units
+— that's the queue line it belongs to. Owning more finished factories of a kind speeds
+that line's ticksLeft/credit drip (capped ×2.5); owning more finished `eye`/`tmpl`
+speeds the matching superweapon charge (capped ×4/tick).
 
 Unit fields (`makeUnit`): `id, kind:'unit', type, owner, x, y, facing, turretFacing, hp,
 path [], pathi, moveTarget {cx,cy}|null, targetId, state ('idle'|'move'|'attack'|'harvest'|
-'return'|'unload'|'enter'|'air'|...), cooldown, tib (harvester load 0..C.HARV_CAP), ammo,
-cloaked, decloakTicks, anim, spawnTick, guardAnchor {x,y}|null`.
+'return'|'unload'|'enter'|'board'|'boarded'|'air'|...), cooldown, tib (harvester load
+0..C.HARV_CAP), ammo, cloaked, decloakTicks, anim, spawnTick, guardAnchor {x,y}|null,
+cargo (array of passenger unit objects, or null — only present when DATA.units[type].transport
+is set), boardTargetId (id of the transport an infantry unit is walking to)`.
+A boarded passenger is fully detached from `game.units`/occupancy (kept alive only by the
+transport's `cargo` array reference) until `unloadCargo` re-adds it; it dies with its
+transport if the transport is destroyed.
 
 Building fields (`makeBuilding`): `id, kind:'building', type, owner, cx, cy (top-left), hp,
 turretFacing, targetId, cooldown, buildProgress (0..1, 1 = finished), repairing, anim,
@@ -185,7 +197,18 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   shells travel linear with small arc, rockets home on target, artillery lobs (slow, big
   splash, inaccurate vs moving). Splash damages all entities within radius (linear falloff,
   friendly fire ON like the original).
-- Tanks (flag `crush`) kill enemy infantry by driving onto their cell (squish sound).
+- Tanks (flag `crush`) kill enemy infantry by driving onto their cell (squish sound) —
+  pathfinding treats enemy-held cells as passable-but-costly, so a move order whose route
+  happens to cross stationary infantry crushes it; left-click on an enemy always orders
+  attack, never a deliberate drive-over.
+- Mammoth Tank (flag `dualBarrel`) fires its primary cannon as two half-damage shots from
+  offset muzzle points each volley (same total damage as one shot — a visual/behavioral
+  flourish, not a buff); its sprite carries a `_scaleBoost` read by `Render`'s `sca()` so it
+  draws visibly bigger than every other tank.
+- Transports (flag `transport: N` on a unit, e.g. `apc: 5`) carry infantry: `orderBoard(u,
+  transport)` walks the infantry adjacent then embarks it (`removeUnit` + push onto
+  `transport.cargo`, kept alive only by that reference); `unloadCargo(transport)` disembarks
+  everyone into free nearby cells. A destroyed transport kills its cargo.
 - Aircraft (`orca`, `heli`): fly ignoring terrain/occupancy (state 'air'), have `ammo`
   (orca 6 rockets, heli 10 mg bursts, from DATA), fly to target, orbit-strafe firing until
   ammo out, then auto-return to a free `hpad` to rearm (ammo refills over ~5s). Only

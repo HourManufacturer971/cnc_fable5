@@ -587,6 +587,10 @@
                    apc: 3, ltnk: 3, mtnk: 3, htnk: 3, ftnk: 3,
                    msam: 3, harv: 3, mcv: 3 };
   const SQ = 0.86; // top-face squash of the 3/4 camera
+  // the Mammoth Tank draws visibly bigger than every other tank, overflowing
+  // its single-cell footprint like a tall building overflows upward
+  const SCALE_BOOST = { htnk: 1.22 };
+  function _tagScale(frames, s) { for (const f of frames) f._scaleBoost = s; }
 
   // constant screen-space 1px lift so turrets sit ON their hulls
   function lift1(frames) {
@@ -622,6 +626,10 @@
           for (let f = 0; f < 16; f++) c[f] = frames[f];
           return c;
         });
+      }
+      if (SCALE_BOOST[key]) {
+        _tagScale(rec.body, SCALE_BOOST[key]);
+        if (rec.turret) _tagScale(rec.turret, SCALE_BOOST[key]);
       }
       entry[side] = rec;
     }

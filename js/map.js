@@ -269,6 +269,26 @@ const MAPGEN = (function () {
     }
   }
 
+  // Zero out any tiberium along the guaranteed corridor between the two
+  // starts, so a tiberium-free route always connects the bases (infantry
+  // can cross without taking chip damage, matching the always-passable
+  // terrain guarantee carveCorridor already gives that same line).
+  function clearTibCorridor(g, a, b, rad) {
+    const steps = Math.max(1, Math.ceil(distC(a.cx, a.cy, b.cx, b.cy)) * 2);
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const px = Math.round(a.cx + (b.cx - a.cx) * t);
+      const py = Math.round(a.cy + (b.cy - a.cy) * t);
+      for (let dy = -rad; dy <= rad; dy++) {
+        for (let dx = -rad; dx <= rad; dx++) {
+          const x = px + dx, y = py + dy;
+          if (!inMap(x, y)) continue;
+          g.tib[cellIdx(x, y)] = 0;
+        }
+      }
+    }
+  }
+
   // BFS over grass/dirt cells (occupancy is empty at mapgen time).
   function connected(g, a, b) {
     const W = C.MAP_W, H = C.MAP_H;
@@ -489,6 +509,10 @@ const MAPGEN = (function () {
       const count = 50 + ((rng() * 31) | 0); // 50..80
       placeField(g, rng, mx, my, count, starts, reach);
     }
+
+    // guaranteed tiberium-free route between the bases (mirrors the always-
+    // passable corridor carved above)
+    clearTibCorridor(g, hs, as, 2);
 
     // --- scrub exact start cells ±2: passable terrain, no tiberium --------------
     for (const st of starts) {

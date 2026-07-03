@@ -354,6 +354,16 @@ const Input = (function () {
         AUDIO.ack('move', _selClass());
         return;
       }
+      // load infantry into a friendly transport
+      if (ent.kind === 'unit' && DATA.units[ent.type].transport &&
+          ownSel.length && ownSel.every(u => DATA.units[u.type].infantry) &&
+          !ownSel.some(u => u.id === ent.id)) {
+        let acted = false;
+        for (const u of ownSel) if (orderBoard(u, ent)) acted = true;
+        if (acted) AUDIO.ack('move', _selClass());
+        else AUDIO.play('buzz');
+        return;
+      }
       // select it
       if (ent.kind === 'unit') {
         const now = Date.now();
@@ -519,9 +529,26 @@ const Input = (function () {
           if (DATA.units[u.type].deploysTo) { if (!orderDeploy(u)) AUDIO.play('buzz'); }
         }
         break;
+      case 'u': {
+        let acted = false;
+        for (const u of _selectedUnits()) {
+          if (DATA.units[u.type].transport && unloadCargo(u)) acted = true;
+        }
+        AUDIO.play(acted ? 'click' : 'buzz');
+        break;
+      }
       case 't': {
         const sel = _selectedUnits();
         if (sel.length) _selectSameTypeOnScreen(sel[0].type);
+        break;
+      }
+      case 'p': {
+        const selB = g.selection.map(id => g.buildings.get(id)).filter(Boolean);
+        if (selB.length === 1 && selB[0].owner === g.humanSide && Production.setPrimary(g.human, selB[0])) {
+          AUDIO.play('click');
+        } else {
+          AUDIO.play('buzz');
+        }
         break;
       }
     }
@@ -597,6 +624,8 @@ const Input = (function () {
         return 'deploy';
       }
       if (ent.kind === 'building' && sel.some(u => DATA.units[u.type].engineer) && ent.hp < ent.maxHp) return 'enter';
+      if (ent.kind === 'unit' && DATA.units[ent.type].transport && sel.length &&
+          sel.every(u => DATA.units[u.type].infantry) && !sel.some(u => u.id === ent.id)) return 'enter';
       return 'select';
     }
     if (ent && ent.owner !== g.humanSide) {

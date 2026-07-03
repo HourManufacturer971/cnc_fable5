@@ -4,8 +4,11 @@
 
 const Production = (function () {
 
+  // 'building' for structures; for units, the factory kind that builds them
+  // ('infantry' | 'vehicle' | 'air') — each kind is its own concurrent line
   function categoryOf(key) {
-    return DATA.buildings[key] ? 'building' : 'unit';
+    if (DATA.buildings[key]) return 'building';
+    return DATA.units[key].factory;
   }
 
   function _isHuman(player) { return game && player === game.human; }
@@ -16,6 +19,25 @@ const Production = (function () {
       if (b && b.type === type && b.buildProgress >= 1) return b;
     }
     return null;
+  }
+
+  function _countFinished(player, type) {
+    let n = 0;
+    for (const id of player.buildingIds) {
+      const b = game.buildings.get(id);
+      if (b && b.type === type && b.buildProgress >= 1) n++;
+    }
+    return n;
+  }
+
+  // finished factory buildings of a given kind ('infantry'|'vehicle'|'air')
+  function _countFactories(player, kind) {
+    let n = 0;
+    for (const id of player.buildingIds) {
+      const b = game.buildings.get(id);
+      if (b && b.buildProgress >= 1 && DATA.buildings[b.type].factory === kind) n++;
+    }
+    return n;
   }
 
   function _hasFactory(player, factoryKind) {
@@ -58,7 +80,7 @@ const Production = (function () {
     for (const strip of ['buildings', 'units']) {
       for (const key of list[strip]) {
         if (!prereqOk(player, key)) continue;
-        const cat = strip === 'buildings' ? 'building' : 'unit';
+        const cat = categoryOf(key);
         const job = player.queues[cat];
         let state = 'idle', frac = 0, eta = 0, count = 0;
         if (cat === 'building' && player.ready.building === key) {
@@ -68,9 +90,9 @@ const Production = (function () {
           frac = 1 - job.ticksLeft / job.ticksTotal;
           eta = Math.ceil(job.ticksLeft * (lowPower ? 2 : 1) / C.TPS);
         }
-        if (cat === 'unit') {
+        if (cat !== 'building') {
           count = (job && job.key === key ? 1 : 0) +
-            player.unitQueue.filter(k => k === key).length;
+            player.unitQueue[cat].filter(k => k === key).length;
         }
         out[strip].push({ key, state, frac, eta, count });
       }
@@ -103,10 +125,13 @@ const Production = (function () {
       if (human) { AUDIO.eva('building'); AUDIO.play('click'); }
       return true;
     }
-    // units: one active job + a pending queue (departure from the original)
-    if (player.queues.unit) {
-      if (1 + player.unitQueue.length >= C.QUEUE_MAX) { if (human) AUDIO.play('buzz'); return false; }
-      player.unitQueue.push(key);
+    // units: one active job per factory kind + a pending queue per kind, so
+    // infantry/vehicles/aircraft can all build at once (departure from the
+    // original, which shared one line for every unit type)
+    const q = player.unitQueue[cat];
+    if (player.queues[cat]) {
+      if (1 + q.length >= C.QUEUE_MAX) { if (human) AUDIO.play('buzz'); return false; }
+      q.push(key);
       if (human) AUDIO.play('click');
       return true;
     }
@@ -131,11 +156,12 @@ const Production = (function () {
       if (_isHuman(player)) AUDIO.eva('cancelled');
       return;
     }
-    if (cat === 'unit') {
+    if (cat !== 'building') {
       // pending copies go first (no money spent on them yet)
-      const i = player.unitQueue.lastIndexOf(key);
+      const q = player.unitQueue[cat];
+      const i = q.lastIndexOf(key);
       if (i >= 0) {
-        player.unitQueue.splice(i, 1);
+        q.splice(i, 1);
         if (_isHuman(player)) AUDIO.play('click');
         return;
       }
@@ -144,13 +170,14 @@ const Production = (function () {
     if (!job || job.key !== key) return;
     player.credits += job.spent;
     player.queues[cat] = null;
-    if (cat === 'unit') _advanceQueue(player);
+    if (cat !== 'building') _advanceQueue(player, cat);
     if (_isHuman(player)) AUDIO.eva('cancelled');
   }
 
-  function _advanceQueue(player) {
-    while (player.unitQueue.length && !player.queues.unit) {
-      const next = player.unitQueue.shift();
+  function _advanceQueue(player, cat) {
+    const q = player.unitQueue[cat];
+    while (q.length && !player.queues[cat]) {
+      const next = q.shift();
       if (prereqOk(player, next)) _startJob(player, next);
     }
   }
@@ -311,17 +338,25 @@ const Production = (function () {
 
   function _primaryFactory(g, player, kind) {
     // prefer stored primary, else first alive factory of that kind
-    const stored = kind === 'infantry' ? player.primaryBar : player.primaryWF;
+    const stored = player.primary[kind];
     if (stored) {
       const b = g.buildings.get(stored);
       if (b && !b._dead && b.buildProgress >= 1) return b;
     }
     const b = _hasFactory(player, kind);
-    if (b) {
-      if (kind === 'infantry') player.primaryBar = b.id;
-      else player.primaryWF = b.id;
-    }
+    if (b) player.primary[kind] = b.id;
     return b;
+  }
+
+  // player designates `building` as the primary factory of its kind — new
+  // units/aircraft spawn there instead of whichever one happened to be found
+  // first (matches the "set primary building" convenience from later C&C games)
+  function setPrimary(player, building) {
+    if (!building || building.owner !== player.side) return false;
+    const kind = DATA.buildings[building.type] && DATA.buildings[building.type].factory;
+    if (!kind) return false;
+    player.primary[kind] = building.id;
+    return true;
   }
 
   function _spawnUnit(g, player, key) {
@@ -419,19 +454,22 @@ const Production = (function () {
       }
     }
 
-    // advance queues (low power: half speed)
-    for (const cat of ['building', 'unit']) {
+    // advance queues (low power: half speed). Infantry/vehicle/air each run
+    // independently so e.g. a barracks and a war factory build at once; more
+    // finished factories of a kind speed that line up (diminishing, capped).
+    for (const cat of ['building', 'infantry', 'vehicle', 'air']) {
       const job = player.queues[cat];
       if (!job || job.hold) continue;
       if (lowPower && (g.tick & 1)) continue;
-      const drip = job.total / job.ticksTotal;
+      const mult = cat === 'building' ? 1 : Math.min(2.5, 1 + 0.5 * (_countFactories(player, cat) - 1));
+      const drip = (job.total / job.ticksTotal) * mult;
       if (player.credits < drip) {
         if (human) _evaOnceLocal(g, 'insufficientFunds', 225);
         continue;
       }
       player.credits -= drip;
       job.spent += drip;
-      job.ticksLeft--;
+      job.ticksLeft -= mult;
       if (job.ticksLeft <= 0) {
         if (cat === 'building') {
           player.ready.building = job.key;
@@ -443,29 +481,32 @@ const Production = (function () {
           }
         } else {
           if (_spawnUnit(g, player, job.key)) {
-            player.queues.unit = null;
+            player.queues[cat] = null;
             if (human) AUDIO.eva('unitReady');
-            _advanceQueue(player);
+            _advanceQueue(player, cat);
           } else {
             job.ticksLeft = 0; // retry next tick (spawn blocked / factory died)
             if (!_hasFactory(player, (DATA.units[job.key] || {}).factory)) {
               player.credits += job.spent;
-              player.queues.unit = null;
-              _advanceQueue(player);
+              player.queues[cat] = null;
+              _advanceQueue(player, cat);
             }
           }
         }
       }
     }
 
-    // superweapon charge
-    const superBld = player.side === 'gdi' ? _ownedFinished(player, 'eye') : _ownedFinished(player, 'tmpl');
-    if (superBld) {
-      const key = DATA.buildings[superBld.type].superweapon;
+    // superweapon charge — more Adv. Comm. Centers / Temples of Nod charge
+    // the Ion Cannon / nuke proportionally faster (capped so it can't be
+    // instant-fired by spamming the tech building)
+    const superKey = player.side === 'gdi' ? 'eye' : 'tmpl';
+    const superCount = _countFinished(player, superKey);
+    if (superCount > 0) {
+      const key = DATA.buildings[superKey].superweapon;
       if (player.super.key !== key) {
         player.super = { key, timer: C.SUPER_TICKS[key], max: C.SUPER_TICKS[key] };
       } else if (player.super.timer > 0) {
-        player.super.timer--;
+        player.super.timer = Math.max(0, player.super.timer - Math.min(superCount, 4));
         if (player.super.timer <= 0 && human) {
           AUDIO.eva(key === 'ion' ? 'ionReady' : 'nukeReady');
         }
@@ -522,6 +563,6 @@ const Production = (function () {
   return {
     tick, tryStart, toggleHold, cancel, items, canPlace, cellOk, place, sell,
     placeWallLine, toggleRepair, computePower, categoryOf, prereqOk, superReady,
-    launchSuper,
+    launchSuper, setPrimary,
   };
 })();

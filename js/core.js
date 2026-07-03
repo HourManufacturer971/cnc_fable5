@@ -219,15 +219,17 @@ function makePlayer(side, isAI) {
     credits: 5000,
     storage: 0,
     power: { out: 0, drain: 0 },
-    queues: { building: null, unit: null }, // Job {key, spent, total, ticksLeft, ticksTotal, hold}
-    unitQueue: [],                          // pending unit keys behind the active job (max C.QUEUE_MAX total)
+    // one Job {key, spent, total, ticksLeft, ticksTotal, hold} per line —
+    // infantry/vehicle/air build concurrently, each its own line
+    queues: { building: null, infantry: null, vehicle: null, air: null },
+    unitQueue: { infantry: [], vehicle: [], air: [] }, // pending keys per line (max C.QUEUE_MAX each)
     ready: { building: null },              // finished building key awaiting placement
     scroll: { b: 0, u: 0 },                 // sidebar strip scroll offsets
     radar: false,
     super: { key: null, timer: 0, max: 0 },
     unitIds: [],
     buildingIds: [],
-    primaryWF: 0, primaryBar: 0,            // building ids (0 = none)
+    primary: { infantry: 0, vehicle: 0, air: 0 }, // building ids (0 = none)
   };
 }
 
@@ -291,6 +293,9 @@ function makeUnit(type, owner, cx, cy) {
     anim: 0,
     spawnTick: game ? game.tick : 0,
     guardAnchor: null,
+    cargo: d.transport ? [] : null,   // passenger unit objects, if a transport
+    boardTargetId: 0,
+    _commit: -1,
   };
 }
 

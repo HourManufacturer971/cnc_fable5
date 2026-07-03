@@ -45,23 +45,31 @@ Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1`.
 | Shift+click | Add/remove from selection |
 | Double-click | Select all visible units of that type |
 | Click selected MCV (or `D`) | Deploy into Construction Yard |
+| Select infantry, click a friendly APC | Board it (up to 5 passengers) |
+| `U` | Unload the selected APC's passengers |
 | Alt+1..9 (or Ctrl+1..9) | Assign control group — Alt is the reliable one; browsers steal Ctrl+1..8 for tab switching |
 | 1..9 | Recall group (double-tap to center camera, Shift adds the group to the selection) |
 | `H` | Center on Construction Yard |
 | `S` / `G` | Stop / guard |
 | `T` | Select same type on screen |
+| `P` | Set the selected factory building as primary for its kind |
 | Arrow keys / screen edges | Scroll the map |
 | Two-finger touchpad scroll (or mouse wheel) | Pan the map |
 | `Esc` | Options menu / cancel placement, sell, repair, targeting |
 
-Sidebar: left icon strip is structures, right strip is units. Click an icon to
-start building (cost drains as it builds, remaining time shows on the icon);
-click a finished structure icon to place it. Unit icons can be clicked
-repeatedly to **queue up to 20 units** (the badge shows the count) — a
-deliberate departure from the original. Left-click an in-progress structure
-icon to pause it, right-click any icon to cancel/dequeue with refund. REPAIR
-and SELL buttons toggle wrench/sell cursor modes. The radar comes online with
-a powered Communications Center.
+Sidebar: left icon strip is structures, right strip is units — every icon
+shows its credit cost. Click an icon to start building (cost drains as it
+builds, remaining time shows on the icon); click a finished structure icon to
+place it. Unit icons can be clicked repeatedly to **queue up to 20 units**
+(the badge shows the count) — a deliberate departure from the original.
+Infantry, vehicles, and aircraft each build on their own concurrent line, so
+a Barracks and a War Factory (or Airstrip) run at the same time; owning more
+than one factory of a kind speeds that line up, and `P` designates which one
+new units spawn from. Left-click an in-progress structure icon to pause it,
+right-click any icon to cancel/dequeue with refund. REPAIR and SELL buttons
+toggle wrench/sell cursor modes. The radar comes online with a powered
+Communications Center; owning more than one Advanced Comm. Center or Temple
+of Nod charges the Ion Cannon / nuke proportionally faster.
 
 ## What's simulated
 
@@ -87,9 +95,10 @@ a powered Communications Center.
   placement rules, incremental payment, hold/cancel with refund
 - **Full roster** — Minigunner, Grenadier, Rocket Soldier, Flamethrower, Chem
   Warrior, Engineer (captures buildings), Commando; Hum-Vee, Buggy, Recon Bike,
-  APC, Light/Medium/Mammoth/Flame/Stealth Tanks, Artillery, Rocket Launcher,
-  Harvester, MCV; Orca and Apache with helipad rearming; Nod vehicles arrive by
-  cargo plane at the Airstrip
+  APC (carries up to 5 infantry), Light/Medium/Mammoth/Flame/Stealth Tanks,
+  Artillery, Rocket Launcher, Harvester, MCV; Orca and Apache with helipad
+  rearming; Nod vehicles arrive by cargo plane at the Airstrip. The Mammoth
+  Tank is visibly bigger than the rest and fires twin cannon shots.
 - **Defenses** — Guard Tower, Advanced Guard Tower, Gun Turret, SAM Site, and
   the Obelisk of Light with its charge-up laser; concrete walls place in
   drag-runs, auto-connect, and block movement
@@ -97,7 +106,11 @@ a powered Communications Center.
   strike (Temple of Nod)
 - **Combat details** — warhead vs. armor tables, turret rotation, homing
   rockets, artillery arcs, splash damage with friendly fire, tanks crush
-  infantry, stealth tank cloaking, Mammoth self-repair
+  infantry underfoot when a move order paths over them, stealth tank
+  cloaking, Mammoth self-repair
+- **Pathfinding** — infantry bias their routes away from tiberium (still
+  crossable if it's the only way through); a tiberium-free route always
+  connects the two bases
 - **Fog of war** — permanent-reveal black shroud, jagged edges, radar minimap;
   enemy blips on the radar need live line-of-sight from your own forces
 - **Visceroids** — infantry that die on a tiberium field mutate into hostile

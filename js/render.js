@@ -24,8 +24,9 @@ const Render = (function () {
     minimap = mkCanvas(C.MM_S, C.MM_S);
   }
 
-  // scale factor for a sprite canvas (pre-rendered assets are already hi-res)
-  function sca(img) { return img._hires ? 1 : Z; }
+  // scale factor for a sprite canvas (pre-rendered assets are already hi-res;
+  // a few units carry a _scaleBoost to visibly outsize their footprint)
+  function sca(img) { return img._hires ? 1 : Z * (img._scaleBoost || 1); }
 
   // draw a sprite at SCREEN coords (top-left)
   function drawSpr(img, sx, sy) {
@@ -471,10 +472,21 @@ const Render = (function () {
       const e = getEnt(id);
       if (!e) continue;
       if (e.kind === 'unit') {
-        const air = DATA.units[e.type].air;
+        const ud = DATA.units[e.type];
+        const air = ud.air;
         const x = X(e.x) - cs / 2, y = Y(e.y) - cs / 2 - (air ? 16 : 0);
         _drawBrackets(x, y, cs, cs);
         _drawHealthBar(x, y - 10, cs, e.hp / e.maxHp);
+        // transport cargo pips: filled = a passenger aboard
+        if (ud.transport && e.cargo) {
+          const pw = 6, gap = 2, n = ud.transport;
+          let px = x + cs / 2 - (n * pw + (n - 1) * gap) / 2;
+          for (let i = 0; i < n; i++) {
+            ctx.fillStyle = i < e.cargo.length ? PAL.uiGold : 'rgba(255,255,255,0.25)';
+            ctx.fillRect(px, y - 20, pw, 5);
+            px += pw + gap;
+          }
+        }
       } else {
         const x = X(e.cx * C.CELL), y = Y(e.cy * C.CELL);
         _drawBrackets(x, y, e.w * cs, e.h * cs);
@@ -710,6 +722,18 @@ const Render = (function () {
           ctx.fillRect(sx + C.CAMEO_PW - 34, iy + 2, 32, 20);
           ctx.fillStyle = PAL.uiGold;
           ctx.fillText('x' + item.count, sx + C.CAMEO_PW - 30, iy + 5);
+        }
+        // cost badge, always on top so it reads in every state
+        if (!item.super) {
+          const cd = DATA.buildings[item.key] || DATA.units[item.key];
+          if (cd) {
+            const label = '$' + cd.cost;
+            const w = ctx.measureText(label).width + 8;
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(sx + 2, iy + C.CAMEO_PH - 19, w, 17);
+            ctx.fillStyle = PAL.uiGold;
+            ctx.fillText(label, sx + 6, iy + C.CAMEO_PH - 16);
+          }
         }
         // hover highlight
         if (Input.mouse.x >= sx && Input.mouse.x < sx + C.CAMEO_PW &&

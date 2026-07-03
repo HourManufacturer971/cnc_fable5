@@ -1207,56 +1207,45 @@
     g.fillRect(cx - 16, cy - 12, 1, 1); g.fillRect(cx + 14, cy - 14, 1, 1);
     g.fillRect(cx + 18, cy - 4, 1, 1); g.fillRect(cx - 19, cy - 3, 1, 1);
 
-    // raptor: hand-drawn bitmap in chunky 2px pixels, layered golds.
-    // Left wing (col 0 = tip, upswept top edge, stepped feather tiers below).
-    const LWING = [
-      '.ll.......',
-      'llggl.....',
-      'lggggll...',
-      '.sggggggll',
-      '.sdggggggg',
-      '..sddggggg',
-      '...s.ddggg',
-      '....s..sdg',
-      '.......s.d',
-    ];
-    // Body column: head turned right w/ hooked beak, chest, fanned tail.
-    const BODY = [
-      '..lll..',
-      '.llggl.',
-      '.lgggpp',
-      '..lgg.p',
-      '..lgg..',
-      '..lggd.',
-      '.lgggd.',
-      '.lgggd.',
-      '..ggd..',
-      '..gds..',
-      '.dgggd.',
-      'ddgggdd',
-      '.d.g.d.',
-      '..s.s..',
-    ];
-    const grid = [];
-    for (let y2 = 0; y2 < 14; y2++) grid.push(new Array(25).fill('.'));
-    function blit(rows, ox, oy) {
-      for (let y2 = 0; y2 < rows.length; y2++)
-        for (let x2 = 0; x2 < rows[y2].length; x2++)
-          if (rows[y2][x2] !== '.') grid[oy + y2][ox + x2] = rows[y2][x2];
+    // eagle: bold tapered-disk silhouette (spike head, swept wings, tail
+    // point) — same point-chain technique as the Nod tail below, chosen
+    // for a strong graphic read at badge scale instead of a fussy bitmap.
+    function chain(pts2) {
+      const out = [];
+      for (let i = 0; i < pts2.length - 1; i++) {
+        for (let tt = 0; tt < 3; tt++) {
+          const f2 = tt / 3;
+          out.push([
+            Math.round(lerp(pts2[i][0], pts2[i + 1][0], f2)),
+            Math.round(lerp(pts2[i][1], pts2[i + 1][1], f2)),
+            lerp(pts2[i][2], pts2[i + 1][2], f2),
+          ]);
+        }
+      }
+      out.push(pts2[pts2.length - 1]);
+      return out;
     }
-    const RWING = LWING.map(r2 => r2.split('').reverse().join(''));
-    blit(LWING, 0, 2); blit(RWING, 15, 2); blit(BODY, 9, 0);
-    const eagle = outline(pad(bmp(grid.map(r2 => r2.join('')), {
-      l: GOLD_L, g: GOLD, d: GOLD_D, s: GOLD_S, p: '#c89838',
-    }, 2), 1), NAVY_OUT);
-    const ex = cx - (eagle.width >> 1), ey = cy - 15;
-    g.drawImage(eagle, ex, ey);
-    // eye (dark socket + glint) at the front of the turned head
-    g.fillStyle = NAVY_OUT; g.fillRect(ex + 1 + 13 * 2, ey + 2 + 2 * 2, 2, 2);
-    g.fillStyle = '#ffffff'; g.fillRect(ex + 1 + 13 * 2, ey + 2 + 2 * 2, 1, 1);
-    // wing glint dashes along the lit upper edge
-    g.fillStyle = '#f8ecc0';
-    g.fillRect(ex + 5, ey + 7, 6, 1); g.fillRect(ex + eagle.width - 11, ey + 7, 6, 1);
+    const head = chain([[cx, cy - 20, 1], [cx, cy - 13, 2.5], [cx, cy - 6, 4], [cx, cy, 5]]);
+    const lWing = chain([[cx - 1, cy + 1, 5], [cx - 8, cy - 1, 5], [cx - 14, cy - 5, 4],
+                          [cx - 19, cy - 10, 2.5], [cx - 22, cy - 15, 1]]);
+    const rWing = lWing.map(p2 => [cx + (cx - p2[0]), p2[1], p2[2]]);
+    const tail = chain([[cx, cy + 1, 5], [cx, cy + 7, 3.5], [cx, cy + 12, 1.5]]);
+    const body = [...head, ...lWing, ...rWing, ...tail];
+    for (const p of body) disk(g, p[0], p[1], p[2] + 1, NAVY_OUT);      // dark halo
+    for (const p of body) disk(g, p[0], p[1], p[2], GOLD_D);            // base
+    for (const p of body) if (p[2] > 1.5) disk(g, p[0] - 1, p[1] - 1, p[2] - 1.5, GOLD);
+    for (const p of body) if (p[2] > 3) disk(g, p[0] - 1, p[1] - 2, p[2] - 3.5, GOLD_L);
+    // wingtip + head glints
+    g.fillStyle = '#fff8dc';
+    g.fillRect(cx, cy - 20, 1, 1); g.fillRect(cx - 22, cy - 15, 1, 1); g.fillRect(cx + 22, cy - 15, 1, 1);
+    // feather notches on the wings' trailing edge
+    g.fillStyle = GOLD_S;
+    for (const p of [lWing[3], lWing[6], rWing[3], rWing[6]]) {
+      g.fillRect(p[0], p[1] + Math.round(p[2]) - 1, 2, 1);
+    }
+    // dark eye dot at the head/chest join
+    g.fillStyle = NAVY_OUT; g.fillRect(cx - 1, cy - 8, 2, 2);
+    g.fillStyle = '#dff0ff'; g.fillRect(cx, cy - 8, 1, 1);
 
     // wordmark with flanking chevrons
     drawWord(g, 'GDI', 35, 66, 3, GOLD, GOLD_L, NAVY_OUT);
@@ -1325,19 +1314,18 @@
     // apex glint
     g.fillStyle = '#ff9070'; g.fillRect(apexX - 1, apexY - 1, 2, 2);
 
-    // scorpion tail: one smooth, strongly tapered limb coiled ENTIRELY inside
-    // the triangle — rising along the left interior, arching under the top
-    // edge and hooking down into a stinger over the badge core.
+    // scorpion tail: a bold, thick hook coiled ENTIRELY inside the triangle —
+    // short and confident (a big "?" curl) rather than a long thin winding
+    // limb, so it reads clearly as a scorpion sting at badge scale.
     const spine = [
-      [56, 43], [51, 38], [48, 32], [48, 26], [51, 21], [56, 17], [61, 16],
-      [66, 18], [70, 22], [71, 27], [70, 31], [67, 35], [63, 38], [60, 40],
+      [60, 44], [53, 40], [47, 31], [51, 21], [60, 17], [67, 22], [66, 31],
     ];
-    const rad = [5, 5, 5, 4, 4, 4, 4, 3, 3, 3, 2, 2, 1, 1];
+    const rad = [7, 6, 6, 5, 4, 3, 1];
     // interpolated points for a smooth continuous body
     const pts = [];
     for (let i = 0; i < spine.length - 1; i++) {
-      for (let tt = 0; tt < 2; tt++) {
-        const f2 = tt / 2;
+      for (let tt = 0; tt < 3; tt++) {
+        const f2 = tt / 3;
         pts.push([
           Math.round(lerp(spine[i][0], spine[i + 1][0], f2)),
           Math.round(lerp(spine[i][1], spine[i + 1][1], f2)),
@@ -1354,16 +1342,16 @@
     for (const p of pts) if (p[2] <= 2) disk(g, p[0], p[1], Math.max(1, p[2] - 1), RED);
     for (const p of pts) if (p[2] >= 4) disk(g, p[0] - 1, p[1] - 2, p[2] - 3, RED_L);
     // segmentation bands + carapace glints at the thick spine knuckles
-    for (let i = 1; i < 9; i += 2) {
+    for (let i = 1; i < 6; i += 2) {
       ring(g, spine[i][0], spine[i][1], rad[i], rad[i] - 1, RED_D);
       g.fillStyle = '#ff9070';
       g.fillRect(spine[i][0] - 1, spine[i][1] - rad[i] + 1, 2, 1);
     }
     // stinger point: sharp venom tip finishing the stroke (inside the core)
-    g.fillStyle = RED; g.fillRect(59, 40, 2, 2);
-    g.fillStyle = RED_L; g.fillRect(59, 40, 1, 1);
-    g.fillStyle = '#ffb090'; g.fillRect(58, 42, 1, 1);
-    g.fillStyle = '#120202'; g.fillRect(57, 43, 1, 1);
+    g.fillStyle = RED; g.fillRect(65, 31, 2, 2);
+    g.fillStyle = RED_L; g.fillRect(65, 31, 1, 1);
+    g.fillStyle = '#ffb090'; g.fillRect(64, 33, 1, 1);
+    g.fillStyle = '#120202'; g.fillRect(63, 35, 1, 1);
     // inner shadow along the right slant so the badge reads dimensional
     g.fillStyle = RED_S;
     for (let y = topY + 2; y <= apexY - 2; y++) {

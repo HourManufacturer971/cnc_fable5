@@ -63,6 +63,10 @@ const findPath = (function () {
     opts = opts || {};
     const maxNodes = opts.maxNodes || 4000;
     const range = opts.range || 0;
+    // infantry take damage crossing tiberium — bias routes around it (soft,
+    // never a hard block: a field blocking the only way through still passes)
+    const ud = unit && unit.type ? DATA.units[unit.type] : null;
+    const avoidTib = !!(ud && ud.infantry && !ud.tibImmune);
     const scx = worldToCell(unit.x), scy = worldToCell(unit.y);
     let dcx = clamp(destCx | 0, 0, C.MAP_W - 1), dcy = clamp(destCy | 0, 0, C.MAP_H - 1);
 
@@ -125,7 +129,8 @@ const findPath = (function () {
         }
         const ni = cellIdx(nx, ny);
         if (state[ni] === closedTag) continue;
-        const step = (dx && dy ? 14 : 10) + (st === SOFT ? 80 : 0);
+        const tibPenalty = (avoidTib && game.tib[ni] > 0) ? 30 : 0;
+        const step = (dx && dy ? 14 : 10) + (st === SOFT ? 80 : 0) + tibPenalty;
         const ng = gCost[cur] + step;
         if (state[ni] !== openTag || ng < gCost[ni]) {
           gCost[ni] = ng;
