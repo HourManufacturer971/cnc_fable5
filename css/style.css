@@ -40,6 +40,57 @@ html, body {
   }
 }
 
+/* touch devices: the "minimal-ui" scroll shim. Mobile browsers only collapse
+   their address bar in response to a real page scroll — so keep the document
+   exactly one bar-height taller than the visible viewport (100vh is the
+   LARGE viewport on mobile, the dynamic viewport is the visible one) and pin
+   the game to the visible area with position:fixed. While the bar is
+   showing, the page has that much scrollable slack; one swipe (via the
+   #swipeHint overlay, whose touches we deliberately DON'T intercept)
+   collapses the bar, after which the slack is zero and nothing can scroll —
+   the game's own touch handling keeps it locked away. */
+@media (pointer: coarse) {
+  html, body { height: 100vh; overflow: visible; }
+  #wrap {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+  }
+  @supports (height: 100dvh) {
+    #wrap { width: 100dvw; height: 100dvh; }
+  }
+}
+
+#swipeHint {
+  position: fixed; inset: 0;
+  z-index: 30;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #d8d0a8;
+  font-size: 14px;
+  letter-spacing: 1px;
+  text-align: center;
+  touch-action: pan-y; /* the whole point: this swipe must scroll the page */
+}
+#swipeHint.hidden { display: none; }
+#swipeHint .chev {
+  font-size: 34px;
+  color: #e0b840;
+  animation: chevUp 1.1s ease-in-out infinite;
+}
+@keyframes chevUp {
+  0%, 100% { transform: translateY(10px); opacity: 0.45; }
+  50% { transform: translateY(-10px); opacity: 1; }
+}
+#swipeHint button { width: auto; padding: 8px 22px; }
+
+.coarseOnly { display: none; }
+@media (pointer: coarse) {
+  .coarseOnly { display: block; }
+}
+
 #rotateHint {
   display: none;
   position: fixed;

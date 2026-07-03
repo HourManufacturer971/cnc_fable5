@@ -280,15 +280,29 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   assigns the current selection (empty selection clears). Gold when the group has live
   members, with an `xN` count. Second click on a sole-selected factory = set primary;
   on a sole-selected loaded transport = unload; on the MCV = deploy.
-- **Fullscreen** (`main.js`, cross-browser via standard + `webkit`-prefixed
-  `requestFullscreen`/`exitFullscreen`, feature-detected): picking a faction on a
-  coarse-pointer (touch) device calls it synchronously inside the click handler, before
-  `AUDIO.init()`, so it stays inside the user-gesture window — otherwise mobile Chrome
-  keeps its address bar docked and steals playfield height. Desktop (fine pointer) never
-  auto-requests it. A `Fullscreen: ON/OFF` button in the pause menu (hidden when the API
-  is unsupported) lets anyone toggle it by hand; a `fullscreenchange`/
-  `webkitfullscreenchange` listener keeps its label in sync if the OS/browser exits
-  fullscreen out from under the page (Android back gesture, Esc on desktop).
+- **Maximize screen on mobile** (`main.js` `_maximizeScreen`), layered because no single
+  mechanism works everywhere:
+  1. Fullscreen API (standard + `webkit`-prefixed, feature-detected), requested
+     synchronously inside the faction-pick tap. On success, `screen.orientation.lock`
+     ('landscape') is attempted (best-effort). Desktop (fine pointer) never
+     auto-requests.
+  2. Minimal-ui scroll shim: under `@media (pointer: coarse)` the document is sized to
+     the LARGE viewport (`100vh`) while `#wrap` is `position: fixed` at the dynamic
+     viewport (`100dvh`) — so while the browser bar is showing, the page has exactly
+     bar-height of scrollable slack. Mobile browsers only collapse the bar on a real
+     scroll and the game swallows all canvas touches, so `#swipeHint` (a body-level
+     overlay with `touch-action: pan-y`, deliberately outside `#wrap`) lets one swipe
+     through. `_barVisible()` = documentElement.scrollHeight − visualViewport.height
+     > 8; resize/scroll listeners auto-dismiss the overlay when the bar collapses; a
+     skip button suppresses it. Shown after the fullscreen attempt fails (600ms check)
+     and from the pause-menu button (labelled `Maximize Screen` where the Fullscreen
+     API is absent, e.g. iPhone).
+  3. PWA: `manifest.webmanifest` (display `fullscreen`, orientation `landscape`,
+     procedurally-generated tiberium icons incl. a maskable variant) + `sw.js`
+     (network-first with cache fallback → installable + offline) + a menu `Install as
+     App` button wired to `beforeinstallprompt`, plus `apple-mobile-web-app-capable`/
+     `apple-touch-icon` for iOS Add-to-Home-Screen. Installed launches have no browser
+     chrome at all.
 
 ### AI opponent (`ai.js`)
 - Skirmish AI. Starts with deployed base (see map/main setup) + same credits as player.

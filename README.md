@@ -82,13 +82,27 @@ near-miss taps — a slop zone snaps them to the target. Edge scrolling
 and the in-game cursor are mouse-only; on touch the pan gesture
 replaces them.
 
-Picking a faction on a touch device also requests fullscreen, since
-mobile Chrome otherwise keeps its address bar docked at the top of the
-page for the whole match. A **Fullscreen: ON/OFF** button in the
-Options menu (`Esc` or tap the top-left tab) lets anyone re-enter or
-back out by hand; it only appears where the browser actually supports
-the Fullscreen API. Desktop mouse users never get fullscreen forced on
-them — only touch devices auto-request it.
+**Getting rid of the mobile browser bar** works in three layers, since
+no single mechanism covers every phone:
+
+1. Picking a faction on a touch device requests fullscreen via the
+   Fullscreen API (where the browser honors it).
+2. If the address bar is still there, a **"Swipe up to hide the browser
+   bar"** overlay appears — mobile browsers only collapse the bar in
+   response to a real page scroll, which the game normally swallows, so
+   this overlay lets exactly one swipe through as a genuine scroll. The
+   page is kept one bar-height taller than the visible viewport for
+   this purpose; once the bar collapses there is nothing left to scroll
+   and the game locks the viewport again.
+3. Best of all: the game is an installable **PWA** (manifest + service
+   worker + icons). Use the *Install as App* button on the menu when
+   the browser offers it, or *Add to Home Screen* — launched that way
+   it runs truly fullscreen with no browser chrome at all, and works
+   offline too.
+
+The Options menu (`Esc` or the top-left tab) has a
+**Fullscreen / Maximize Screen** button to redo any of this by hand.
+Desktop mouse users never get fullscreen forced on them.
 
 Sidebar: left icon strip is structures, right strip is units — every icon
 shows its credit cost. Click an icon to start building (cost drains as it

@@ -10,9 +10,16 @@ const Main = (function () {
 
   function $(id) { return document.getElementById(id); }
 
-  // ---- fullscreen (mobile browsers keep an address bar otherwise) ------------------
-  // Cross-browser: standard API everywhere current, webkit-prefixed for older
-  // Safari/iOS. Feature-detected so the button only appears where it can work.
+  // ---- maximizing the screen on mobile ----------------------------------------------
+  // Layered, because no single mechanism works everywhere:
+  //  1. Fullscreen API (standard + webkit-prefixed) — best when the browser
+  //     honors it, absent entirely on iPhone.
+  //  2. The "minimal-ui" scroll shim: mobile Chrome/Safari only collapse the
+  //     address bar on a real page scroll, and the game normally swallows
+  //     every touch — so when the bar is detected, the #swipeHint overlay
+  //     asks for one swipe and lets it through as a genuine scroll.
+  //  3. PWA install (manifest + service worker + beforeinstallprompt button)
+  //     — launching from the home screen has no browser chrome at all.
   function _fsEl() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
   function _fsSupported() {
     const el = document.documentElement;
@@ -33,18 +40,98 @@ const Main = (function () {
   }
   function _updateFsButton() {
     const btn = $('btnFullscreen');
-    if (btn) btn.textContent = 'Fullscreen: ' + (_fsEl() ? 'ON' : 'OFF');
+    if (btn && _fsSupported()) btn.textContent = 'Fullscreen: ' + (_fsEl() ? 'ON' : 'OFF');
+    if (_fsEl()) {
+      $('swipeHint').classList.add('hidden'); // fullscreen made the shim moot
+      if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('landscape').catch(() => {});
+      }
+    }
+  }
+
+  // the browser bar is visible when the document (sized to the LARGE
+  // viewport by the coarse-pointer CSS) overflows the visible viewport
+  function _barVisible() {
+    const vvh = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+    return document.documentElement.scrollHeight - vvh > 8;
+  }
+  let swipeSkipped = false;
+  function _showSwipeHint() {
+    if (swipeSkipped) return;
+    if (!matchMedia('(pointer: coarse)').matches) return;
+    if (!_barVisible()) return;
+    $('swipeHint').classList.remove('hidden');
+  }
+  function _hideSwipeHintIfDone() {
+    if (!$('swipeHint').classList.contains('hidden') && !_barVisible()) {
+      $('swipeHint').classList.add('hidden');
+    }
+  }
+  // try fullscreen (must be inside the user gesture), then fall back to the
+  // swipe shim once the request has had a beat to succeed or fail
+  function _maximizeScreen() {
+    if (_fsEl()) return;
+    if (_fsSupported()) _requestFullscreen();
+    setTimeout(() => { if (!_fsEl()) _showSwipeHint(); }, 600);
   }
 
   function boot() {
     canvas = $('screen');
     Render.init(canvas);
 
-    if (_fsSupported()) {
-      $('btnFullscreen').classList.remove('hidden');
-      $('btnFullscreen').addEventListener('click', _toggleFullscreen);
+    if (_fsSupported() || matchMedia('(pointer: coarse)').matches) {
+      const btn = $('btnFullscreen');
+      btn.classList.remove('hidden');
+      if (!_fsSupported()) btn.textContent = 'Maximize Screen'; // iPhone: shim only
+      btn.addEventListener('click', () => {
+        if (_fsSupported()) {
+          const entering = !_fsEl();
+          _toggleFullscreen();
+          if (entering) {
+            setTimeout(() => {
+              if (!_fsEl() && _barVisible()) {
+                togglePause(false);
+                swipeSkipped = false;
+                _showSwipeHint();
+              }
+            }, 600);
+          }
+        } else {
+          togglePause(false);
+          swipeSkipped = false;
+          _showSwipeHint();
+        }
+      });
       document.addEventListener('fullscreenchange', _updateFsButton);
       document.addEventListener('webkitfullscreenchange', _updateFsButton);
+    }
+
+    // the collapse fires resize/scroll — dismiss the hint the moment it lands
+    $('btnSwipeSkip').addEventListener('click', () => {
+      swipeSkipped = true;
+      $('swipeHint').classList.add('hidden');
+    });
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', _hideSwipeHintIfDone);
+    window.addEventListener('resize', _hideSwipeHintIfDone);
+    window.addEventListener('scroll', _hideSwipeHintIfDone);
+
+    // PWA install prompt (Android Chrome & friends): stash it, offer a button
+    let installEv = null;
+    window.addEventListener('beforeinstallprompt', ev => {
+      ev.preventDefault();
+      installEv = ev;
+      $('btnInstall').classList.remove('hidden');
+    });
+    $('btnInstall').addEventListener('click', () => {
+      if (!installEv) return;
+      installEv.prompt();
+      installEv.userChoice.then(() => { installEv = null; $('btnInstall').classList.add('hidden'); });
+    });
+    window.addEventListener('appinstalled', () => { $('btnInstall').classList.add('hidden'); });
+
+    if ('serviceWorker' in navigator &&
+        (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
     }
 
     // faction logos on the menu
@@ -55,10 +142,10 @@ const Main = (function () {
 
     document.querySelectorAll('#menu button[data-side]').forEach(btn => {
       btn.addEventListener('click', () => {
-        // touch devices only: go fullscreen right away so mobile Chrome's
-        // address bar doesn't eat playfield height. Desktop mouse users get
-        // no surprise fullscreen — they have the pause-menu toggle instead.
-        if (matchMedia('(pointer: coarse)').matches) _requestFullscreen();
+        // touch devices only: maximize right away (fullscreen if the browser
+        // honors it, else the swipe-the-bar-away shim). Desktop mouse users
+        // get no surprise fullscreen — they have the pause-menu toggle.
+        if (matchMedia('(pointer: coarse)').matches) _maximizeScreen();
         AUDIO.init();
         startGame(btn.dataset.side);
       });
