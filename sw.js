@@ -50,7 +50,10 @@ self.addEventListener('activate', ev => {
 self.addEventListener('fetch', ev => {
   if (ev.request.method !== 'GET' || !ev.request.url.startsWith(self.location.origin)) return;
   ev.respondWith(
-    fetch(ev.request).then(res => {
+    // cache:'no-cache' bypasses the HTTP cache's max-age (GitHub Pages sets
+    // 10 minutes) in favor of a conditional request — an online player gets
+    // the freshest deploy on every load, at the cost of cheap 304s
+    fetch(ev.request, { cache: 'no-cache' }).then(res => {
       if (res.ok) {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(ev.request, copy));
