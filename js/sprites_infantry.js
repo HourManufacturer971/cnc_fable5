@@ -2,7 +2,7 @@
 // sprites_infantry.js — procedurally drawn infantry sprites + cameos.
 // Fills SPRITES.infantry[key][side] for e1,e2,e3,e4,e5,e6,rmbo (both sides) with
 // { stand:[8], walk:[8][4], fire:[8][2], die:[4] } 24x24 canvases, and
-// SPRITES.cameo[key] 64x48 bust-portrait icons. Original pixel art, C&C-95 style.
+// SPRITES.cameo[key] 64x48 bust-portrait icons. Original pixel art, mid-90s RTS style.
 // Facing index 0 = N, 1 = NE, ... clockwise (unit facing16 >> 1).
 
 (function () {

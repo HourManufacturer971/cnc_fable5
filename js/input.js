@@ -1,5 +1,5 @@
 'use strict';
-// input.js — mouse/keyboard handling, classic C&C left-click scheme.
+// input.js — mouse/keyboard/touch handling, classic left-click RTS scheme.
 // Global: Input.
 
 const Input = (function () {
@@ -608,7 +608,7 @@ const Input = (function () {
       return;
     }
 
-    // ---- normal mode: classic C&C left-click ----
+    // ---- normal mode: classic left-click scheme ----
     const ent = _entAt(w.x, w.y);
     const sel = _selectedUnits();
     const ownSel = sel.filter(u => u.owner === g.humanSide);

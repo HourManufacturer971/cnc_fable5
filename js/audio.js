@@ -428,7 +428,7 @@ const AUDIO = (function () {
         [[0, 0.001], [0.05, 0.42], [1.8, 0.15], [2.8, 0.001]], { pink: true });
     },
 
-    // airy high shimmer ~1s (ion cannon spin-up)
+    // airy high shimmer ~1s (orbital lance spin-up)
     ionHum(t) {
       tone(t, 1.0, 'sine', [[0, 1244], [1.0, 1350]], [[0, 0.001], [0.3, 0.09], [1.0, 0.001]]);
       tone(t, 1.0, 'sine', [[0, 1866], [1.0, 1780]], [[0, 0.001], [0.3, 0.06], [1.0, 0.001]]);

@@ -38,6 +38,9 @@ const C = {
   SUPER_TICKS: { ion: 5400, nuke: 6300 },
   EDGE_SCROLL: 16,         // SCREEN px border that triggers edge scrolling
   SCROLL_SPEED: 12,        // WORLD px per frame while scrolling
+  // display names for the internal side keys (the keys themselves are legacy
+  // identifiers baked into save-free game state; only the labels are shown)
+  SIDE_NAME: { gdi: 'UDC', nod: 'SERPENT' },
 };
 
 // Widen the fixed 16:10 layout to a device's real aspect (phones in landscape
@@ -60,9 +63,9 @@ function applyScreenAspect(aspect) {
 // Shared palette — every sprite file draws from these so the art reads as one set.
 const PAL = {
   outline: '#101008',
-  // GDI: desert gold/tan
+  // UDC: desert gold/tan
   gdi: '#c8a84c', gdiDark: '#8a7230', gdiLight: '#e8d088', gdiShadow: '#5c4c20',
-  // Nod: steel grey + red accents
+  // Serpent Order: steel grey + red accents
   nod: '#8a8a94', nodDark: '#54545e', nodLight: '#b8b8c2', nodShadow: '#36363e',
   nodRed: '#b02818', nodRedLight: '#e05038',
   // terrain

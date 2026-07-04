@@ -1,7 +1,7 @@
 {
-  "name": "Tiberian Dawn Homage",
-  "short_name": "Tiberian Dawn",
-  "description": "A homage to the 1995 classic RTS — original code & art",
+  "name": "Harvest War",
+  "short_name": "Harvest War",
+  "description": "An original retro real-time strategy game — all code, art and audio built from scratch",
   "start_url": ".",
   "scope": ".",
   "display": "fullscreen",

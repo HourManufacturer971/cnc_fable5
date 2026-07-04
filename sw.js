@@ -5,7 +5,7 @@
 // fallback so an online player always gets the latest deploy — the cache
 // only answers when the network can't.
 
-const CACHE = 'td-v1';
+const CACHE = 'hw-v1';
 const CORE = [
   './',
   'index.html',

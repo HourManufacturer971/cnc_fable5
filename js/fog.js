@@ -1,5 +1,5 @@
 'use strict';
-// fog.js — permanent-reveal black shroud (Tiberian Dawn style). Global: Fog.
+// fog.js — permanent-reveal black shroud, classic-RTS style. Global: Fog.
 // Accepts both (game, ...) and bare (...) call shapes per SPEC.
 
 const Fog = (function () {

@@ -217,7 +217,7 @@ function _fireWeapon(shooter, w, target) {
     : shooter.turretFacing;
   if (shooter.kind === 'unit') shooter.decloakTicks = Math.max(shooter.decloakTicks || 0, 45);
 
-  // twin-barrel turrets (Mammoth Tank) fire two half-damage rounds side by
+  // twin-barrel turrets (Behemoth Tank) fire two half-damage rounds side by
   // side from the main gun only — total volley damage matches a single shot,
   // this is a visual/behavioral flourish, not a damage buff
   if (shooter.kind === 'unit' && d.dualBarrel && w.key === d.weapon) {
@@ -921,7 +921,7 @@ function _tickUnit(u) {
     default: // idle
       u._firing = false;
       _autoAcquire(u, d);
-      // mammoth self-heal to 50%
+      // behemoth self-heal to 50%
       if (d.selfHeal && u.hp < u.maxHp / 2 && g.tick % 8 === 0) u.hp++;
       // creatures roam the fields between meals
       if (d.creature && (g.tick + u.id) % 45 === 0) {
@@ -1091,7 +1091,7 @@ function killEntity(ent, attacker) {
     }
     if (d.infantry) {
       spawnEffect('infdie', ent.x, ent.y, { itype: ent.type, side: ent.owner });
-      // dying on a tiberium field mutates the body into a visceroid
+      // dying on a crystal field mutates the body into a fleshling
       const tc = cellIdx(worldToCell(ent.x), worldToCell(ent.y));
       if (g.tib[tc] > 0 && DATA.units.vice) {
         const v = makeUnit('vice', 'mut', worldToCell(ent.x), worldToCell(ent.y));

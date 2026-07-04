@@ -555,10 +555,10 @@
   function drawProc(ctx, W, H, pal, f, side, rnd) { // 72x48 +6 — tank + dock
     baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
     const m = mats(pal);
-    // --- tiberium storage tank (west): big cylinder ---
+    // --- chrysalite storage tank (west): big cylinder ---
     const wc = [pal.light, pal.base, pal.dark, pal.shadow];
     cyl3(ctx, 17, 1, 13, 5, 14, wc, [pal.base, pal.light, pal.shadow]);
-    // cap: glass viewport into the tiberium
+    // cap: glass viewport into the chrysalite
     ellipseFill(ctx, 17, 1, 8, 3, pal.shadow);
     ellipseFill(ctx, 17, 1, 7, 2, '#0e2010');
     ellipseFill(ctx, 16, 1, 5, 2, PAL.tibDark);
@@ -610,7 +610,7 @@
       const ph = (i + f) % 3;
       P(ctx, 29 + i * 6, ay + 5, 2, 2, ph === 0 ? PAL.tib3 : ph === 1 ? PAL.tib1 : '#1e4a22');
     }
-    // tiberium spill crystals around the dock
+    // chrysalite spill crystals around the dock
     const spill = [[27, 46], [30, 49], [34, 46], [38, 50], [42, 47], [45, 49], [32, 52], [25, 51]];
     const tibCols = [PAL.tib1, PAL.tib2, PAL.tib3];
     for (let i = 0; i < spill.length; i++) {
@@ -1692,7 +1692,7 @@
     ellipseFill(ctx, 48, 36, 10, 3, 'rgba(168,216,248,0.5)');
     ellipseFill(ctx, 48, 36, 6, 2, PAL.ion);
     ellipseFill(ctx, 48, 36, 3, 1, '#ffffff');
-    finishCameo(ctx, 'Ion Cannon');
+    finishCameo(ctx, 'Orbital Lance');
     return c;
   }
 

@@ -1,4 +1,4 @@
-# render_sprites.py — Westwood-style sprite pre-renderer.
+# render_sprites.py — retro-style sprite pre-renderer.
 # Builds low-poly models in code, renders them with Cycles from a fixed
 # tilted orthographic camera (one NW sun + soft fill, shadow-catcher ground),
 # and writes raw 4x PNG frames + projection metadata for tools/render3d/post.js.

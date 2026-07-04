@@ -623,7 +623,7 @@ const Render = (function () {
     const ss = String(secs % 60).padStart(2, '0');
     ctx.fillStyle = PAL.uiText;
     ctx.fillText(mm + ':' + ss, C.SIDEBAR_X + 220, 8);
-    ctx.fillText(g.humanSide.toUpperCase(), C.SIDEBAR_X + 16, 8);
+    ctx.fillText(C.SIDE_NAME[g.humanSide] || g.humanSide.toUpperCase(), C.SIDEBAR_X + 16, 8);
   }
 
   // ---- sidebar -------------------------------------------------------------------------------

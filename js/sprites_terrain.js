@@ -1121,11 +1121,18 @@
 
   // blocky 5x6 letterforms for the crest wordmarks
   const FONT = {
-    G: ['#####', '#....', '#.###', '#...#', '#...#', '#####'],
+    C: ['#####', '#....', '#....', '#....', '#....', '#####'],
     D: ['####.', '#...#', '#...#', '#...#', '#...#', '####.'],
+    E: ['#####', '#....', '####.', '#....', '#....', '#####'],
+    G: ['#####', '#....', '#.###', '#...#', '#...#', '#####'],
     I: ['#####', '..#..', '..#..', '..#..', '..#..', '#####'],
     N: ['#...#', '##..#', '#.#.#', '#..##', '#...#', '#...#'],
     O: ['#####', '#...#', '#...#', '#...#', '#...#', '#####'],
+    P: ['####.', '#...#', '####.', '#....', '#....', '#....'],
+    R: ['####.', '#...#', '####.', '#.#..', '#..#.', '#...#'],
+    S: ['#####', '#....', '#####', '....#', '....#', '#####'],
+    T: ['#####', '..#..', '..#..', '..#..', '..#..', '..#..'],
+    U: ['#...#', '#...#', '#...#', '#...#', '#...#', '#####'],
   };
 
   // word with hard drop shadow, dark outline, and a lit top row on each letter
@@ -1154,7 +1161,7 @@
     }
   }
 
-  // --- GDI crest: gold riveted roundel, navy field, layered spread-wing raptor
+  // --- UDC crest: gold heater shield, coalition stars, bold chevron on navy
   {
     const t = mk(120, 90); const g = t.g;
     // field with subtle horizontal scanline weave
@@ -1175,80 +1182,63 @@
     g.fillRect(3, 86, 4, 1); g.fillRect(3, 83, 1, 4);
     g.fillRect(113, 86, 4, 1); g.fillRect(116, 83, 1, 4);
 
-    const cx = 60, cy = 33;
-    // roundel: shadowed gold ring with rivets, deep navy inner field
-    disk(g, cx + 1, cy + 2, 29, 'rgba(4,8,16,0.6)');       // drop shadow
-    disk(g, cx, cy, 29, GOLD_S);
-    disk(g, cx, cy, 28, GOLD_D);
-    ring(g, cx, cy, 28, 24, GOLD);
-    // rim light top-left / core shadow bottom-right on the ring
-    for (let a = 0; a < Math.PI * 2; a += 0.045) {
-      const lx = Math.cos(a), ly = Math.sin(a);
-      const x26 = Math.round(cx + lx * 26.5), y26 = Math.round(cy + ly * 26.5);
-      if (lx + ly < -0.9) { g.fillStyle = GOLD_L; g.fillRect(x26, y26, 1, 1); }
-      else if (lx + ly > 0.9) { g.fillStyle = GOLD_D; g.fillRect(x26, y26, 1, 1); }
+    // heater shield: straight flanks curving to a point, gold band, navy core
+    const scx = 60, sTop = 8, sMid = 30, sTip = 58, shw = 22;
+    function shieldHW(y) {
+      if (y <= sMid) return shw;
+      const f = (y - sMid) / (sTip - sMid);
+      return Math.max(0, Math.round(shw * (1 - f * f)));
     }
-    // rivets around the ring
-    for (let i = 0; i < 12; i++) {
-      const a = i / 12 * Math.PI * 2 + 0.26;
-      const rx2 = Math.round(cx + Math.cos(a) * 26), ry2 = Math.round(cy + Math.sin(a) * 26);
-      g.fillStyle = GOLD_S; g.fillRect(rx2 - 1, ry2 - 1, 2, 2);
-      g.fillStyle = GOLD_L; g.fillRect(rx2 - 1, ry2 - 1, 1, 1);
+    // drop shadow
+    for (let y = sTop; y <= sTip; y++) {
+      const o = shieldHW(y);
+      g.fillStyle = 'rgba(4,8,16,0.6)';
+      g.fillRect(scx - o + 2, y + 2, o * 2 + 1, 1);
     }
-    // inner navy field with a lighter upper arc (sky glow)
-    disk(g, cx, cy, 23, NAVY_OUT);
-    disk(g, cx, cy, 22, NAVY);
-    for (let y = -22; y < -8; y++) {
-      const w = Math.floor(Math.sqrt(22 * 22 - y * y + 0.25));
-      if ((y & 1) === 0) { g.fillStyle = NAVY_L; g.fillRect(cx - w + 1, cy + y + 1, w * 2 - 1, 1); }
+    // gold band with navy core inset
+    for (let y = sTop; y <= sTip; y++) {
+      const o = shieldHW(y);
+      g.fillStyle = GOLD_S; g.fillRect(scx - o, y, o * 2 + 1, 1);
+      const o1 = shieldHW(y) - 1;
+      if (o1 > 0) { g.fillStyle = GOLD_D; g.fillRect(scx - o1, y, o1 * 2 + 1, 1); }
+      const o2 = shieldHW(y) - 2;
+      if (o2 > 0 && y >= sTop + 2 && y <= sTip - 2) { g.fillStyle = GOLD; g.fillRect(scx - o2, y, o2 * 2 + 1, 1); }
+      const o4 = shieldHW(y) - 4;
+      if (o4 > 0 && y >= sTop + 4 && y <= sTip - 3) { g.fillStyle = NAVY; g.fillRect(scx - o4, y, o4 * 2 + 1, 1); }
     }
-    // tiny stars in the field
-    g.fillStyle = '#4a6a9a';
-    g.fillRect(cx - 16, cy - 12, 1, 1); g.fillRect(cx + 14, cy - 14, 1, 1);
-    g.fillRect(cx + 18, cy - 4, 1, 1); g.fillRect(cx - 19, cy - 3, 1, 1);
-
-    // eagle: bold tapered-disk silhouette (spike head, swept wings, tail
-    // point) — same point-chain technique as the Nod tail below, chosen
-    // for a strong graphic read at badge scale instead of a fussy bitmap.
-    function chain(pts2) {
-      const out = [];
-      for (let i = 0; i < pts2.length - 1; i++) {
-        for (let tt = 0; tt < 3; tt++) {
-          const f2 = tt / 3;
-          out.push([
-            Math.round(lerp(pts2[i][0], pts2[i + 1][0], f2)),
-            Math.round(lerp(pts2[i][1], pts2[i + 1][1], f2)),
-            lerp(pts2[i][2], pts2[i + 1][2], f2),
-          ]);
-        }
-      }
-      out.push(pts2[pts2.length - 1]);
-      return out;
+    // lit top edge + left flank
+    g.fillStyle = GOLD_L;
+    g.fillRect(scx - shw, sTop, shw * 2 + 1, 1);
+    for (let y = sTop; y <= sTip; y++) g.fillRect(scx - shieldHW(y), y, 1, 1);
+    // sky glow arc in the upper core
+    g.fillStyle = NAVY_L;
+    for (let y = sTop + 5; y <= sTop + 11; y++) {
+      const o4 = shieldHW(y) - 4;
+      if (o4 > 0 && (y & 1) === 0) g.fillRect(scx - o4 + 1, y, o4 * 2 - 1, 1);
     }
-    const head = chain([[cx, cy - 20, 1], [cx, cy - 13, 2.5], [cx, cy - 6, 4], [cx, cy, 5]]);
-    const lWing = chain([[cx - 1, cy + 1, 5], [cx - 8, cy - 1, 5], [cx - 14, cy - 5, 4],
-                          [cx - 19, cy - 10, 2.5], [cx - 22, cy - 15, 1]]);
-    const rWing = lWing.map(p2 => [cx + (cx - p2[0]), p2[1], p2[2]]);
-    const tail = chain([[cx, cy + 1, 5], [cx, cy + 7, 3.5], [cx, cy + 12, 1.5]]);
-    const body = [...head, ...lWing, ...rWing, ...tail];
-    for (const p of body) disk(g, p[0], p[1], p[2] + 1, NAVY_OUT);      // dark halo
-    for (const p of body) disk(g, p[0], p[1], p[2], GOLD_D);            // base
-    for (const p of body) if (p[2] > 1.5) disk(g, p[0] - 1, p[1] - 1, p[2] - 1.5, GOLD);
-    for (const p of body) if (p[2] > 3) disk(g, p[0] - 1, p[1] - 2, p[2] - 3.5, GOLD_L);
-    // wingtip + head glints
-    g.fillStyle = '#fff8dc';
-    g.fillRect(cx, cy - 20, 1, 1); g.fillRect(cx - 22, cy - 15, 1, 1); g.fillRect(cx + 22, cy - 15, 1, 1);
-    // feather notches on the wings' trailing edge
-    g.fillStyle = GOLD_S;
-    for (const p of [lWing[3], lWing[6], rWing[3], rWing[6]]) {
-      g.fillRect(p[0], p[1] + Math.round(p[2]) - 1, 2, 1);
+    // three coalition stars across the chief
+    for (const [sx2, sy2] of [[46, 19], [60, 16], [74, 19]]) {
+      g.fillStyle = GOLD_L;
+      g.fillRect(sx2 - 1, sy2 - 3, 2, 7); g.fillRect(sx2 - 3, sy2 - 1, 6, 3);
+      g.fillStyle = GOLD;
+      g.fillRect(sx2 - 1, sy2 - 1, 2, 2);
+      g.fillStyle = '#fff8dc'; g.fillRect(sx2 - 1, sy2 - 2, 1, 1);
     }
-    // dark eye dot at the head/chest join
-    g.fillStyle = NAVY_OUT; g.fillRect(cx - 1, cy - 8, 2, 2);
-    g.fillStyle = '#dff0ff'; g.fillRect(cx, cy - 8, 1, 1);
+    // bold chevron pointing up in the lower field
+    for (let k = 0; k <= 12; k++) {
+      const yy = 30 + ((k * 3 / 4) | 0);
+      g.fillStyle = GOLD_D;
+      g.fillRect(59 - k, yy, 2, 5); g.fillRect(59 + k, yy, 2, 5);
+      g.fillStyle = GOLD;
+      g.fillRect(59 - k, yy, 2, 3); g.fillRect(59 + k, yy, 2, 3);
+      g.fillStyle = GOLD_L;
+      g.fillRect(59 - k, yy, 2, 1); g.fillRect(59 + k, yy, 2, 1);
+    }
+    // apex glint
+    g.fillStyle = '#fff8dc'; g.fillRect(59, 30, 2, 1);
 
     // wordmark with flanking chevrons
-    drawWord(g, 'GDI', 35, 66, 3, GOLD, GOLD_L, NAVY_OUT);
+    drawWord(g, 'UDC', 35, 66, 3, GOLD, GOLD_L, NAVY_OUT);
     g.fillStyle = GOLD_D;
     for (let i = 0; i < 4; i++) {
       g.fillRect(24 - i, 72 + i, 2, 1); g.fillRect(24 - i, 78 - i, 2, 1);
@@ -1257,7 +1247,7 @@
     SPRITES.logo.gdi = t.c;
   }
 
-  // --- Nod crest: layered red delta, segmented scorpion-tail sweep, black field
+  // --- Serpent Order crest: coiled red serpent inside a segmented ring, black field
   {
     const t = mk(120, 90); const g = t.g;
     g.fillStyle = '#080808'; g.fillRect(0, 0, 120, 90);
@@ -1280,93 +1270,73 @@
     g.fillRect(3, 86, 5, 1); g.fillRect(3, 82, 1, 5);
     g.fillRect(112, 86, 5, 1); g.fillRect(116, 82, 1, 5);
 
-    // inverted-triangle badge: scanline fill with layered border
-    const apexX = 60, topY = 7, apexY = 61, hw0 = 37;
-    function hwAt(y) { return (apexY - y) / (apexY - topY) * hw0; }
-    for (let y = topY; y <= apexY; y++) {
-      const hw = hwAt(y);
-      const o = Math.round(hw);
-      // dark red outer band (4px thick, follows the slant)
-      g.fillStyle = RED_D;
-      g.fillRect(apexX - o, y, o * 2 + 1, 1);
+    // segmented ring badge: dark red ring with tick marks, black core
+    const rcx = 60, rcy = 32, rOut = 27, rIn = 22;
+    disk(g, rcx + 1, rcy + 2, rOut + 1, 'rgba(10,2,2,0.6)'); // drop shadow
+    disk(g, rcx, rcy, rOut + 1, RED_S);
+    ring(g, rcx, rcy, rOut, rIn, RED_D);
+    disk(g, rcx, rcy, rIn, '#0a0a0a');
+    // lit upper-left arc, shadowed lower-right arc
+    for (let a = 0; a < Math.PI * 2; a += 0.04) {
+      const lx = Math.cos(a), ly = Math.sin(a);
+      const xm = Math.round(rcx + lx * (rOut - 2)), ym = Math.round(rcy + ly * (rOut - 2));
+      if (lx + ly < -0.8) { g.fillStyle = RED; g.fillRect(xm, ym, 1, 1); }
+      else if (lx + ly > 1.1) { g.fillStyle = RED_S; g.fillRect(xm, ym, 1, 1); }
     }
-    for (let y = topY + 4; y <= apexY - 7; y++) {
-      const w1 = Math.round(hwAt(y)) - 4;
-      if (w1 > 0) { g.fillStyle = RED; g.fillRect(apexX - w1, y, w1 * 2 + 1, 1); } // bright line band
+    // ring segment ticks
+    for (let i = 0; i < 10; i++) {
+      const a = i / 10 * Math.PI * 2 + 0.31;
+      const x1 = Math.round(rcx + Math.cos(a) * (rIn + 1)), y1 = Math.round(rcy + Math.sin(a) * (rIn + 1));
+      const x2 = Math.round(rcx + Math.cos(a) * (rOut - 1)), y2 = Math.round(rcy + Math.sin(a) * (rOut - 1));
+      g.fillStyle = '#0a0a0a';
+      g.fillRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1) + 1, Math.abs(y2 - y1) + 1);
     }
-    for (let y = topY + 6; y <= apexY - 10; y++) {
-      const w2 = Math.round(hwAt(y)) - 6;
-      if (w2 > 0) { g.fillStyle = '#0a0a0a'; g.fillRect(apexX - w2, y, w2 * 2 + 1, 1); } // black core
-    }
-    // subtle dark-red inner sheen at the top of the core
-    g.fillStyle = '#1c0806';
-    for (let y = topY + 7; y <= topY + 12; y++) {
-      const w2 = Math.round(hwAt(y)) - 7;
-      if (w2 > 0 && (y & 1)) g.fillRect(apexX - w2, y, w2 * 2 + 1, 1);
-    }
-    // top edge highlight + lit left slant
-    g.fillStyle = RED_L;
-    g.fillRect(apexX - hw0, topY, hw0 * 2 + 1, 1);
-    for (let y = topY; y <= apexY; y++) {
-      const o = Math.round(hwAt(y));
-      g.fillRect(apexX - o, y, 1, 1);
-    }
-    // apex glint
-    g.fillStyle = '#ff9070'; g.fillRect(apexX - 1, apexY - 1, 2, 2);
 
-    // scorpion tail: a bold, thick hook coiled ENTIRELY inside the triangle —
-    // short and confident (a big "?" curl) rather than a long thin winding
-    // limb, so it reads clearly as a scorpion sting at badge scale.
+    // coiled serpent: S-curve body swelling to the head, drawn with the
+    // point-chain technique for a smooth continuous coil
     const spine = [
-      [60, 44], [53, 40], [47, 31], [51, 21], [60, 17], [67, 22], [66, 31],
+      [46, 49], [56, 51], [66, 48], [71, 41], [66, 34],
+      [56, 32], [49, 26], [54, 18], [64, 16], [71, 20],
     ];
-    const rad = [7, 6, 6, 5, 4, 3, 1];
-    // interpolated points for a smooth continuous body
+    const rad = [1.5, 3, 4, 4.5, 4.5, 4.5, 4.5, 4.5, 5, 5.5];
     const pts = [];
     for (let i = 0; i < spine.length - 1; i++) {
-      for (let tt = 0; tt < 3; tt++) {
-        const f2 = tt / 3;
+      for (let tt = 0; tt < 4; tt++) {
+        const f2 = tt / 4;
         pts.push([
           Math.round(lerp(spine[i][0], spine[i + 1][0], f2)),
           Math.round(lerp(spine[i][1], spine[i + 1][1], f2)),
-          Math.round(lerp(rad[i], rad[i + 1], f2)),
+          lerp(rad[i], rad[i + 1], f2),
         ]);
       }
     }
     pts.push([spine[spine.length - 1][0], spine[spine.length - 1][1], rad[rad.length - 1]]);
-    // dark halo so the tail pops off both the black field and the red border
+    // dark halo so the coil pops off the ring and field
     for (const p of pts) disk(g, p[0], p[1], p[2] + 1, '#120202');
-    // body: dark base, red mid, lit top-left crest; thin tip stays bright
     for (const p of pts) disk(g, p[0], p[1], p[2], RED_D);
-    for (const p of pts) if (p[2] > 1) disk(g, p[0], p[1] - 1, p[2] - 1, RED);
-    for (const p of pts) if (p[2] <= 2) disk(g, p[0], p[1], Math.max(1, p[2] - 1), RED);
+    for (const p of pts) if (p[2] > 1.5) disk(g, p[0], p[1] - 1, p[2] - 1.5, RED);
     for (const p of pts) if (p[2] >= 4) disk(g, p[0] - 1, p[1] - 2, p[2] - 3, RED_L);
-    // segmentation bands + carapace glints at the thick spine knuckles
-    for (let i = 1; i < 6; i += 2) {
-      ring(g, spine[i][0], spine[i][1], rad[i], rad[i] - 1, RED_D);
+    // scale bands along the body
+    for (let i = 2; i < 8; i += 2) {
+      ring(g, spine[i][0], spine[i][1], Math.round(rad[i]), Math.round(rad[i]) - 1, RED_D);
       g.fillStyle = '#ff9070';
-      g.fillRect(spine[i][0] - 1, spine[i][1] - rad[i] + 1, 2, 1);
+      g.fillRect(spine[i][0] - 1, spine[i][1] - Math.round(rad[i]) + 1, 2, 1);
     }
-    // stinger point: sharp venom tip finishing the stroke (inside the core)
-    g.fillStyle = RED; g.fillRect(65, 31, 2, 2);
-    g.fillStyle = RED_L; g.fillRect(65, 31, 1, 1);
-    g.fillStyle = '#ffb090'; g.fillRect(64, 33, 1, 1);
-    g.fillStyle = '#120202'; g.fillRect(63, 35, 1, 1);
-    // inner shadow along the right slant so the badge reads dimensional
-    g.fillStyle = RED_S;
-    for (let y = topY + 2; y <= apexY - 2; y++) {
-      const o = Math.round(hwAt(y)) - 1;
-      if (o > 0) g.fillRect(apexX + o - 1, y, 1, 1);
-    }
+    // head: brow ridge, bright eye, forked tongue flicking up-right
+    const hx = 71, hy = 20;
+    disk(g, hx, hy, 5.5, RED_D);
+    disk(g, hx, hy - 1, 4.5, RED);
+    disk(g, hx - 1, hy - 2, 2.5, RED_L);
+    g.fillStyle = '#120202'; g.fillRect(hx + 1, hy - 2, 2, 2);   // eye socket
+    g.fillStyle = '#ffd090'; g.fillRect(hx + 2, hy - 2, 1, 1);   // gleaming eye
+    g.fillStyle = RED_L;                                          // tongue
+    g.fillRect(hx + 5, hy - 4, 1, 1); g.fillRect(hx + 6, hy - 5, 1, 1);
+    g.fillRect(hx + 7, hy - 6, 1, 1); g.fillRect(hx + 7, hy - 4, 1, 1);
+    // tail tip fade
+    g.fillStyle = '#ffb090'; g.fillRect(45, 49, 1, 1);
 
     // wordmark
-    drawWord(g, 'NOD', 35, 66, 3, RED, RED_L, '#1a0402');
-    // flanking blades
-    g.fillStyle = RED_D;
-    for (let i = 0; i < 4; i++) {
-      g.fillRect(24 - i, 72 + i, 2, 1); g.fillRect(24 - i, 78 - i, 2, 1);
-      g.fillRect(94 + i, 72 + i, 2, 1); g.fillRect(94 + i, 78 - i, 2, 1);
-    }
+    drawWord(g, 'SERPENT', 18, 68, 2, RED, RED_L, '#1a0402');
     SPRITES.logo.nod = t.c;
   }
 

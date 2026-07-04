@@ -1,16 +1,16 @@
-# Tiberian Dawn Homage — Engineering Spec
+# Harvest War — Engineering Spec
 
-A faithful-mechanics homage to the 1995 RTS *Command & Conquer* (Tiberian Dawn), built from
-scratch with **original code and original procedurally-generated pixel art / synthesized audio**.
-No assets or code from the original game are used.
+An original real-time strategy game in the mid-90s mold, built from scratch with
+**original code and original procedurally-generated pixel art / synthesized audio**.
+Inspired by the classic RTS genre; contains no assets, names, or code from any other game.
 
 ## Tech constraints
 
 - Plain ES2020 JavaScript, **no modules, no build step, no dependencies**. Every file is a
   classic `<script>` that defines the global symbols listed for it below and nothing else.
-- Internal resolution **640×400** (like the DOS/Win95 original), rendered on one `<canvas>`
+- Internal resolution **640×400** (period-correct low resolution), rendered on one `<canvas>`
   scaled up with `image-rendering: pixelated`.
-- Game logic runs at a fixed **15 ticks/second** (`C.TPS`) like the original "normal" speed;
+- Game logic runs at a fixed **15 ticks/second** (`C.TPS`) the classic "normal" RTS tick rate;
   rendering runs on `requestAnimationFrame`.
 - All randomness inside the simulation must use `game.rng()` (seeded) — never `Math.random()`
   inside sim/production/ai/map code. UI/audio/effects may use `Math.random()`.
@@ -26,19 +26,19 @@ No assets or code from the original game are used.
   timer. Sidebar background is dark metal grey (`PAL.uiMetal`).
 - **Map viewport**: x 0..480, y 16..400 (480×384 → 20×16 cells of 24px).
 - **Sidebar**: x 480..640, y 16..400 (160×384), metal grey panel:
-  - **Radar** area: 480..640 × 16..146 (160×130). Shows faction logo (drawn: GDI eagle-ish
-    gold emblem / Nod scorpion-tail-ish red emblem on black) until player owns a powered
-    `hq`; then a 128×128 minimap centered (2px per cell, terrain colors, tiberium green,
+  - **Radar** area: 480..640 × 16..146 (160×130). Shows faction logo (drawn: UDC gold
+    shield-and-chevron crest on navy / Serpent Order coiled-serpent ring on black) until player owns a powered
+    `hq`; then a 128×128 minimap centered (2px per cell, terrain colors, chrysalite green,
     units as 2px team-color dots, buildings 2px blocks, shroud black, white viewport
     rectangle). Click/drag on active radar moves the camera.
   - **Buttons row**: y 146..168: three 48×20 buttons at x 484/536/588: `REPAIR`, `SELL`, `MAP`
     (MAP is decorative/disabled). Repair/Sell toggle input modes; active mode = lit border.
-  - **Two build strips** (like the original): left strip x 484..548 = **structures**, right
+  - **Two build strips**: left strip x 484..548 = **structures**, right
     strip x 552..616 = **units** (infantry+vehicles+aircraft mixed, ordered by DATA list).
     Each strip shows **4 cameo icons** of 64×48 stacked from y 172 (spacing 50px: 172, 222,
     272, 322), and at the strip bottom (y 372..384) a pair of 32×12 up/down scroll arrow
     buttons. Strips scroll independently (`game.human.scroll.b` / `.u`).
-  - Superweapon cameos (`ion` for GDI w/ eye, `nuke` for Nod w/ tmpl) appear in the units
+  - Superweapon cameos (`ion` for UDC w/ eye, `nuke` for the Serpent Order w/ tmpl) appear in the units
     strip when their building exists; overlay text shows charge countdown m:ss or "READY".
 - Cursor: OS cursor hidden over canvas; custom cursor sprite drawn by render at
   `Input.mouse` position using `Input.cursorKind`.
@@ -60,8 +60,8 @@ define **exactly** the globals listed and may freely call any global listed for 
 | file | globals defined |
 |---|---|
 | core.js | `C`, `PAL`, `game`, `SPRITES`, `EV`, `uid`, `mulberry`, `clamp`, `lerp`, `dist`, `cellIdx`, `inMap`, `worldToCell`, `cellCenterX/Y`, `dirTo16`, `turnFacing`, `angleOf16`, `mkCanvas`, `rotFrames`, `makeGame`, `makePlayer`, `makeUnit`, `makeBuilding`, `addUnit`, `addBuilding`, `removeUnit`, `removeBuilding`, `getEnt`, `occAt`, `setOcc`, `clearOcc`, `terrainPassable`, `isPassable`, `footprintCells`, `applyDamage`, `enemyOf` |
-| data.js | `DATA` (warheads, weapons, units, buildings, build lists, EVA lines) |
-| sprites_terrain.js | fills `SPRITES.terrain`, `SPRITES.tiberium`, `SPRITES.fx`, `SPRITES.cursor`, `SPRITES.logo`, `SPRITES.shroudEdge` |
+| data.js | `DATA` (warheads, weapons, units, buildings, build lists, announcer lines) |
+| sprites_terrain.js | fills `SPRITES.terrain`, `SPRITES.chrysalite`, `SPRITES.fx`, `SPRITES.cursor`, `SPRITES.logo`, `SPRITES.shroudEdge` |
 | terrain_paint.js | `TERRAINPAINT` (`build(game) -> {canvas, anim}` — continuous full-map ground painter) |
 | sprites_units.js | fills `SPRITES.units[key][side]` for every vehicle & aircraft, and their `SPRITES.cameo[key]` |
 | sprites_infantry.js | fills `SPRITES.infantry[key][side]` for every infantry type, and their `SPRITES.cameo[key]` |
@@ -117,9 +117,9 @@ rally {cx,cy}|null, spawnTick`.
 ## Terrain ids
 
 `0 grass, 1 dirt, 2 rock (impassable), 3 water (impassable), 4 tree (impassable),
-5 blossom tree (impassable, regrows tiberium around it), 6 bridge deck (passable,
+5 blossom tree (impassable, regrows chrysalite around it), 6 bridge deck (passable,
 drawn over water)`. `game.tvar` picks sprite variants.
-Tiberium lives in `game.tib` (0..C.TIB_MAX per cell) independent of terrain (only on 0/1).
+Chrysalite lives in `game.tib` (0..C.TIB_MAX per cell) independent of terrain (only on 0/1).
 MAPGEN also fills `game.decor = { bridge, waterfall, village }`: bridge cells, the
 waterfall cell, and the neutral hamlet layout that main.js spawns as 'civ'-owned
 buildings/units (players include a `civ` stub owner nobody auto-targets).
@@ -132,12 +132,12 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   (or field exhausted and >0 load) drive to own refinery dock cell (the cell just south of
   the refinery's middle column), unload over ~60 ticks adding credits gradually
   (respect storage cap; excess is lost + EVA `silosNeeded`), then return to last field.
-  Idle harvesters auto-seek visible tiberium. New refinery spawns a free harvester beside it.
+  Idle harvesters auto-seek visible chrysalite. New refinery spawns a free harvester beside it.
 - Storage: refinery 1000, silo 1500. `player.storage` = sum over owned finished buildings.
   Credits over storage bleed away (clamped on add).
-- Tiberium growth: every ~75 ticks a few random tiberium cells with value ≥ 125 spread 25 to
+- Chrysalite growth: every ~75 ticks a few random chrysalite cells with value ≥ 125 spread 25 to
   a random adjacent grass/dirt cell (new cells start at 25, cap C.TIB_MAX=300); blossom
-  trees seed/refill adjacent cells more aggressively. Infantry standing on tiberium take
+  trees seed/refill adjacent cells more aggressively. Infantry standing on chrysalite take
   1 hp per 8 ticks (chem warrior `e5` immune).
 
 ### Power
@@ -150,7 +150,7 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 - Two queues per player: `building` and `unit` (unit strip covers infantry+vehicles+air but
   only ONE thing builds at a time per strip, like the original — no multi-queue).
 - Prerequisites per DATA `prereq` (list of building keys, all must exist finished) plus the
-  producing building itself; GDI items require GDI production buildings etc. per DATA `side`
+  producing building itself; UDC items require UDC production buildings etc. per DATA `side`
   (null = both sides).
 - Cost is deducted **incrementally** each tick while building; if credits run dry the job
   stalls (EVA `insufficientFunds` once/15s). `ticksTotal = ceil(cost * C.BUILD_TPC)`
@@ -163,7 +163,7 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   animation (buildProgress 0→1 over ~25 ticks, rendered as bottom-up reveal + scaffold
   flicker), then EVA `newOptions` if it unlocked anything.
 - Units: when done, spawn at primary factory (barracks/hand for infantry, weap for
-  vehicles, hpad for aircraft, afld for Nod vehicles: a cargo plane effect flies across and
+  vehicles, hpad for aircraft, afld for Serpent Order vehicles: a cargo plane effect flies across and
   the vehicle appears at the airstrip), EVA `unitReady`, walk to rally point (building
   `rally`, set by clicking a factory then left-clicking ground... keep: rally = 2 cells south
   of factory).
@@ -201,7 +201,7 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   pathfinding treats enemy-held cells as passable-but-costly, so a move order whose route
   happens to cross stationary infantry crushes it; left-click on an enemy always orders
   attack, never a deliberate drive-over.
-- Mammoth Tank (flag `dualBarrel`) fires its primary cannon as two half-damage shots from
+- Behemoth Tank (flag `dualBarrel`) fires its primary cannon as two half-damage shots from
   offset muzzle points each volley (same total damage as one shot — a visual/behavioral
   flourish, not a buff); its sprite carries a `_scaleBoost` read by `Render`'s `sca()` so it
   draws visibly bigger than every other tank.
@@ -223,10 +223,10 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   mcv cell + (-1,-1)) placeable → replaced by fact building. Else buzz + no-deploy cursor.
 
 ### Superweapons
-- GDI: `eye` finished → ion cannon, charge `C.SUPER_TICKS.ion = 5400` ticks (6 min). Ready →
+- UDC: `eye` finished → orbital lance, charge `C.SUPER_TICKS.ion = 5400` ticks (6 min). Ready →
   EVA `ionReady`, cameo READY; click cameo → target mode → click map: white-blue beam column
   effect, `900 dmg` warhead `laser` splash 36px at point after ~1s. Then recharges.
-- Nod: `tmpl` finished → nuke, `C.SUPER_TICKS.nuke = 6300`. EVA `nukeReady`/`nukeLaunched`;
+- Serpent Order: `tmpl` finished → nuke, `C.SUPER_TICKS.nuke = 6300`. EVA `nukeReady`/`nukeLaunched`;
   missile drops after 3s: `600 dmg` warhead `he`, splash 84px, leaves scorch, screen flash
   + shake. Superweapon state lives on `player.super`; timers tick in Production.tick; only
   while the granting building exists (destroyed → super removed).
@@ -244,9 +244,9 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   Score screen (Main): dark screen, tally lines (time, credits harvested, units
   destroyed/lost, buildings destroyed/lost, score) + "PLAY AGAIN" button → menu.
 
-### Controls (classic C&C left-click scheme)
+### Controls (classic left-click scheme)
 - **Left-click**: select own unit(s)/building; with selection on: click enemy → attack;
-  click ground → move (units) ; click tiberium w/ harvester selected → harvest; click own
+  click ground → move (units) ; click chrysalite w/ harvester selected → harvest; click own
   building w/ engineer... (engineer targets enemy building = enter/capture cursor); click
   selected MCV again → deploy; click own factory → select it (its rally shown).
 - **Drag left**: selection box (own units only; buildings excluded unless single-click).
@@ -298,7 +298,7 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
      and from the pause-menu button (labelled `Maximize Screen` where the Fullscreen
      API is absent, e.g. iPhone).
   3. PWA: `manifest.webmanifest` (display `fullscreen`, orientation `landscape`,
-     procedurally-generated tiberium icons incl. a maskable variant) + `sw.js`
+     procedurally-generated chrysalite icons incl. a maskable variant) + `sw.js`
      (network-first with cache fallback → installable + offline) + a menu `Install as
      App` button wired to `beforeinstallprompt`, plus `apple-mobile-web-app-capable`/
      `apple-touch-icon` for iOS Add-to-Home-Screen. Installed launches have no browser
@@ -315,7 +315,7 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 
 ### AI opponent (`ai.js`)
 - Skirmish AI. Starts with deployed base (see map/main setup) + same credits as player.
-  Personality by side (GDI: tanks+AGT; Nod: turrets/obelisk+buggy/ltnk/arty swarm).
+  Personality by side (UDC: tanks+AGT; Serpent: turrets/spire+buggy/ltnk/arty swarm).
 - Loop (~every 30 ticks): maintain build order: power ahead of drain → proc (up to 2-3) →
   barracks/hand → weap/afld → hq → defenses near base perimeter facing player → tech (eye/
   tmpl) → superweapon use on player's densest building cluster.
@@ -350,16 +350,16 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   voice than EVA), throttled to at most one per second.
 - `AUDIO.init()` must be called from a user gesture (menu click) to unlock the context.
 
-### Art direction (sprites_*.js) — original pixel art, C&C-95 look
+### Art direction (sprites_*.js) — original pixel art, mid-90s RTS look
 - All sprites drawn programmatically on offscreen canvases at 1× with integer `fillRect`
   pixels; NO anti-aliasing, no gradients except tiny dithers; dark outline (#111-ish) around
   readable silhouettes; light source top-left; palettes from `PAL` in core.js.
-- Team colors: GDI = desert gold/tan (`PAL.gdi*`), Nod = steel grey with red accents
+- Team colors: UDC = desert gold/tan (`PAL.gdi*`), Serpent Order = steel grey with red accents
   (`PAL.nod*`). Same shapes, different palette per `side`.
 - Vehicles: 24×24 canonical facing NORTH, then `rotFrames(c, 16)` (core helper) for 16
   facings; turreted vehicles (ltnk, mtnk, htnk, gun turret) supply separate `body` and
   `turret` frame arrays (turret drawn centered over body). Tracks/wheels visibly darker;
-  htnk (mammoth) is bulkier, double barrels; harv has a scoop + tumbling intake anim frames
+  htnk (behemoth) is bulkier, double barrels; harv has a scoop + tumbling intake anim frames
   (2); mcv has a big crane box. Aircraft 24×24 with rotor anim frames (2, drawn as spinning
   blur bar) — orca is a tan VTOL with stub wings, heli a grey attack chopper.
 - Infantry: 24×24 canvas, figure ~10-12px tall centered-bottom, 8 facings × {stand:1,
@@ -384,7 +384,7 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   = tan; rock = grey boulders on dirt; water = blue with light ripple dither (2 anim
   variants OK); tree = dark green canopy w/ shadow on grass base; blossom = white-pink
   canopy pod. These tiles are the FALLBACK path only — the shipped ground comes from
-  `terrain_paint.js` (below). `SPRITES.tiberium = [3 densities][3 variants]` — clusters of
+  `terrain_paint.js` (below). `SPRITES.chrysalite = [3 densities][3 variants]` — clusters of
   bright green crystals (PAL.tib*), density by cell value thirds, variant picked per cell by
   position hash (render also jitters the draw a few px to break the cell grid).
 
@@ -419,7 +419,7 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   blocking the two base areas or the corridor between them; BFS connectivity check widens the
   corridor as a last resort).
 - Two start zones: player SW-ish (around 12,50), AI NE-ish (around 52,12) — keep a 12-cell
-  radius buildable (grass/dirt only). 4-5 tiberium fields: one near each base (~120 cells
+  radius buildable (grass/dirt only). 4-5 chrysalite fields: one near each base (~120 cells
   rich), 2-3 mid-map, each with a blossom tree at heart. Fill `game.tib` values 75..300
   denser at field center.
 - Also sets `game.startPos = {human:{cx,cy}, ai:{cx,cy}}`.
@@ -432,7 +432,7 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   `Production.tick(each player)` → `Sim.tick` → `AI.tick` → `Fog.update`; render every RAF
   with `Render.frame`. Pause when menu open (`game.paused`).
 - Menu DOM (#menu overlays in index.html): title screen with the two faction emblems
-  (canvas-drawn logos injected), buttons Start GDI / Start Nod; pause menu (Resume,
+  (canvas-drawn logos injected), faction buttons UDC / Serpent Order; pause menu (Resume,
   Restart, Sound on/off, Speed slider 0.5–2, Abort mission); score screen. Esc toggles.
 - Win check per rules; on end: `Main.endGame(won)` shows score screen; sound
   `missionAccomplished`/`missionFailed` EVA.

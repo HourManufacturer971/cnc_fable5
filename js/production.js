@@ -350,7 +350,7 @@ const Production = (function () {
 
   // player designates `building` as the primary factory of its kind — new
   // units/aircraft spawn there instead of whichever one happened to be found
-  // first (matches the "set primary building" convenience from later C&C games)
+  // first (the classic "set primary building" convenience)
   function setPrimary(player, building) {
     if (!building || building.owner !== player.side) return false;
     const kind = DATA.buildings[building.type] && DATA.buildings[building.type].factory;
@@ -497,7 +497,7 @@ const Production = (function () {
     }
 
     // superweapon charge — more Adv. Comm. Centers / Temples of Nod charge
-    // the Ion Cannon / nuke proportionally faster (capped so it can't be
+    // the orbital lance / nuke proportionally faster (capped so it can't be
     // instant-fired by spamming the tech building)
     const superKey = player.side === 'gdi' ? 'eye' : 'tmpl';
     const superCount = _countFinished(player, superKey);
