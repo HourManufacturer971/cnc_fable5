@@ -16,12 +16,24 @@ const Render = (function () {
   let minimap = null, minimapTick = -10;
   let creditsShown = 0;
   let shownTick = -1, shakeX = 0, shakeY = 0;
+  let evaMsg = null;            // {text, born} — HUD announcement banner
+  let evaWired = false;
+
+  function _nowMs() {
+    return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  }
 
   function init(canvas) {
     cv = canvas;
     ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     minimap = mkCanvas(C.MM_S, C.MM_S);
+    // show every EVA announcement as readable text (the synthesized voice is
+    // flavor; the words live here). Wire once — EV is a session singleton.
+    if (!evaWired && typeof EV !== 'undefined' && EV) {
+      evaWired = true;
+      EV.on('eva', function (text) { evaMsg = { text: String(text), born: _nowMs() }; });
+    }
   }
 
   // after applyScreenAspect changed C.SCREEN_W: resizing the bitmap resets
@@ -791,6 +803,37 @@ const Render = (function () {
     }
   }
 
+  // ---- EVA announcement banner ----------------------------------------------------------------
+
+  function _drawEvaBanner() {
+    if (!evaMsg) return;
+    const LIFE = 3.9;
+    const age = (_nowMs() - evaMsg.born) / 1000;
+    if (age > LIFE) { evaMsg = null; return; }
+    let a = 1;
+    if (age < 0.16) a = age / 0.16;
+    else if (age > LIFE - 0.7) a = (LIFE - age) / 0.7;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, a));
+    ctx.font = 'bold 20px monospace';
+    ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(evaMsg.text).width;
+    const cx = C.VIEW_PW / 2;
+    const bh = 34, by = C.TAB_H + 12, bw = tw + 40, bx = Math.round(cx - bw / 2);
+    ctx.fillStyle = 'rgba(8,14,10,0.74)';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = PAL.uiGold; ctx.lineWidth = 1;
+    ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+    // small blinking transmit dot at the left
+    if ((((_nowMs() / 260) | 0) & 1) === 0) {
+      ctx.fillStyle = PAL.uiGreen || '#40c040';
+      ctx.fillRect(bx + 10, by + bh / 2 - 3, 6, 6);
+    }
+    ctx.fillStyle = PAL.uiGold;
+    ctx.fillText(evaMsg.text, Math.round(cx - tw / 2 + 8), by + bh / 2 + 1);
+    ctx.restore();
+  }
+
   // ---- cursor ---------------------------------------------------------------------------------
 
   function _drawCursor() {
@@ -815,6 +858,7 @@ const Render = (function () {
     _drawViewport(g);
     _drawTabBar(g);
     _drawSidebar(g);
+    _drawEvaBanner();
     if (Input.mouse.inside && !g.paused) _drawCursor();
     shownTick = g.tick;
   }

@@ -66,7 +66,7 @@ define **exactly** the globals listed and may freely call any global listed for 
 | sprites_units.js | fills `SPRITES.units[key][side]` for every vehicle & aircraft, and their `SPRITES.cameo[key]` |
 | sprites_infantry.js | fills `SPRITES.infantry[key][side]` for every infantry type, and their `SPRITES.cameo[key]` |
 | sprites_buildings.js | fills `SPRITES.buildings[key][side]` for every building, and their `SPRITES.cameo[key]`, plus `SPRITES.cameo.ion` / `SPRITES.cameo.nuke` |
-| audio.js | `AUDIO` (`init, play, eva, ack, setEnabled, enabled, tickCredits`) |
+| audio.js | `AUDIO` (`init, play, eva, ack, setEnabled, enabled, setVoiceEnabled, voiceEnabled, tickCredits`) |
 | music.js | `MUSIC` (`start, stop, setEnabled, enabled` — original procedural soundtrack) |
 | map.js | `MAPGEN` (`generate(game, seed)`) |
 | path.js | `findPath(unit, destCx, destCy, opts?) -> [{cx,cy},...]` |
@@ -340,14 +340,20 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   squish, harvest, radarOn, radarOff, ready, cashUp` — `AUDIO.play(name)` (missing name =
   silent no-op). Keep volumes balanced (master gain ~0.35). `AUDIO.tickCredits()` = rapid
   tick used by the credits counter.
-- `AUDIO.eva(key)`: speak `DATA.eva[key]` with `speechSynthesis` (rate ~1.05, pitch ~0.8,
-  prefer an en female voice) through a message queue so lines never overlap; also plays a
-  short radio-static blip before each line. No-throw if speechSynthesis missing. Callers
-  handle cooldowns via `game.evaCooldowns`.
-- `AUDIO.ack(kind)`: unit acknowledgment when selecting ('select': "Reporting", "Yes sir?",
-  "Vehicle reporting") or ordering ('move'/'attack': "Acknowledged", "Affirmative",
-  "Moving out") — random pick, spoken with pitch ~0.5 rate ~1.15 (sounds like a different
-  voice than EVA), throttled to at most one per second.
+- `AUDIO.eva(key)`: announces `DATA.eva[key]`. **No browser TTS** — the voice is
+  synthesized by `voxTransmission` (two detuned sawtooths → three parallel bandpass
+  formants that step between vowel shapes per syllable → per-syllable amplitude gate →
+  radio band-limit), bracketed by radio-static blips, queued so lines never overlap. It
+  does not pronounce words; it reads as an in-universe comms computer. The literal text is
+  always surfaced by `EV.emit('eva', text)` → render.js draws a fading HUD banner, so the
+  message survives even with voice or all audio off. Gated by `voiceEnabled`.
+- `AUDIO.ack(kind, cls)`: order feedback. Non-'select' always leads with a radio `squelch`;
+  then (always for 'select', ~45% otherwise) a short `voxAck` chatter blip — a 1-2 syllable
+  transmission pitched by unit class (inf high, veh low). Suppressed while an EVA line is
+  playing, throttled to ~1/second, gated by `voiceEnabled`.
+- `AUDIO.setVoiceEnabled(bool)` / `AUDIO.voiceEnabled`: the comms voice toggles separately
+  from `setEnabled` (all SFX) and `MUSIC` — pause-menu "Voice" button, persisted in
+  localStorage. All three are independent.
 - `AUDIO.init()` must be called from a user gesture (menu click) to unlock the context.
 
 ### Art direction (sprites_*.js) — original pixel art, mid-90s RTS look

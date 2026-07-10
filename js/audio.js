@@ -1,48 +1,45 @@
 'use strict';
-// audio.js — the AUDIO global: fully synthesized WebAudio SFX + speech-synthesis EVA.
-// No samples: every effect is layered at play time from (a) a 2-8ms noise transient,
-// (b) a filtered-noise body with a downward filter sweep, (c) a pitch-dropping sine
-// 'thump' sub layer, and (d) an echo-tap send for the big booms — so weapons read as
-// physical impacts instead of beeps. Combat sounds are randomly detuned ~±10% per play.
-// Every public function is a safe no-op when disabled, before init(), or when
-// WebAudio / speechSynthesis are unavailable. Audio is cosmetic, so Math.random() is fine.
+// audio.js — the AUDIO global: fully synthesized WebAudio SFX + a synthesized
+// comms voice. NOTHING uses the browser's speech synthesis — the tactical
+// announcer and unit chatter are built from oscillators + formant filters at
+// play time (see voxTransmission), so they sound like an in-universe radio
+// computer instead of a screen-reader, and sound identical on every device.
+// The literal announcement text is surfaced on the HUD (render.js listens for
+// the 'eva' event) so no information rides on the stylized voice alone.
+// No samples: every SFX is layered at play time from (a) a 2-8ms noise
+// transient, (b) a filtered-noise body with a downward filter sweep, (c) a
+// pitch-dropping sine 'thump' sub layer, and (d) an echo-tap send for the big
+// booms. Combat sounds are randomly detuned ~±10% per play. Every public
+// function is a safe no-op when disabled, before init(), or when WebAudio is
+// unavailable. Audio is cosmetic, so Math.random() is fine.
 
 const AUDIO = (function () {
   const MASTER_GAIN = 0.35;
   const MASTER_LP_HZ = 9000;  // gentle master lowpass to take the digital edge off
-  const MAX_VOICES = 12;      // cap on simultaneously sounding source nodes
+  const MAX_VOICES = 18;      // cap on simultaneously sounding source nodes
   const TICK_MIN_MS = 30;     // credit-counter tick rate limit
-  const ACK_MIN_MS = 1000;    // at most one voice acknowledgment per second
+  const ACK_MIN_MS = 900;     // at most one unit acknowledgment per ~second
 
   let ctx = null;             // AudioContext, created lazily by init()
   let master = null;          // master gain (-> lowpass -> destination)
   let echoIn = null;          // input of the shared echo/delay tap for big booms
   let inited = false;
   let enabled = true;
+  let voiceEnabled = true;    // the announcer/chatter voice, toggled separately
   let activeVoices = 0;
   let noiseBuf = null;        // shared 1s white-noise buffer
   let pinkBuf = null;         // shared 2s pink-ish noise buffer (warmer roars/rumbles)
   let lastTickAt = -1e9;
   let lastAckAt = -1e9;
 
-  // EVA / speech state
-  let evaVoice = null;        // preferred English female voice (higher-quality if present)
-  let ackVoice = null;        // distinct voice for unit acks when available
+  // EVA announcer state (synthesized voice, queued so lines don't overlap)
   const evaQueue = [];        // pending EVA line texts
   const EVA_QUEUE_MAX = 5;    // drop new lines when badly backlogged
-  let evaBusy = false;        // an EVA line is being delivered (blip -> speech -> end)
-  let evaTimer = 0;           // fallback timeout handle
-  let evaUtter = null;        // live refs so Chrome can't GC utterances before 'end'
-  let ackUtter = null;
+  let evaBusy = false;        // an EVA line is currently being delivered
+  let evaTimer = 0;           // sequencing timeout handle
 
   function noop() {}
   function nowMs() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
-
-  function hasSpeech() {
-    return typeof window !== 'undefined' &&
-           'speechSynthesis' in window &&
-           typeof window.SpeechSynthesisUtterance === 'function';
-  }
 
   function audioReady() { return enabled && inited && !!ctx && !!master; }
 
@@ -486,84 +483,125 @@ const AUDIO = (function () {
       [[0, 0.001], [0.004, 0.08], [0.04, 0.001]]);
   }
 
-  // ---- speech (EVA + acks) ----------------------------------------------------
+  // ---- synthesized comms voice (EVA announcer + unit chatter) ------------------
+  // A glottal buzz (two detuned sawtooths) driven through parallel bandpass
+  // "formant" filters that step between vowel shapes per syllable, gated by a
+  // per-syllable amplitude envelope and band-limited like a radio. It doesn't
+  // pronounce words — it reads as an in-universe comms voice talking, and the
+  // real message is shown on the HUD. Fully deterministic across browsers.
 
-  function pickVoices() {
-    try {
-      const vs = window.speechSynthesis.getVoices();
-      if (!vs || !vs.length) return;
-      const en = vs.filter(function (v) { return /^en/i.test(v.lang || ''); });
-      const pool = en.length ? en : vs;
-      // higher-quality engines first — they make EVA far less robotic
-      const hqRe = /natural|neural|online|google us english|aria|jenny|zira/i;
-      const femaleRe = /female|woman|zira|hazel|susan|samantha|karen|moira|tessa|fiona|serena|victoria|allison|ava|joanna|salli|kendra|kimberly|amy|emma|aria|jenny|libby|sonia|michelle|natasha|catherine|nicky|kathy/i;
-      const maleRe = /\bmale\b|\bman\b|david|mark|daniel|alex|fred|george|guy|ryan|thomas|james|matthew|russell|brian|aaron|arthur/i;
-      function firstMatch(re) {
-        return pool.find(function (v) { return re.test(v.name || '') && hqRe.test(v.name || ''); }) ||
-               pool.find(function (v) { return re.test(v.name || ''); });
-      }
-      evaVoice = pool.find(function (v) { return femaleRe.test(v.name || '') && hqRe.test(v.name || ''); }) ||
-                 pool.find(function (v) { return hqRe.test(v.name || ''); }) ||
-                 pool.find(function (v) { return femaleRe.test(v.name || ''); }) ||
-                 pool.find(function (v) { return v.default; }) || pool[0] || null;
-      ackVoice = firstMatch(maleRe) || evaVoice;
-      if (ackVoice && femaleRe.test(ackVoice.name || '') && maleRe.test(ackVoice.name || '')) {
-        ackVoice = evaVoice; // ambiguous name matched both; fall back
-      }
-    } catch (e) { /* voices stay null; utterances use the browser default */ }
+  // [F1, F2] formant pairs for a spread of vowels (a, i, u, e, o, schwa)
+  const VOWELS = [[730, 1090], [270, 2290], [300, 870], [530, 1840], [570, 840], [500, 1500]];
+
+  // rough syllable count of a phrase → clamped burst count
+  function sylCount(text) {
+    const m = String(text).toLowerCase().replace(/[^a-z ]/g, '').match(/[aeiouy]+/g);
+    const n = m ? m.length : Math.max(2, Math.round(String(text).length / 3));
+    return n < 2 ? 2 : n > 8 ? 8 : n;
   }
 
-  function evaDone() {
-    if (evaTimer) { clearTimeout(evaTimer); evaTimer = 0; }
-    evaUtter = null;
-    evaBusy = false;
-    pumpEva();
-  }
+  // Build one spoken "transmission". base = glottal pitch Hz; formScale sizes
+  // the vocal tract (>1 brighter/smaller = EVA computer, <1 gruffer = trooper).
+  function voxTransmission(t0, syl, base, formScale, gain, sylDur) {
+    if (!ctx || activeVoices >= MAX_VOICES) return;
+    const dur = syl * sylDur + 0.05;
 
-  function speakEva(text) {
-    if (!enabled || !hasSpeech()) { evaQueue.length = 0; evaBusy = false; return; }
-    try {
-      const u = new SpeechSynthesisUtterance(text);
-      // near-natural rate/pitch: deep-pitched synthesis is what sounds robotic
-      u.rate = 1.0; u.pitch = 0.95; u.volume = 0.9;
-      if (evaVoice) u.voice = evaVoice;
-      let finished = false;
-      const done = function () {
-        if (finished) return;
-        finished = true;
-        evaDone();
-      };
-      u.onend = done;
-      u.onerror = done;
-      evaUtter = u;
-      // timeout fallback in case 'end' never fires; re-arm while still speaking
-      let retries = 0;
-      const fallback = function () {
-        let stillSpeaking = false;
-        try { stillSpeaking = window.speechSynthesis.speaking; } catch (e) {}
-        if (stillSpeaking && retries < 4) {
-          retries++;
-          evaTimer = setTimeout(fallback, 1000);
-          return;
-        }
-        done();
-      };
-      evaTimer = setTimeout(fallback, 1500 + text.length * 90);
-      try { window.speechSynthesis.resume(); } catch (e) {}
-      window.speechSynthesis.speak(u);
-    } catch (e) {
-      evaDone(); // keep the queue draining even if speak() blows up
+    // voiced source: two slightly detuned sawtooths for a buzzy glottal tone
+    const o1 = ctx.createOscillator(); o1.type = 'sawtooth';
+    const o2 = ctx.createOscillator(); o2.type = 'sawtooth';
+    // pitch contour: a small step per syllable, trending gently downward so it
+    // lands like a spoken statement rather than a flat drone
+    const fp = [[0, base]];
+    for (let i = 0; i < syl; i++) {
+      const frac = syl > 1 ? i / (syl - 1) : 0;
+      const p = base * (1 + (Math.random() * 2 - 1) * 0.05 - frac * 0.13);
+      fp.push([i * sylDur + 0.02, p]);
+      fp.push([i * sylDur + sylDur * 0.9, p * (1 + (Math.random() * 2 - 1) * 0.03)]);
+    }
+    curve(o1.frequency, t0, fp);
+    curve(o2.frequency, t0, fp.map(function (p) { return [p[0], p[1] * 1.007]; }));
+
+    const srcGain = ctx.createGain(); srcGain.gain.value = 0.5;
+    o1.connect(srcGain); o2.connect(srcGain);
+
+    // three parallel formants; each steps to a fresh vowel each syllable
+    const sum = ctx.createGain(); sum.gain.value = 1;
+    const fAmp = [1.0, 0.7, 0.32];
+    for (let k = 0; k < 3; k++) {
+      const bp = ctx.createBiquadFilter();
+      bp.type = 'bandpass'; bp.Q.value = 6 + k * 3;
+      const ffp = [];
+      for (let i = 0; i < syl; i++) {
+        const v = VOWELS[(Math.random() * VOWELS.length) | 0];
+        const f = (k < 2 ? v[k] : v[1] * 1.8) * formScale;
+        ffp.push([i * sylDur + 0.006, f]);
+        ffp.push([i * sylDur + sylDur * 0.85, f]);
+      }
+      if (!ffp.length) ffp.push([0, 700 * formScale]);
+      curve(bp.frequency, t0, ffp);
+      const fg = ctx.createGain(); fg.gain.value = fAmp[k];
+      srcGain.connect(bp); bp.connect(fg); fg.connect(sum);
+    }
+
+    // per-syllable amplitude envelope: attack, hold, dip between syllables
+    const env = ctx.createGain();
+    const ep = [[0, 0.0001]];
+    for (let i = 0; i < syl; i++) {
+      const s = i * sylDur;
+      ep.push([s + 0.015, gain]);
+      ep.push([s + sylDur * 0.68, gain * 0.82]);
+      ep.push([s + sylDur * 0.97, gain * 0.14]);
+    }
+    ep.push([dur, 0.0001]);
+    curve(env.gain, t0, ep);
+    sum.connect(env);
+
+    // radio band-limit
+    const bandpass = ctx.createBiquadFilter();
+    bandpass.type = 'bandpass'; bandpass.frequency.value = 1500; bandpass.Q.value = 0.7;
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 340;
+    env.connect(bandpass); bandpass.connect(hp); hp.connect(master);
+
+    startSrc(o1, t0, dur); startSrc(o2, t0, dur);
+
+    // faint consonant transients at some syllable onsets (plosive/fricative feel)
+    for (let i = 0; i < syl; i++) {
+      if (Math.random() < 0.55) {
+        noiseHit(t0 + i * sylDur, 0.028, 'bandpass', [[0, vr(2200)], [0.028, 1400]], 2,
+          [[0, 0.001], [0.004, gain * 0.35], [0.028, 0.001]]);
+      }
     }
   }
 
   function pumpEva() {
     if (evaBusy || evaQueue.length === 0) return;
+    if (!audioReady() || !voiceEnabled) { evaQueue.length = 0; evaBusy = false; return; }
     evaBusy = true;
     const text = evaQueue.shift();
-    if (audioReady()) {
-      try { staticBlip(ctx.currentTime); } catch (e) {}
+    const t = ctx.currentTime;
+    try {
+      staticBlip(t);
+      const syl = sylCount(text);
+      const sylDur = 0.135;
+      voxTransmission(t + 0.09, syl, vr(212, 0.05), 1.14, 0.13, sylDur); // EVA: high, bright
+      staticBlip(t + 0.09 + syl * sylDur + 0.02);                        // close squelch
+      const ms = (0.09 + syl * sylDur + 0.16) * 1000;
+      if (evaTimer) clearTimeout(evaTimer);
+      evaTimer = setTimeout(function () { evaBusy = false; pumpEva(); }, ms + 90);
+    } catch (e) {
+      evaBusy = false;
     }
-    setTimeout(function () { speakEva(text); }, 100); // let the blip lead in
+  }
+
+  // short unit-chatter blip: a 1-2 syllable transmission, gruffer than EVA and
+  // pitched by unit class (infantry higher, vehicle crews lower)
+  function voxAck(cls) {
+    if (!audioReady() || !voiceEnabled) return;
+    const t = ctx.currentTime;
+    const base = cls === 'inf' ? vr(150, 0.06) : cls === 'air' ? vr(172, 0.06) : vr(122, 0.06);
+    const form = cls === 'inf' ? 1.02 : cls === 'air' ? 1.0 : 0.9;
+    voxTransmission(t + 0.02, 1 + ((Math.random() * 2) | 0), base, form, 0.1, 0.12);
   }
 
   // ---- public API ---------------------------------------------------------------
@@ -609,17 +647,13 @@ const AUDIO = (function () {
     } catch (e) {
       ctx = null; master = null; echoIn = null;
     }
-    if (hasSpeech()) {
-      try {
-        pickVoices(); // often empty until voiceschanged fires
-        if (typeof window.speechSynthesis.addEventListener === 'function') {
-          window.speechSynthesis.addEventListener('voiceschanged', pickVoices);
-        } else {
-          window.speechSynthesis.onvoiceschanged = pickVoices;
-        }
-      } catch (e) {}
-    }
     inited = true;
+  }
+
+  function _stopVoice() {
+    evaQueue.length = 0;
+    if (evaTimer) { clearTimeout(evaTimer); evaTimer = 0; }
+    evaBusy = false;
   }
 
   function setEnabled(b) {
@@ -627,15 +661,12 @@ const AUDIO = (function () {
     if (master) { // mute/unmute in-flight sounds immediately
       try { master.gain.value = enabled ? MASTER_GAIN : 0; } catch (e) {}
     }
-    if (!enabled) {
-      evaQueue.length = 0;
-      if (evaTimer) { clearTimeout(evaTimer); evaTimer = 0; }
-      evaBusy = false;
-      evaUtter = null; ackUtter = null;
-      if (hasSpeech()) {
-        try { window.speechSynthesis.cancel(); } catch (e) {}
-      }
-    }
+    if (!enabled) _stopVoice();
+  }
+
+  function setVoiceEnabled(b) {
+    voiceEnabled = !!b;
+    if (!voiceEnabled) _stopVoice();
   }
 
   function play(name) {
@@ -657,9 +688,12 @@ const AUDIO = (function () {
   }
 
   function eva(key) {
-    if (!enabled || !inited || !hasSpeech()) return;
     const text = (typeof DATA !== 'undefined' && DATA && DATA.eva) ? DATA.eva[key] : null;
     if (!text) return;
+    // surface the message on the HUD regardless of audio settings — the words
+    // live in the banner, the voice is just flavor
+    if (typeof EV !== 'undefined' && EV) EV.emit('eva', text);
+    if (!enabled || !inited || !voiceEnabled) return;
     if (evaQueue.length >= EVA_QUEUE_MAX) return; // drop when badly backlogged
     evaQueue.push(text);
     pumpEva();
@@ -684,39 +718,17 @@ const AUDIO = (function () {
 
   function ack(kind, cls) {
     if (!enabled || !inited) return;
-    // move/attack orders lead with a radio squelch every time...
+    // move/attack orders lead with a radio squelch every time
     if (kind !== 'select') squelch();
-    if (!hasSpeech()) return;
-    const acks = (typeof DATA !== 'undefined' && DATA && DATA.acks) ? DATA.acks : null;
-    if (!acks) return;
-    // ...and only sometimes add a spoken word, so constant TTS doesn't grate
-    if (kind !== 'select' && Math.random() > 0.4) return;
-    // 'select' picks a class-specific pool so infantry never say "vehicle reporting"
-    let lines;
-    if (kind === 'select') {
-      lines = cls === 'air' ? acks.selectAir : cls === 'inf' ? acks.selectInf : acks.selectVeh;
-    } else {
-      lines = acks[kind];
-    }
-    if (!lines || !lines.length) return;
+    if (!voiceEnabled) return;
+    if (evaBusy) return;                    // don't talk over an EVA announcement
     const n = nowMs();
     if (n - lastAckAt < ACK_MIN_MS) return; // throttle: drop extras
-    if (evaBusy) return;                    // EVA mid-line: skip, never queue acks
+    // selection always gets a short chatter blip; move/attack only sometimes,
+    // so the squelch (always present) carries the feedback and the voice accents it
+    if (kind !== 'select' && Math.random() > 0.45) return;
     lastAckAt = n;
-    try {
-      const u = new SpeechSynthesisUtterance(lines[(Math.random() * lines.length) | 0]);
-      // infantry read higher and quicker than vehicle crews (kept clear of the
-      // robotic-sounding sub-0.6 pitch range)
-      u.pitch = cls === 'inf' ? 1.0 : 0.7;
-      u.rate = cls === 'inf' ? 1.1 : 1.0;
-      u.volume = 0.75;
-      if (ackVoice) u.voice = ackVoice;
-      u.onend = function () { if (ackUtter === u) ackUtter = null; };
-      u.onerror = u.onend;
-      ackUtter = u;
-      try { window.speechSynthesis.resume(); } catch (e) {}
-      window.speechSynthesis.speak(u);
-    } catch (e) {}
+    voxAck(cls);
   }
 
   function tickCredits() { play('tick'); }
@@ -724,8 +736,10 @@ const AUDIO = (function () {
   return {
     get enabled() { return enabled; },
     set enabled(v) { setEnabled(v); },
+    get voiceEnabled() { return voiceEnabled; },
     init: init,
     setEnabled: setEnabled,
+    setVoiceEnabled: setVoiceEnabled,
     play: play,
     eva: eva,
     ack: ack,

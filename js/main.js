@@ -199,6 +199,15 @@ const Main = (function () {
       localStorage.setItem('td_music', MUSIC.enabled ? '1' : '0');
       $('btnMusic').textContent = 'Music: ' + (MUSIC.enabled ? 'ON' : 'OFF');
     });
+    // the synthesized comms voice (announcer + unit chatter), toggled apart
+    // from SFX so players can keep gunfire but silence the talking
+    if (localStorage.getItem('hw_voice') === '0') AUDIO.setVoiceEnabled(false);
+    $('btnVoice').textContent = 'Voice: ' + (AUDIO.voiceEnabled ? 'ON' : 'OFF');
+    $('btnVoice').addEventListener('click', () => {
+      AUDIO.setVoiceEnabled(!AUDIO.voiceEnabled);
+      localStorage.setItem('hw_voice', AUDIO.voiceEnabled ? '1' : '0');
+      $('btnVoice').textContent = 'Voice: ' + (AUDIO.voiceEnabled ? 'ON' : 'OFF');
+    });
     $('speedSlider').addEventListener('input', ev => {
       if (game) game.speed = ev.target.value / 100;
     });

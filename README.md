@@ -2,10 +2,11 @@
 
 An original, from-scratch, browser-based real-time strategy game in the
 mid-90s style. All code, pixel art, and sound are **original** — the art is
-drawn procedurally on canvases at load time and the audio is synthesized with
-WebAudio (the tactical announcer and unit voices use the browser's speech
-synthesis). Inspired by the classic RTS games of the 1990s; not affiliated
-with, endorsed by, or connected to any other game or publisher.
+drawn procedurally on canvases at load time and every sound, including the
+tactical announcer and unit chatter, is synthesized live with WebAudio (no
+recordings, no browser text-to-speech). Inspired by the classic RTS games of
+the 1990s; not affiliated with, endorsed by, or connected to any other game
+or publisher.
 
 ## Screenshots
 
@@ -175,9 +176,13 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   running, masses each attack at a staging point before striking on a
   sustained 2-4 minute cadence that scales up, garrisons its home, and fires
   its superweapon at your densest cluster
-- **Tactical announcer** — "Construction complete", "Unit ready", "Low power", "Base under
-  attack", "Silos needed"… spoken via speech synthesis, plus synthesized
-  weapon/explosion sound effects
+- **Tactical announcer & comms** — a synthesized in-universe radio voice
+  (built live from oscillators + formant filters, never browser text-to-speech)
+  calls out events — "Construction complete", "Unit ready", "Base under
+  attack"… — with the message also shown on the HUD so nothing rides on the
+  stylized voice; unit selection/orders answer with radio squelch + chatter.
+  A **Voice: ON/OFF** toggle in the options menu silences it apart from the
+  sound effects. Weapons, explosions and the soundtrack are all synthesized too.
 
 ## Not included (yet)
 
