@@ -297,6 +297,8 @@ function orderAttackMove(u, cx, cy) {
   u.moveTarget = { cx, cy };
   u._amove = { cx, cy };
   u._amRetries = 0;
+  u._repathFails = 0;
+  u._retryAt = 0;
   u.path = findPath(u, cx, cy);
   u.pathi = 0;
   return true;
@@ -555,6 +557,12 @@ function _combat(u, d) {
   if (u.guardAnchor && dist(u.x, u.y, u.guardAnchor.x, u.guardAnchor.y) > 6 * C.CELL) {
     const a = u.guardAnchor;
     u.targetId = 0;
+    // mid-sweep the leash break resumes the attack-move march instead of
+    // walking back to the anchor (orderMove would erase the sweep)
+    if (u._amove) {
+      orderAttackMove(u, u._amove.cx, u._amove.cy);
+      return;
+    }
     orderMove(u, worldToCell(a.x), worldToCell(a.y));
     u.guardAnchor = a;
     return;
@@ -710,11 +718,13 @@ function _harvester(u, d) {
     const home = _nearestProc(u);
     const homeDock = home ? _procDock(home) : null;
     let tries = 8;
-    // the leash is a preference, not a law: pass 1 stays near home, and if
-    // the local area is mined DRY an empty harvester treks to whatever is
-    // left on the map rather than idling the economy to death
-    for (const anchor of (u.tib === 0 ? [homeDock, null] : [homeDock])) {
-      for (const r of (anchor ? [3, 6, 10, 16, 24, 40] : [64])) {
+    // the leash is a preference, not a law: pass 1 stays near home; pass 2
+    // unleashes — an EMPTY harvester treks the whole map rather than idling
+    // the economy to death, while a PARTIAL one only tops off close by, so
+    // a harvester that trekked to a far field keeps eating it until full
+    // instead of round-tripping home after every single cell
+    for (const anchor of [homeDock, null]) {
+      for (const r of (anchor ? [3, 6, 10, 16, 24, 40] : (u.tib === 0 ? [64] : [10]))) {
         let c;
         while ((c = _findTibCell(u, r, anchor))) {
           const path = findPath(u, c.cx, c.cy);
@@ -737,7 +747,11 @@ function _harvester(u, d) {
     // prefer the refinery this trip already chose (set below when the
     // nearest one turned out to be unreachable), else the nearest
     let proc = u._procId ? g.buildings.get(u._procId) : null;
-    if (!proc || proc._dead || proc.type !== 'proc') { u._procId = 0; proc = _nearestProc(u); }
+    // owner check matters: an engineer can capture the booked refinery
+    // mid-trip and the id stays valid
+    if (!proc || proc._dead || proc.type !== 'proc' || proc.owner !== u.owner) {
+      u._procId = 0; proc = _nearestProc(u);
+    }
     if (!proc) {
       if (g.tick % 30 === 0) u.state = u.tib > 0 ? 'return' : 'idle'; // retry / stand down
       return;
@@ -817,7 +831,12 @@ function _harvester(u, d) {
     // feedback for the LOCAL player only (in MP the opponent is also human)
     if (u._chunk > add + 0.01 && p === g.human) _evaOnce('silosNeeded', 450);
     if (p === g.human) g.stats.harvested += add;
-    if (add >= 1 && p === g.human) g._fundsNags = 0;   // money flowing again: reset the nag escalation
+    if (add >= 1 && p === g.human) {
+      // money flowing again: reset the nag escalation AND any long cooldown
+      // already scheduled, so fresh poverty warns at the base 15s again
+      g._fundsNags = 0;
+      if (g.evaCooldowns) g.evaCooldowns.insufficientFunds = 0;
+    }
     u._unload--;
     if (u._unload <= 0 || u.tib <= 0) {
       // floating credit readout over the refinery — pay the player the
@@ -1119,27 +1138,38 @@ function _tickUnit(u) {
         const w = DATA.weapons[d.weapon];
         const t = _nearestEnemy(u, d.sight + 1, { antiAir: !!(w.antiAir || d.weapon2), airOnly: !!w.airOnly });
         if (t && _canTarget(_pickWeapon(u, t), t)) {
-          // engage directly (not via orderAttack — that would erase _amove)
+          // engage directly (not via orderAttack — that would erase _amove).
+          // Anchor here so the combat leash caps the chase: a kiting scout
+          // must not drag the sweep across the map; the leash break resumes
+          // the march instead (see _combat)
           u.targetId = t.id;
           u.state = 'attack';
+          u.guardAnchor = { x: u.x, y: u.y };
           break;
         }
       }
+      // jammed columns retry on the same staggered backoff as plain moves —
+      // instant retries would burn every attempt inside half a second while
+      // the unit ahead is still shuffling clear
+      if (u._retryAt && u._amove && u.pathi >= u.path.length) {
+        if (g.tick < u._retryAt) break;
+        u._retryAt = 0;
+        u._repathFails = 0;
+        u.path = findPath(u, u._amove.cx, u._amove.cy);
+        u.pathi = 0;
+      }
       const r = _stepAlongPath(u, d);
-      if (r === 'arrived') {
+      if (r === 'blocked' && u._amove && (u._amRetries = (u._amRetries || 0) + 1) <= 8) {
+        u._retryAt = g.tick + 12 + ((u.id * 7) % 10);
+        break;
+      }
+      if (r === 'arrived' || r === 'blocked') {
+        if (u._retryAt && u._amove) break; // retry pending — not done yet
         u.state = 'idle';
         u._amove = null;
+        u._amRetries = 0;
         u.path = []; u.pathi = 0;
         if (!u.guardAnchor) u.guardAnchor = { x: u.x, y: u.y };
-      } else if (r === 'blocked') {
-        if ((u._amRetries = (u._amRetries || 0) + 1) <= 8 && u._amove) {
-          u.path = findPath(u, u._amove.cx, u._amove.cy);
-          u.pathi = 0;
-        } else {
-          u.state = 'idle';
-          u._amove = null;
-          u.path = []; u.pathi = 0;
-        }
       }
       break;
     }

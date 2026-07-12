@@ -394,6 +394,16 @@ function addBuilding(b) {
   game.buildings.set(b.id, b);
   game.players[b.owner].buildingIds.push(b.id);
   for (const c of footprintCells(b)) setOcc(c.cx, c.cy, b.id);
+  // a crate under the slab is crushed — it could never be picked up again
+  // and its radar blip would blink under the building forever
+  if (game.crates) {
+    for (let i = game.crates.length - 1; i >= 0; i--) {
+      const c = game.crates[i];
+      if (c.cx >= b.cx && c.cx < b.cx + b.w && c.cy >= b.cy && c.cy < b.cy + b.h) {
+        game.crates.splice(i, 1);
+      }
+    }
+  }
   return b;
 }
 

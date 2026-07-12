@@ -139,8 +139,10 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   Idle harvesters auto-seek visible chrysalite. New refinery spawns a free harvester beside it.
 - Harvester field discipline: target cells are LEASHED to ~20 cells of the home dock while
   local crystal lasts; when the neighborhood is dry an EMPTY harvester treks unleashed to
-  whatever is left on the map (never idles the economy to death). Known-unreachable cells
-  are blacklisted (`u._noReach`) for ~60s.
+  whatever is left on the map (never idles the economy to death), and a PARTIALLY loaded
+  one tops off within ~10 cells of itself — so a far field is eaten until the hopper is
+  full, never one cell per round trip. Known-unreachable cells are blacklisted
+  (`u._noReach`) for ~60s.
 - Dock etiquette (`_shoveIdle`): a returning harvester within 4 cells of its dock nudges
   FRIENDLY idle ground units off the dock cell and off its next path cell (orderMove to a
   free neighbor, never onto another dock). Enemy units are a legitimate blockade and stay.
@@ -378,8 +380,10 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   when credits ride the cap — the moment loads start evaporating.
 - **Hunt mode** (`_huntCount`, render-only): enemy down to ≤3 non-wall buildings AND zero
   combat units → gold `TARGETS REMAINING: n` chip (playing state, takes precedence over
-  the mission-objective line) and the surviving enemy buildings blink on radar. Pure
-  render read of sim state — legal in MP (both clients compute identically).
+  the mission-objective line) and the surviving enemy buildings AND units show on radar.
+  Unarmed stragglers (harvester, MCV, engineer) count as targets too — victory needs every
+  unit dead, so the assist must not vanish with the last building. DISABLED whenever
+  `NET.active`: in MP `g.ai` is the remote human and the reveal would be a fog cheat.
 
 ### Controls (classic left-click scheme)
 - **Left-click**: select own unit(s)/building; with selection on: click enemy → attack;
@@ -486,9 +490,13 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 - AI places buildings on a spiral search around its conyard obeying `Production.canPlace`.
 - AI ignores shroud, does not cheat resources (its harvesters really harvest), except: if
   fully broke (<100 credits) for 60s straight and no harvester, gets a 2000 credit "bailout"
-  — but ONLY while it can still rebuild an economy (own conyard, or a refinery already
-  planned/under way). A beaten AI with neither sits on its stumps instead of respawning
+  — but ONLY while it can still restore an income: a conyard (rebuilds anything), or
+  refinery + vehicle factory both standing (`Production.prereqOk('harv')`, so the money
+  can buy a harvester). A beaten AI with neither sits on its stumps instead of respawning
   money forever (endgame drag fix).
+- If a ready building has no legal spot, the AI cancels it AND cooldowns that key for
+  ~100s (`S.noSpot`); `_nextBuilding` skips cooled-down keys so the goals below still run
+  (no build→cancel livelock freezing base development on cramped maps).
 - Skirmish difficulty presets (Operations menu → SKIRMISH EASY/NORMAL/HARD) ride the same
   knobs campaign missions use, as a pseudo-mission on `game.mission` (no `n`, no
   `objective`): EASY `{aiCalm:1.7, aiWaveCap:6, aiCredits:3500}`, NORMAL null, HARD

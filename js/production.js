@@ -445,6 +445,10 @@ const Production = (function () {
           if (!inMap(cx, cy)) continue;
           if (_nearOwnDock(g, player, cx, cy)) continue;
           if (!terrainPassable(g.terrain[cellIdx(cx, cy)])) continue;
+          // a cell inside a building would make findPath retarget — quite
+          // possibly right back onto the dock this dodge exists to avoid
+          const o = g.occ[cellIdx(cx, cy)];
+          if (o && g.buildings.has(o)) continue;
           return { cx, cy };
         }
       }

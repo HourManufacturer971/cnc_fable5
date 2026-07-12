@@ -191,12 +191,17 @@ const Render = (function () {
         if (++bld > 3) return 0;
       }
     }
-    if (!bld) return 0;
+    // victory needs every unit dead too (harvesters, MCVs, engineers…), so
+    // stragglers count as targets — otherwise the chip vanishes with the
+    // last building while an unarmed unit hides the win in the shroud
+    let stragglers = 0;
     for (const u of g.units.values()) {
+      if (u.owner !== g.ai.side) continue;
       const d = DATA.units[u.type];
-      if (u.owner === g.ai.side && d.weapon && !d.harvester) return 0;
+      if (d.weapon && !d.harvester) return 0;   // still fields an army: no assist
+      stragglers++;
     }
-    return bld;
+    return bld + stragglers;
   }
 
   // live blips, drawn every frame directly onto the composed frame
@@ -233,11 +238,14 @@ const Render = (function () {
     for (const u of g.units.values()) {
       const cx = worldToCell(u.x), cy = worldToCell(u.y);
       const i = cellIdx(cx, cy);
-      if (g.shroud[i] !== 1) continue;
-      if (u.owner !== g.humanSide) {
-        // enemy blips only where MY forces can currently see, not just explored
-        if (!g.visible || g.visible[i] !== 1) continue;
-        if (u.cloaked) continue;
+      const revealed = hunt && u.owner === g.ai.side;   // last stragglers show
+      if (!revealed) {
+        if (g.shroud[i] !== 1) continue;
+        if (u.owner !== g.humanSide) {
+          // enemy blips only where MY forces can currently see, not just explored
+          if (!g.visible || g.visible[i] !== 1) continue;
+          if (u.cloaked) continue;
+        }
       }
       // sub-cell world position: blips glide instead of stepping cell to cell
       const mx = C.MM_X + (u.x / C.CELL) * MMC, my = C.MM_Y + (u.y / C.CELL) * MMC;

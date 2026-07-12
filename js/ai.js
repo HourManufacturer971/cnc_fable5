@@ -201,18 +201,22 @@ const AI = (function () {
       return null;
     };
 
+    // a key that failed placement recently is skipped so the goals below it
+    // still run — retried when its no-spot cooldown expires
+    const blocked = key => S.noSpot && S.noSpot[key] > g.tick;
+
     if (projectedPower < 30) {
-      if (Production.prereqOk(p, 'nuk2') && p.credits > 800) return 'nuk2';
-      if (Production.prereqOk(p, 'nuke')) return 'nuke';
+      if (Production.prereqOk(p, 'nuk2') && p.credits > 800 && !blocked('nuk2')) return 'nuk2';
+      if (Production.prereqOk(p, 'nuke') && !blocked('nuke')) return 'nuke';
       return null;
     }
-    if (_planned(g, p, 'proc') < 1) return 'proc';
-    if (_planned(g, p, inf) < 1) return inf;
+    if (_planned(g, p, 'proc') < 1 && !blocked('proc')) return 'proc';
+    if (_planned(g, p, inf) < 1 && !blocked(inf)) return inf;
     // vehicle factory before hq/defense: tanks matter more than walls
-    if (_planned(g, p, veh) < 1) return pick(veh, 1200);
+    if (_planned(g, p, veh) < 1 && !blocked(veh)) return pick(veh, 1200);
     // second refinery EARLY — the whole midgame stalls on a one-proc economy
-    if (_planned(g, p, 'proc') < 2) return pick('proc', 1000);
-    if (_planned(g, p, 'hq') < 1) return pick('hq', 900);
+    if (_planned(g, p, 'proc') < 2 && !blocked('proc')) return pick('proc', 1000);
+    if (_planned(g, p, 'hq') < 1 && !blocked('hq')) return pick('hq', 900);
 
     // defense line grows with the war — with the war CLOCK as well as the
     // wave count. Until the superweapon tech building exists the perimeter
@@ -226,22 +230,22 @@ const AI = (function () {
       (p.ready.building && ROLE[p.ready.building] === 'defense' ? 1 : 0);
     if (defHave < (techDone ? defWant : Math.min(defWant, 4))) {
       const want = DEF_PLAN[side][Math.min(defHave, DEF_PLAN[side].length - 1)];
-      if (Production.prereqOk(p, want)) return pick(want, 500);
+      if (Production.prereqOk(p, want) && !blocked(want)) return pick(want, 500);
     }
 
     if (side === 'gdi' && _planned(g, p, 'fix') < 1 &&
-        Production.prereqOk(p, 'fix')) return pick('fix', 1500);
-    if (!S.builtHpad && Production.prereqOk(p, 'hpad')) return pick('hpad', 2000);
+        Production.prereqOk(p, 'fix') && !blocked('fix')) return pick('fix', 1500);
+    if (!S.builtHpad && Production.prereqOk(p, 'hpad') && !blocked('hpad')) return pick('hpad', 2000);
     // late-game economy keeps pace with the growing army bill
-    if (_planned(g, p, 'proc') < 3 && g.tick > 5000) return pick('proc', 1500);
-    if (!techDone && Production.prereqOk(p, tech) && g.tick > 6000) return pick(tech, 2200);
+    if (_planned(g, p, 'proc') < 3 && g.tick > 5000 && !blocked('proc')) return pick('proc', 1500);
+    if (!techDone && Production.prereqOk(p, tech) && g.tick > 6000 && !blocked(tech)) return pick(tech, 2200);
     if (defHave < defWant) {
       const want = DEF_PLAN[side][Math.min(defHave, DEF_PLAN[side].length - 1)];
-      if (Production.prereqOk(p, want)) return pick(want, 500);
+      if (Production.prereqOk(p, want) && !blocked(want)) return pick(want, 500);
     }
-    if (_planned(g, p, 'proc') < 4 && g.tick > 12000) return pick('proc', 2500);
+    if (_planned(g, p, 'proc') < 4 && g.tick > 12000 && !blocked('proc')) return pick('proc', 2500);
     if (p.storage - p.credits < 400 && Production.prereqOk(p, 'silo') &&
-        _planned(g, p, 'silo') < 4) return pick('silo', 500);
+        _planned(g, p, 'silo') < 4 && !blocked('silo')) return pick('silo', 500);
     return null;
   }
 
@@ -499,11 +503,13 @@ const AI = (function () {
     if (g.tick % 30 !== 7) return; // main cadence
 
     // bailout if fully starved with no way back — but only while the AI can
-    // still actually rebuild (conyard or refinery standing). A beaten AI on
-    // its last barracks must not drip-fund itself forever and drag the
-    // endgame out.
+    // still actually restore an INCOME: a conyard rebuilds anything, and
+    // prereqOk('harv') means refinery + vehicle factory both stand so the
+    // money can buy a harvester. A bare surviving refinery (no factory, no
+    // conyard) has no path back to an economy — funding it would drip-feed
+    // infantry forever and drag the endgame out.
     if (p.credits < 100 && _unitCount(g, p, 'harv') === 0 &&
-        (_conyard(g, p) || _planned(g, p, 'proc') > 0)) {
+        (_conyard(g, p) || Production.prereqOk(p, 'harv'))) {
       if (S.brokeSince < 0) S.brokeSince = g.tick;
       else if (g.tick - S.brokeSince > 900) { p.credits += 2000; S.brokeSince = -1; }
     } else S.brokeSince = -1;
@@ -517,7 +523,11 @@ const AI = (function () {
       if (spot && Production.place(g, p, key, spot.cx, spot.cy)) {
         if (key === 'hpad') S.builtHpad = true;
       } else if (!spot) {
-        Production.cancel(p, key); // no legal spot: refund, try something else
+        // no legal spot: refund AND remember — without the cooldown the
+        // planner re-picks the same key next tick and the build->cancel
+        // livelock freezes every goal below it (tech was the worst case)
+        Production.cancel(p, key);
+        (S.noSpot || (S.noSpot = {}))[key] = g.tick + 1500;
       }
     }
 
