@@ -233,6 +233,40 @@ const MAPGEN = (function () {
     return { x, y }; // give up on the constraint; the clear pass will fix spill
   }
 
+  // Holdout fortress: a two-cell-thick rock ring around the player's start
+  // with exactly three passes — one aimed at the enemy (so the guaranteed
+  // corridor threads a gate instead of blasting a random hole), the other
+  // two swung wide to the flanks. Pass arcs are ~4-5 cells wide: enough for
+  // tanks and harvesters, narrow enough to fortify.
+  function fortressRing(g, rng, c, foe) {
+    const r0 = 9.5, r1 = 11.5;
+    const a0 = Math.atan2(foe.cy - c.cy, foe.cx - c.cx);
+    const gates = [
+      a0,
+      a0 + 1.9 + rng() * 0.7,
+      a0 - 1.9 - rng() * 0.7,
+    ];
+    const HALF = 0.22;   // angular half-width => ~4.6-cell arc at r=10.5
+    const R = Math.ceil(r1);
+    for (let dy = -R; dy <= R; dy++) {
+      for (let dx = -R; dx <= R; dx++) {
+        const r = Math.sqrt(dx * dx + dy * dy);
+        if (r < r0 || r > r1) continue;
+        const x = c.cx + dx, y = c.cy + dy;
+        if (x < 1 || y < 1 || x >= C.MAP_W - 1 || y >= C.MAP_H - 1) continue;
+        const a = Math.atan2(dy, dx);
+        let inGate = false;
+        for (const ga of gates) {
+          // gate angles may sit outside [-PI, PI] — wrap the difference fully
+          let d = Math.abs(a - ga) % (Math.PI * 2);
+          if (d > Math.PI) d = Math.PI * 2 - d;
+          if (d < HALF) { inGate = true; break; }
+        }
+        if (!inGate) g.terrain[cellIdx(x, y)] = T_ROCK;
+      }
+    }
+  }
+
   // ---- constraint passes -----------------------------------------------------
 
   // Reset any impassable terrain within `rad` (euclidean) of (cx,cy) to grass.
@@ -388,7 +422,8 @@ const MAPGEN = (function () {
 
   // ---- main entry --------------------------------------------------------------
 
-  function generate(g, seed) {
+  function generate(g, seed, opts) {
+    opts = opts || {};
     const s = (seed === undefined || seed === null) ? g.seed : seed;
     const rng = mulberry(s >>> 0);
     const hseed = (s >>> 0) ^ 0x3c6ef372;
@@ -399,8 +434,11 @@ const MAPGEN = (function () {
     g.tib.fill(0);
 
     // --- start positions: human SW-ish, AI NE-ish, jitter ±3 -----------------
+    // (holdout scenario: the human holds the CENTER of the map instead)
     const jit = () => ((rng() * 7) | 0) - 3;
-    const hs = { cx: 12 + jit(), cy: 50 + jit() };
+    const hs = opts.holdout
+      ? { cx: 32 + ((rng() * 5) | 0) - 2, cy: 32 + ((rng() * 5) | 0) - 2 }
+      : { cx: 12 + jit(), cy: 50 + jit() };
     const as = { cx: 52 + jit(), cy: 12 + jit() };
     g.startPos = { human: hs, ai: as };
     const starts = [hs, as];
@@ -463,6 +501,10 @@ const MAPGEN = (function () {
     clearZone(g, as.cx, as.cy, 12);
     carveCorridor(g, hs, as, 1); // 3 cells wide
 
+    // holdout: ring the player's plateau in rock, leaving three gated passes
+    // (one facing the enemy — the carved corridor threads through it)
+    if (opts.holdout) fortressRing(g, rng, hs, as);
+
     // --- hard map border ring = rock ---------------------------------------------
     for (let x = 0; x < W; x++) {
       g.terrain[cellIdx(x, 0)] = T_ROCK;
@@ -477,19 +519,46 @@ const MAPGEN = (function () {
     // Fields only grow on cells reachable from the starts (later passes just
     // clear MORE terrain, so reachability can only widen after this point).
     const reach = reachMask(g, starts);
-    // One rich field 7-9 cells from each start, offset AWAY from the enemy so
-    // your harvesters work the safe side of your base.
-    for (let si = 0; si < starts.length; si++) {
-      const st = starts[si];
-      const foe = starts[1 - si];
-      let dx = st.cx - foe.cx, dy = st.cy - foe.cy;
-      const len = Math.sqrt(dx * dx + dy * dy) || 1;
-      dx /= len; dy /= len;
-      const off = 7 + rng() * 2; // 7..9
-      const fx = clamp(Math.round(st.cx + dx * off), 2, W - 3);
-      const fy = clamp(Math.round(st.cy + dy * off), 2, H - 3);
-      const count = 100 + ((rng() * 41) | 0); // 100..140
-      placeField(g, rng, fx, fy, count, starts, reach);
+    if (opts.holdout) {
+      // the player's pocket INSIDE the walls is modest — enough to boot the
+      // economy, not enough to sit on for the whole siege
+      {
+        const a = Math.atan2(hs.cy - as.cy, hs.cx - as.cx); // away from the enemy
+        const fx = clamp(Math.round(hs.cx + Math.cos(a) * 6), 2, W - 3);
+        const fy = clamp(Math.round(hs.cy + Math.sin(a) * 6), 2, H - 3);
+        placeField(g, rng, fx, fy, 55 + ((rng() * 16) | 0), starts, reach);
+      }
+      // the rich fields lie OUTSIDE the passes — worth a guarded convoy
+      for (let i = 0; i < 3; i++) {
+        const a = rng() * Math.PI * 2;
+        const d = 17 + rng() * 6; // 17..23 cells out, past the ring
+        const fx = clamp(Math.round(hs.cx + Math.cos(a) * d), 3, W - 4);
+        const fy = clamp(Math.round(hs.cy + Math.sin(a) * d), 3, H - 4);
+        placeField(g, rng, fx, fy, 110 + ((rng() * 41) | 0), starts, reach);
+      }
+      // the attacker keeps a normal home field
+      {
+        let dx = as.cx - hs.cx, dy = as.cy - hs.cy;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        const fx = clamp(Math.round(as.cx + dx / len * 8), 2, W - 3);
+        const fy = clamp(Math.round(as.cy + dy / len * 8), 2, H - 3);
+        placeField(g, rng, fx, fy, 120 + ((rng() * 41) | 0), starts, reach);
+      }
+    } else {
+      // One rich field 7-9 cells from each start, offset AWAY from the enemy
+      // so your harvesters work the safe side of your base.
+      for (let si = 0; si < starts.length; si++) {
+        const st = starts[si];
+        const foe = starts[1 - si];
+        let dx = st.cx - foe.cx, dy = st.cy - foe.cy;
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        dx /= len; dy /= len;
+        const off = 7 + rng() * 2; // 7..9
+        const fx = clamp(Math.round(st.cx + dx * off), 2, W - 3);
+        const fy = clamp(Math.round(st.cy + dy * off), 2, H - 3);
+        const count = 100 + ((rng() * 41) | 0); // 100..140
+        placeField(g, rng, fx, fy, count, starts, reach);
+      }
     }
     // 2-3 medium fields around mid-map, spread apart.
     const fieldCenters = [];

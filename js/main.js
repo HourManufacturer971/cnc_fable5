@@ -446,7 +446,7 @@ const Main = (function () {
     }
     window.game = game;
     MUSIC.start();
-    MAPGEN.generate(game, game.seed);
+    MAPGEN.generate(game, game.seed, mission && mission.holdout ? { holdout: true } : undefined);
     Fog.init(game);
 
     const hp = game.startPos.human, ap = game.startPos.ai;
@@ -564,7 +564,9 @@ const Main = (function () {
     // mission objectives beyond annihilation
     const ob = g.mission && g.mission.objective;
     if (!ob) return;
-    if (ob.type === 'harvest' && g.stats.harvested >= ob.amount) return endGame(true);
+    // 'harvest' wins on the BANK BALANCE — hold the amount in credits at
+    // once (spending sets you back), not merely mine it cumulatively
+    if (ob.type === 'harvest' && g.human.credits >= ob.amount) return endGame(true);
     if (ob.type === 'survive' && g.tick >= ob.minutes * 60 * C.TPS) return endGame(true);
     if (ob.type === 'killEconomy') {
       // arms once the enemy owns a refinery or harvester; wins when the

@@ -112,6 +112,7 @@ const Render = (function () {
       terrainCache = res.canvas;
       animCells = res.anim;
       terrainCacheSeed = g.seed;
+      _buildMinimapBase();
       return;
     }
     // fallback: classic per-cell tile blits
@@ -132,30 +133,56 @@ const Render = (function () {
       }
     }
     terrainCacheSeed = g.seed;
+    _buildMinimapBase();
   }
 
   // ---- minimap ---------------------------------------------------------------------
+  // Three layers, refreshed at different rates so the picture is faithful AND
+  // the blips are live:
+  //   minimapBase   — the painted terrain downscaled once per map: the radar
+  //                   shows the actual world, not flat proxy colors
+  //   minimap       — base + shroud + tiberium, refreshed every 8 ticks
+  //                   (fog and fields change slowly)
+  //   entity blips  — drawn straight to the frame EVERY frame from live
+  //                   world coordinates, so movement is real-time and smooth
 
-  const TCOLOR = ['#3e5429', '#8f7a4e', '#6e6e66', '#1e4468', '#1e3416', '#c890b8', '#8a6a42'];
   const OWNER_COLOR = { gdi: '#ffd23c', nod: '#ff2418', mut: '#4ce03c', civ: '#e8e6da' };
   const MMC = C.MM_S / C.MAP_W;   // minimap px per cell
+  let minimapBase = null;
+
+  function _buildMinimapBase() {
+    minimapBase = mkCanvas(C.MM_S, C.MM_S);
+    const mc = minimapBase.getContext('2d');
+    mc.imageSmoothingEnabled = true;
+    mc.imageSmoothingQuality = 'high';
+    mc.drawImage(terrainCache, 0, 0, C.MM_S, C.MM_S);
+  }
 
   function _updateMinimap(g) {
     const mc = minimap.getContext('2d');
-    mc.fillStyle = '#000';
-    mc.fillRect(0, 0, C.MM_S, C.MM_S);
+    if (minimapBase) mc.drawImage(minimapBase, 0, 0);
+    else { mc.fillStyle = '#000'; mc.fillRect(0, 0, C.MM_S, C.MM_S); }
+    mc.fillStyle = PAL.tib2;
     for (let cy = 0; cy < C.MAP_H; cy++) {
       for (let cx = 0; cx < C.MAP_W; cx++) {
         const i = cellIdx(cx, cy);
-        if (g.shroud[i] !== 1) continue;
-        mc.fillStyle = g.tib[i] > 0 ? PAL.tib2 : TCOLOR[g.terrain[i]] || TCOLOR[0];
-        mc.fillRect(cx * MMC, cy * MMC, MMC, MMC);
+        if (g.shroud[i] === 1 && g.tib[i] > 0) mc.fillRect(cx * MMC, cy * MMC, MMC, MMC);
       }
     }
+    mc.fillStyle = '#000';
+    for (let cy = 0; cy < C.MAP_H; cy++) {
+      for (let cx = 0; cx < C.MAP_W; cx++) {
+        if (g.shroud[cellIdx(cx, cy)] !== 1) mc.fillRect(cx * MMC, cy * MMC, MMC, MMC);
+      }
+    }
+  }
+
+  // live blips, drawn every frame directly onto the composed frame
+  function _drawRadarBlips(g) {
     for (const b of g.buildings.values()) {
       if (g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
-      mc.fillStyle = OWNER_COLOR[b.owner] || '#ccc';
-      mc.fillRect(b.cx * MMC, b.cy * MMC, b.w * MMC, b.h * MMC);
+      ctx.fillStyle = OWNER_COLOR[b.owner] || '#ccc';
+      ctx.fillRect(C.MM_X + b.cx * MMC, C.MM_Y + b.cy * MMC, b.w * MMC, b.h * MMC);
     }
     for (const u of g.units.values()) {
       const cx = worldToCell(u.x), cy = worldToCell(u.y);
@@ -166,8 +193,10 @@ const Render = (function () {
         if (!g.visible || g.visible[i] !== 1) continue;
         if (u.cloaked) continue;
       }
-      mc.fillStyle = OWNER_COLOR[u.owner] || '#ccc';
-      mc.fillRect(cx * MMC, cy * MMC, MMC, MMC);
+      // sub-cell world position: blips glide instead of stepping cell to cell
+      const mx = C.MM_X + (u.x / C.CELL) * MMC, my = C.MM_Y + (u.y / C.CELL) * MMC;
+      ctx.fillStyle = OWNER_COLOR[u.owner] || '#ccc';
+      ctx.fillRect(Math.round(mx - MMC / 2), Math.round(my - MMC / 2), MMC, MMC);
     }
   }
 
@@ -720,8 +749,9 @@ const Render = (function () {
     ctx.fillStyle = '#000';
     ctx.fillRect(C.RADAR_X + 8, C.RADAR_Y, C.RADAR_W - 8, C.RADAR_H);
     if (p.radar) {
-      if (g.tick - minimapTick >= 8) { _updateMinimap(g); minimapTick = g.tick; }
+      if (g.tick - minimapTick >= 8 || minimapTick > g.tick) { _updateMinimap(g); minimapTick = g.tick; }
       ctx.drawImage(minimap, C.MM_X, C.MM_Y);
+      _drawRadarBlips(g);
       ctx.strokeStyle = '#fff';
       ctx.lineWidth = 1;
       ctx.strokeRect(
@@ -898,7 +928,7 @@ const Render = (function () {
     if (!m) return null;   // skirmish: no objective chrome
     const ob = m.objective;
     if (ob.type === 'harvest') {
-      return 'HARVEST ' + Math.min(ob.amount, Math.floor(g.stats.harvested)) + ' / ' + ob.amount;
+      return 'TREASURY ' + Math.min(ob.amount, Math.floor(g.human.credits)) + ' / ' + ob.amount;
     }
     if (ob.type === 'survive') {
       const left = Math.max(0, ob.minutes * 60 * C.TPS - g.tick);

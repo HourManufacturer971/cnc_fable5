@@ -12,8 +12,12 @@
 //   aiCalm     multiplier on the AI's attack-wave cadence — above 1 is a
 //              gentler opponent, below 1 keeps the waves coming
 //   aiWaveCap  ceiling on units per AI strike wave (default 9)
+//   holdout    true = fortress scenario: the player starts at the center of
+//              the map inside a rock ring with three gated passes (map.js),
+//              thin chrysalite inside the walls and rich fields beyond them
 //   objective  { type: 'annihilate' }
-//              { type: 'harvest', amount }        — bank that much chrysalite
+//              { type: 'harvest', amount }        — HOLD that many credits at
+//                                                   once (bank balance)
 //              { type: 'survive', minutes }       — outlast the onslaught
 //              { type: 'killEconomy' }            — destroy every enemy
 //                refinery and harvester (arms once the enemy has built one)
@@ -45,36 +49,36 @@ const MISSIONS = [
     credits: 3000, aiCredits: 5000, aiCalm: 1.4,
     objective: { type: 'harvest', amount: 6000 },
     objText: {
-      gdi: 'Bank 6000 credits of harvested chrysalite. Keep your harvesters alive.',
-      nod: 'Bank 6000 credits of harvested chrysalite. The Order provides nothing else.',
+      gdi: 'Hold a treasury of 6000 credits at once. Storage silos will be essential.',
+      nod: 'Hold a treasury of 6000 credits at once. Build silos — the Order audits the vault, not the ledger.',
     },
     brief: {
       gdi: [
         'The war effort runs on chrysalite, Commander, and headquarters is running on fumes. This sector holds some of the richest fields we have charted — and a Serpent Order garrison that knows it.',
-        'Your task is not conquest. Establish refining operations and bank six thousand credits of processed chrysalite. Defend the harvest chain; every crystal counts. Wipe the enemy out if you must, but the quota is the mission.',
+        'Your task is not conquest. Establish refining operations and amass a WAR CHEST of six thousand credits — held in your treasury at one time, so raise storage silos and spend with care. Defend the harvest chain; wipe the enemy out if you must, but the balance is the mission.',
       ],
       nod: [
-        'Faith does not fuel the war machine, disciple. Chrysalite does. The Order requires six thousand credits of the green harvest from this sector, and the Coalition squats upon the richest fields.',
-        'Take what is ours beneath their noses. Guard your harvesters as you would your own blood — the quota is sacred. Annihilation of the UDC is permitted, but it is not required. The harvest is all.',
+        'Faith does not fuel the war machine, disciple. Chrysalite does. The Order requires a war chest of six thousand credits from this sector, and the Coalition squats upon the richest fields.',
+        'Take what is ours beneath their noses. The quota is counted in the vault, not the ledger — six thousand credits held at once. Raise silos, guard your harvesters as you would your own blood, and spend only what the harvest can replace.',
       ],
     },
   },
   {
-    n: 3, title: 'HOLD THE LINE', seed: 9773,
-    credits: 7000, aiCredits: 9000, aiCalm: 0.55,
-    objective: { type: 'survive', minutes: 10 },
+    n: 3, title: 'HOLD THE LINE', seed: 9773, holdout: true,
+    credits: 8000, aiCredits: 11000, aiCalm: 0.5,
+    objective: { type: 'survive', minutes: 15 },
     objText: {
-      gdi: 'Survive for 10 minutes. Reinforcements are inbound.',
-      nod: 'Endure the Coalition storm for 10 minutes. The faithful do not break.',
+      gdi: 'Hold the plateau for 15 minutes. Fortify the three passes.',
+      nod: 'Hold the sanctum for 15 minutes. Seal the three passes with stone and flame.',
     },
     brief: {
       gdi: [
-        'Bad news, Commander. The Serpent Order has massed for a counter-offensive and your position is squarely in its path. Air support is grounded and the relief column is ten minutes out.',
-        'Dig in. Wall up, keep your power grid humming and your defenses hot. Whatever comes out of that haze — hold the line for ten minutes and this position stays ours.',
+        'Bad news, Commander. The Serpent Order has massed for a counter-offensive, and the only ground worth holding is this walled plateau in the dead center of the sector — high rock all around, three passes in.',
+        'There is a chrysalite pocket inside the walls, but it will not carry you fifteen minutes — the rich fields lie OUTSIDE the passes, and every convoy you send is a convoy you must cover. Wall the gaps, keep the power humming, and hold until the relief column arrives.',
       ],
       nod: [
-        'The Coalition believes this temple site can be swept aside before dawn, disciple. They are already moving — armor, infantry, gunships, all of it.',
-        'The Serpent does not retreat. Root yourself, raise stone and flame around the faithful, and endure their storm for ten minutes. Break their momentum here and their whole offensive dies in the mud.',
+        'The Coalition storm is coming, disciple, and the Order has chosen its ground: the old hill sanctum at the heart of the sector, ringed in stone with three gates.',
+        'The crystal within the walls is thin — the true harvest lies beyond the passes, under their guns. Weigh every convoy against the risk. Seal the gates with turret and flame, endure for fifteen minutes, and their offensive breaks on our walls like water.',
       ],
     },
   },

@@ -20,6 +20,8 @@ const AI = (function () {
       // first strike ~3-4 min at calm 1, scaled by the mission's cadence
       nextWaveAt: Math.round((2700 + ((g.rng() * 900) | 0)) * _calm(g)),
       staging: null,        // {ids:[], target:id, launchAt, cell:{cx,cy}}
+      approachAng: 0,       // this wave's attack bearing offset (radians)
+      savingFor: null,      // building key the treasury is reserved for
       brokeSince: -1,
       builtHpad: false,
     };
@@ -174,15 +176,30 @@ const AI = (function () {
   // ---- build order -----------------------------------------------------------------
 
   const DEF_PLAN = {
-    gdi: ['gtwr', 'gtwr', 'atwr', 'gtwr', 'atwr', 'atwr'],
-    nod: ['gun', 'gun', 'obli', 'sam', 'gun', 'obli'],
+    gdi: ['gtwr', 'gtwr', 'atwr', 'gtwr', 'atwr', 'gtwr', 'atwr', 'atwr', 'gtwr'],
+    nod: ['gun', 'gun', 'obli', 'sam', 'gun', 'obli', 'sam', 'obli', 'gun'],
   };
 
+  // Strict-priority build goals. The first applicable goal either starts
+  // (credits above its bar) or becomes the SAVINGS TARGET (S.savingFor): the
+  // unit lines then stop draining credits until it is funded. Without this
+  // the three unit lines pin the treasury near zero forever and the base
+  // stops developing after the opening build-out.
   function _nextBuilding(g, p) {
+    S.savingFor = null;
     const side = p.side;
     const inf = side === 'gdi' ? 'pyle' : 'hand';
     const veh = side === 'gdi' ? 'weap' : 'afld';
     const projectedPower = p.power.out - p.power.drain;
+    const pick = (key, bar) => {
+      // never set a savings bar the treasury cannot physically reach: the
+      // balance is capped at p.storage, so an early one-refinery economy
+      // (storage 1000) must still be able to fund a 1000+ goal
+      bar = Math.min(bar, Math.max(300, p.storage - 200));
+      if (p.credits > bar) return key;
+      S.savingFor = key;
+      return null;
+    };
 
     if (projectedPower < 30) {
       if (Production.prereqOk(p, 'nuk2') && p.credits > 800) return 'nuk2';
@@ -191,34 +208,33 @@ const AI = (function () {
     }
     if (_planned(g, p, 'proc') < 1) return 'proc';
     if (_planned(g, p, inf) < 1) return inf;
-    // vehicle factory (weap/afld) checked BEFORE hq/defense, with a threshold
-    // no higher than either of theirs: a cheaper, lower-priority project must
-    // never be able to jump the queue just because the AI's credits happen to
-    // cross its lower bar first — the AI was going a whole game without ever
-    // building afld/weap this way, which meant no vehicles, ever.
-    if (_planned(g, p, veh) < 1 && p.credits > 1200) return veh;
-    if (_planned(g, p, 'proc') < 2 && p.credits > 1800) return 'proc';
-    if (_planned(g, p, 'hq') < 1 && p.credits > 1200) return 'hq';
+    // vehicle factory before hq/defense: tanks matter more than walls
+    if (_planned(g, p, veh) < 1) return pick(veh, 1200);
+    // second refinery EARLY — the whole midgame stalls on a one-proc economy
+    if (_planned(g, p, 'proc') < 2) return pick('proc', 1000);
+    if (_planned(g, p, 'hq') < 1) return pick('hq', 900);
 
-    // defense line grows with the war — but only once the vehicle factory
-    // exists, so early credits go toward unlocking tanks, not just walls
-    const defWant = Math.min(2 + Math.floor(S.wave / 2) + (g.tick > 9000 ? 1 : 0), 6);
+    // defense line grows with the war — with the war CLOCK as well as the
+    // wave count, so a long game keeps thickening the perimeter
+    const defWant = Math.min(2 + Math.floor(S.wave / 2) + Math.floor(g.tick / 4500), 9);
     const defHave = _defenseSpots(g, p).length +
       (p.queues.building && ROLE[p.queues.building.key] === 'defense' ? 1 : 0) +
       (p.ready.building && ROLE[p.ready.building] === 'defense' ? 1 : 0);
-    if (_planned(g, p, veh) >= 1 && defHave < defWant && p.credits > 800) {
+    if (defHave < defWant) {
       const want = DEF_PLAN[side][Math.min(defHave, DEF_PLAN[side].length - 1)];
-      if (Production.prereqOk(p, want)) return want;
+      if (Production.prereqOk(p, want)) return pick(want, 500);
     }
 
-    if (side === 'gdi' && _planned(g, p, 'fix') < 1 && p.credits > 2000 &&
-        Production.prereqOk(p, 'fix')) return 'fix';
-    if (!S.builtHpad && p.credits > 2800 && Production.prereqOk(p, 'hpad')) return 'hpad';
-    if (_planned(g, p, 'proc') < 3 && p.credits > 3200 && g.tick > 7000) return 'proc';
+    if (side === 'gdi' && _planned(g, p, 'fix') < 1 &&
+        Production.prereqOk(p, 'fix')) return pick('fix', 1500);
+    if (!S.builtHpad && Production.prereqOk(p, 'hpad')) return pick('hpad', 2000);
+    // late-game economy keeps pace with the growing army bill
+    if (_planned(g, p, 'proc') < 3 && g.tick > 5000) return pick('proc', 1500);
+    if (_planned(g, p, 'proc') < 4 && g.tick > 12000) return pick('proc', 2500);
     const tech = side === 'gdi' ? 'eye' : 'tmpl';
-    if (_planned(g, p, tech) < 1 && p.credits > 3500 && Production.prereqOk(p, tech)) return tech;
-    if (p.storage - p.credits < 250 && p.credits > 600 && Production.prereqOk(p, 'silo') &&
-        _planned(g, p, 'silo') < 3) return 'silo';
+    if (_planned(g, p, tech) < 1 && Production.prereqOk(p, tech)) return pick(tech, 2200);
+    if (p.storage - p.credits < 400 && Production.prereqOk(p, 'silo') &&
+        _planned(g, p, 'silo') < 4) return pick('silo', 500);
     return null;
   }
 
@@ -231,9 +247,11 @@ const AI = (function () {
   // own unit types, so the three lines can run concurrently
   function _pickUnit(g, p, kind) {
     if (kind === 'vehicle') {
+      // harvester fleet scales with the refineries (and replaces losses
+      // eagerly — a starved AI stops doing anything interesting)
       const procs = _planned(g, p, 'proc');
       const harvs = _unitCount(g, p, 'harv');
-      if (procs > 0 && harvs < Math.min(4, procs * 2) && p.credits > 1400 &&
+      if (procs > 0 && harvs < Math.min(6, procs * 2 + 1) && p.credits > 900 &&
           Production.prereqOk(p, 'harv')) return 'harv';
     }
     const opts = WEIGHTS[p.side].filter(([k]) => DATA.units[k].factory === kind && Production.prereqOk(p, k));
@@ -288,22 +306,21 @@ const AI = (function () {
 
   // ---- waves ---------------------------------------------------------------------------
 
+  // per-wave approach bearings (radians off the direct line): the strike
+  // masses on a rotated bearing around the HUMAN base, so attacks come in
+  // from the front, the flanks, and occasionally near the rear instead of
+  // marching down the same lane every time
+  const APPROACHES = [0, -0.55, 0.55, -1.1, 1.1, -1.7, 1.7];
+
   function _stageCell(g, p) {
     const t = _threatDir(g, p);
-    // Gather on the attack route itself, ~14 cells short of the enemy base:
-    // any river ford or forest choke is crossed BEFORE the force masses up,
-    // so the strike arrives as one wave instead of a single-file trickle.
     const hs = g.startPos.human;
-    const probe = { x: cellCenterX(t.from.cx), y: cellCenterY(t.from.cy), id: -1, owner: p.side, type: 'ltnk', r: 0.4 };
-    const route = findPath(probe, hs.cx, hs.cy);
-    if (route && route.length > 20) {
-      const c = route[route.length - 14];
-      if (c && isPassable(c.cx, c.cy)) return { cx: c.cx, cy: c.cy };
-    }
-    // fallback: a clear spot 9-14 cells out toward the threat
-    for (let r = 9; r <= 14; r++) {
-      const cx = Math.round(t.from.cx + t.x * r);
-      const cy = Math.round(t.from.cy + t.y * r);
+    // rotate the (target -> us) bearing by this wave's approach angle and
+    // stage 13-18 cells out from the target on that bearing
+    const back = Math.atan2(t.from.cy - hs.cy, t.from.cx - hs.cx) + (S.approachAng || 0);
+    for (let r = 13; r <= 18; r++) {
+      const cx = Math.round(hs.cx + Math.cos(back) * r);
+      const cy = Math.round(hs.cy + Math.sin(back) * r);
       for (let dr = 0; dr < 4; dr++) {
         for (let dy = -dr; dy <= dr; dy++) {
           for (let dx = -dr; dx <= dr; dx++) {
@@ -313,6 +330,14 @@ const AI = (function () {
           }
         }
       }
+    }
+    // fallback: gather on the direct attack route itself, ~14 cells short of
+    // the enemy base (any ford or forest choke is crossed BEFORE massing)
+    const probe = { x: cellCenterX(t.from.cx), y: cellCenterY(t.from.cy), id: -1, owner: p.side, type: 'ltnk', r: 0.4 };
+    const route = findPath(probe, hs.cx, hs.cy);
+    if (route && route.length > 20) {
+      const c = route[route.length - 14];
+      if (c && isPassable(c.cx, c.cy)) return { cx: c.cx, cy: c.cy };
     }
     return t.from;
   }
@@ -364,6 +389,9 @@ const AI = (function () {
     let launch = idle.length - garrison;
     if (g.mission && g.mission.aiWaveCap) launch = Math.min(launch, g.mission.aiWaveCap);
     const force = idle.slice(0, launch);
+    // pick this wave's approach: the first strikes come in near-frontal, the
+    // repertoire widens to full flanking sweeps as the war grinds on
+    S.approachAng = APPROACHES[(g.rng() * Math.min(APPROACHES.length, 3 + S.wave)) | 0];
     const cell = _stageCell(g, p);
     let i = 0;
     for (const u of force) {
@@ -448,12 +476,18 @@ const AI = (function () {
       if (want) Production.tryStart(p, want);
     }
 
-    // keep every unit line running — infantry/vehicle/air build concurrently
+    // keep every unit line running — infantry/vehicle/air build concurrently.
+    // While the planner is saving toward a building, hold NEW unit starts so
+    // the treasury can actually climb; harvesters are exempt (an eco stall
+    // would defeat the whole point of saving).
+    if (p.queues.building || p.ready.building) S.savingFor = null;
+    const armyFloor = _military(g, p).length < 9;   // never save yourself defenseless
     for (const kind of ['infantry', 'vehicle', 'air']) {
-      if (!p.queues[kind] && p.credits > 400) {
-        const want = _pickUnit(g, p, kind);
-        if (want) Production.tryStart(p, want);
-      }
+      if (p.queues[kind] || p.credits <= 400) continue;
+      const want = _pickUnit(g, p, kind);
+      if (!want) continue;
+      if (S.savingFor && want !== 'harv' && !armyFloor) continue;
+      Production.tryStart(p, want);
     }
 
     // superweapon at the densest human cluster

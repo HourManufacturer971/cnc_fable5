@@ -171,14 +171,16 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   channel with copy-paste matchmaking codes: serverless, accountless, and
   checksummed against desyncs (see the Multiplayer section above)
 - **A campaign** — five operations per side with in-universe briefings and
-  distinct objectives: annihilate an outpost, bank a chrysalite quota,
-  survive a ten-minute onslaught, hunt down the enemy economy, and crack a
-  fortress; each tunes the AI's aggression and war chest, wins unlock the
-  next, and an objective chip on the HUD tracks live progress
+  distinct objectives: annihilate an outpost, amass a 6000-credit war chest
+  (held at once — build silos), survive fifteen minutes on a walled center
+  plateau with three defensible passes and the rich chrysalite outside them,
+  hunt down the enemy economy, and crack a fortress; each tunes the AI's
+  aggression and war chest, wins unlock the next, and an objective chip on
+  the HUD tracks live progress
 - **A civilian hamlet** — farmhouse, cottages and a barn with villagers who
   wander about and flee gunfire; nobody auto-targets them (except the
   fleshlings), but Ctrl+click will
-- **Original soundtrack** — four synthesized tracks in the dark mid-90s RTS
+- **Original soundtrack** — eight synthesized tracks in the dark mid-90s RTS
   style, sequenced live with WebAudio (each mission opens on a different
   one); toggle with Music: ON/OFF in the options menu
 - **Feedback that feels good** — orders answer with collapsing green/red
@@ -209,18 +211,23 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 - **Pathfinding** — infantry bias their routes away from chrysalite (still
   crossable if it's the only way through); a chrysalite-free route always
   connects the two bases
-- **Fog of war** — permanent-reveal black shroud, jagged edges, radar minimap;
-  enemy blips on the radar need live line-of-sight from your own forces
+- **Fog of war** — permanent-reveal black shroud, jagged edges, and a radar
+  minimap that shows the actual painted world in miniature with live,
+  smoothly-moving unit blips; enemy blips need live line-of-sight from your
+  own forces
 - **Fleshlings** — infantry that die on a chrysalite field mutate into hostile
   creatures that attack everyone
 - **Auto-repair** — damaged buildings start repairing themselves (toggleable
   with the REPAIR button); wading through chrysalite hurts infantry, standing
   still in it doesn't
 - **Skirmish AI** — plans its base by role (power tucked behind, refineries at
-  the chrysalite, defense arc facing you), keeps its economy and unit lines
-  running, masses each attack at a staging point before striking on a
-  sustained 2-4 minute cadence that scales up, garrisons its home, and fires
-  its superweapon at your densest cluster
+  the chrysalite, defense arc facing you) and KEEPS developing it all game:
+  it saves toward second and third refineries, a growing harvester fleet,
+  and a defense perimeter that thickens as the war drags on. Attacks mass at
+  a staging point on a different approach bearing each wave — frontal at
+  first, then sweeping in from the flanks — on a sustained 2-4 minute
+  cadence that scales up; it garrisons its home and fires its superweapon
+  at your densest cluster
 - **Tactical announcer & comms** — a synthesized in-universe radio voice
   (built live from oscillators + formant filters, never browser text-to-speech)
   calls out events — "Construction complete", "Unit ready", "Base under

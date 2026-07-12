@@ -68,9 +68,9 @@ define **exactly** the globals listed and may freely call any global listed for 
 | sprites_infantry.js | fills `SPRITES.infantry[key][side]` for every infantry type, and their `SPRITES.cameo[key]` |
 | sprites_buildings.js | fills `SPRITES.buildings[key][side]` for every building, and their `SPRITES.cameo[key]`, plus `SPRITES.cameo.ion` / `SPRITES.cameo.nuke` |
 | audio.js | `AUDIO` (`init, play, eva, ack, setEnabled, enabled, setVoiceEnabled, voiceEnabled, tickCredits`) |
-| music.js | `MUSIC` (`start, stop, setEnabled, enabled` — original procedural soundtrack, four tracks, random opener, rotates after two loops) |
+| music.js | `MUSIC` (`start, stop, setEnabled, enabled` — original procedural soundtrack, eight tracks, random opener, rotates after two loops) |
 | missions.js | `MISSIONS` (campaign definitions: seed, credits, AI knobs, objective, per-side briefings), `MissionProgress` (localStorage `hw_progress` unlock tracking) |
-| map.js | `MAPGEN` (`generate(game, seed)`) |
+| map.js | `MAPGEN` (`generate(game, seed, opts?)` — `opts.holdout` centers the human start inside a three-gated rock fortress ring with thin chrysalite inside and rich fields beyond) |
 | path.js | `findPath(unit, destCx, destCy, opts?) -> [{cx,cy},...]` |
 | fog.js | `Fog` (`init, revealCircle, update, isExplored`) |
 | sim.js | `Sim` (`tick`), `orderMove`, `orderAttack`, `orderHarvest`, `orderDeploy`, `orderEnter`, `orderBoard`, `unloadCargo`, `stopUnit`, `killEntity`, `fireIon`, `fireNuke`, `spawnEffect`, `spawnBullet` |
@@ -238,7 +238,10 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 - Black shroud, permanently revealed (no re-shroud, like TD). `game.shroud` bytes: 0 hidden,
   1 explored. Reveal circles of `sight` radius around human units/buildings each few ticks.
   AI sees everything. Hidden cells: draw black; cells adjacent to hidden get jagged dark
-  edge overlay (`SPRITES.shroudEdge`). Radar shows only explored. Enemies/tib in hidden
+  edge overlay (`SPRITES.shroudEdge`). Radar: three layers — the painted terrain
+  downscaled once per map (`minimapBase`), shroud+tiberium refreshed every 8 ticks, and
+  entity blips drawn EVERY frame from live world coordinates (enemy blips gated on
+  current line-of-sight, cloaked units hidden). Radar shows only explored. Enemies/tib in hidden
   cells invisible & untargetable; can't place buildings or superweapons into shroud.
 
 ### Win / lose
@@ -256,15 +259,16 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   `mission.credits` / `mission.aiCredits`, and uses `mission.seed`. Restart Mission
   restarts the same mission; `?mission=N` boots one headlessly.
 - Objectives, checked in `Main._checkEnd` (annihilation still wins/loses everything):
-  `harvest {amount}` (win at `stats.harvested >= amount`), `survive {minutes}` (win at
-  the bell), `killEconomy` (arms once the AI owns a refinery or harvester — flag
-  `game._ecoArmed` — then wins when the count returns to zero). Winning unlocks the next
-  mission (`MissionProgress.unlockUpTo`).
+  `harvest {amount}` (win when the BANK BALANCE `g.human.credits >= amount` — spending
+  sets you back, storage silos are required to hold it), `survive {minutes}` (win at
+  the bell; mission 3 pairs this with `holdout: true` map gen), `killEconomy` (arms once
+  the AI owns a refinery or harvester — flag `game._ecoArmed` — then wins when the count
+  returns to zero). Winning unlocks the next mission (`MissionProgress.unlockUpTo`).
 - AI difficulty knobs read from `game.mission` by ai.js: `aiCalm` multiplies wave-cadence
   delays (first strike + between waves), `aiWaveCap` caps units per strike wave.
   Skirmish (`game.mission` null) keeps the exact original cadence.
 - Render draws a small objective status chip at the top-left of the viewport
-  (`HARVEST n / m`, `HOLD OUT mm:ss`, `ECONOMY TARGETS LEFT: n`, or the annihilate
+  (`TREASURY n / m`, `HOLD OUT mm:ss`, `ECONOMY TARGETS LEFT: n`, or the annihilate
   line); skirmish shows none.
 
 ### Multiplayer (net.js — deterministic lockstep, P2P)
@@ -389,16 +393,24 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 ### AI opponent (`ai.js`)
 - Skirmish AI. Starts with deployed base (see map/main setup) + same credits as player.
   Personality by side (UDC: tanks+AGT; Serpent: turrets/spire+buggy/ltnk/arty swarm).
-- Loop (~every 30 ticks): maintain build order: power ahead of drain → proc (up to 2-3) →
-  barracks/hand → weap/afld → hq → defenses near base perimeter facing player → tech (eye/
-  tmpl) → superweapon use on player's densest building cluster.
+- Loop (~every 30 ticks): strict-priority build goals: power ahead of drain → proc →
+  barracks/hand → weap/afld → proc #2 → hq → defenses (want grows with wave count AND the
+  game clock, up to 9, arced toward the player) → fix/hpad → proc #3-4 late → tech (eye/
+  tmpl) → silos when storage is tight → superweapon on player's densest cluster.
+  The first goal blocked only by credits becomes the SAVINGS TARGET (`S.savingFor`):
+  new unit starts pause (harvesters exempt, and never below a 9-strong army floor) so
+  the treasury can climb; each goal's bar is capped at `p.storage - 200` so a
+  one-refinery economy can't deadlock below its own storage ceiling.
 - Placement (`_findSpot`) keeps a 1-cell clear ring around every own refinery — checked
   in both directions (buildings near an existing proc, and a new proc near existing
   buildings) so harvesters can always dock and the economy never gets walled in.
-- Keep 2-4 harvesters; rebuild destroyed key buildings; repair buildings < 60% hp.
+- Harvester fleet scales with refineries (`min(6, procs*2+1)`), replaced eagerly.
 - Military: continuous production alternating infantry/vehicles from DATA list weighted by
-  personality; group attackers; first wave at ~3 min, then every ~2.5 min send everything
-  idle at the player's base (target nearest player building; retarget when it dies).
+  personality; group attackers; first wave at ~3-4 min, then every ~2.5-3.5 min send
+  everything idle at the player's base. Each wave picks an APPROACH BEARING (rotations of
+  the direct line, `APPROACHES` = 0/±0.55/±1.1/±1.7 rad; early waves near-frontal, the
+  repertoire widening with the wave count) and stages 13-18 cells from the player's base
+  on that bearing, so attacks come from varying directions.
   Defend: units near base intercept intruders. If AI has no conyard but has money+weap →
   build mcv? (skip — too fancy; just keep fighting).
 - AI places buildings on a spiral search around its conyard obeying `Production.canPlace`.
