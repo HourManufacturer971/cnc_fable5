@@ -368,6 +368,13 @@ function unloadCargo(apc) {
   return placed > 0;
 }
 
+// factory rally point. Trivial, but routed through a function so multiplayer
+// can serialize it like every other order (net.js wraps it).
+function orderRally(b, cx, cy) {
+  b.rally = { cx, cy };
+  return true;
+}
+
 function stopUnit(u) {
   // release a mid-transit cell commit; a stopped unit never steps again to
   // heal its own bookkeeping
@@ -467,10 +474,19 @@ function _autoAcquire(u, d) {
   }
 }
 
+// does `side` lose track of a cloaked target? The SP AI is omniscient; every
+// human does. Keyed off mpExplored (not p.isAI, which names the LOCAL side's
+// opponent and so differs between the two multiplayer clients — a sim read
+// of it would desync the lockstep).
+function _cloakBlind(g, side) {
+  if (g.mpExplored) return true;   // multiplayer: both players are human
+  return !g.players[side].isAI;
+}
+
 function _combat(u, d) {
   const g = game;
   const t = getEnt(u.targetId);
-  if (!t || t._dead || (t.kind === 'unit' && t.cloaked && t.owner !== u.owner && !g.players[u.owner].isAI)) {
+  if (!t || t._dead || (t.kind === 'unit' && t.cloaked && t.owner !== u.owner && _cloakBlind(g, u.owner))) {
     // target gone: return to guard anchor if any
     u.targetId = 0;
     if (u.guardAnchor) {
@@ -525,10 +541,19 @@ function _combat(u, d) {
 
 // ---- harvester ---------------------------------------------------------------
 
+// the explored map a SIM read may consult for `side`. In multiplayer both
+// clients maintain per-side maps (g.mpExplored, net.js) so the answer never
+// depends on which client is asking; in single player the human uses the
+// normal shroud and the AI is omniscient (null = no filter).
+function _exploredFor(g, side) {
+  if (g.mpExplored) return g.mpExplored[side];
+  return g.players[side].isAI ? null : g.shroud;
+}
+
 function _findTibCell(u, radius) {
   const g = game;
   const cx = worldToCell(u.x), cy = worldToCell(u.y);
-  const human = !g.players[u.owner].isAI;
+  const expl = _exploredFor(g, u.owner);
   let best = null, bestD = Infinity;
   const r0 = Math.max(0, cx - radius), r1 = Math.min(C.MAP_W - 1, cx + radius);
   const s0 = Math.max(0, cy - radius), s1 = Math.min(C.MAP_H - 1, cy + radius);
@@ -537,7 +562,7 @@ function _findTibCell(u, radius) {
       const i = cellIdx(x, y);
       if (g.tib[i] <= 0) continue;
       if (u._noReach && u._noReach.has(i)) continue;   // known-unreachable cells
-      if (human && g.shroud[i] !== 1) continue;
+      if (expl && expl[i] !== 1) continue;
       const o = g.occ[i];
       if (o && o !== u.id) continue;
       const dd = (x - cx) * (x - cx) + (y - cy) * (y - cy);
@@ -636,13 +661,14 @@ function _harvester(u, d) {
     p.credits += add;
     u.tib = Math.max(0, u.tib - u._chunk);
     u._paid = (u._paid || 0) + add;
-    if (u._chunk > add + 0.01 && !p.isAI) _evaOnce('silosNeeded', 450);
-    if (!p.isAI) g.stats.harvested += add;
+    // feedback for the LOCAL player only (in MP the opponent is also human)
+    if (u._chunk > add + 0.01 && p === g.human) _evaOnce('silosNeeded', 450);
+    if (p === g.human) g.stats.harvested += add;
     u._unload--;
     if (u._unload <= 0 || u.tib <= 0) {
       // floating credit readout over the refinery — pay the player the
       // little dopamine hit along with the money
-      if (!p.isAI && u._paid >= 1) {
+      if (p === g.human && u._paid >= 1) {
         spawnEffect('cash', u.x, u.y - 10, { ttl: 24, vy: -1.1, amount: Math.round(u._paid) });
       }
       u.tib = 0;
@@ -840,7 +866,7 @@ function _engineer(u, d) {
         Production.computePower(g.players[oldOwner]);
         Production.computePower(g.players[u.owner]);
       }
-      if (!g.players[u.owner].isAI) _evaOnce('buildingCaptured', 30);
+      if (u.owner === g.humanSide) _evaOnce('buildingCaptured', 30);
       _maybePlay('radarOn', u.x, u.y);
     } else if (t.hp < t.maxHp) {
       t.hp = t.maxHp;

@@ -92,7 +92,9 @@ const Input = (function () {
           const cells = wallLine || [wallDrag];
           const placed = Production.placeWallLine(game, game.human, modeArg, cells);
           wallDrag = null; wallLine = null;
-          if (placed && !game.human.ready.building) _setMode('normal');
+          // in MP the queued placement consumes ready ~5 ticks from now —
+        // exit place mode on the optimistic ack rather than sticking
+        if (placed && (!game.human.ready.building || NET.active)) _setMode('normal');
           else if (!placed) AUDIO.play('buzz');
           return;
         }
@@ -390,7 +392,9 @@ const Input = (function () {
         const cells = wallLine || [wallDrag];
         const placed = Production.placeWallLine(game, game.human, modeArg, cells);
         wallDrag = null; wallLine = null;
-        if (placed && !game.human.ready.building) _setMode('normal');
+        // in MP the queued placement consumes ready ~5 ticks from now —
+        // exit place mode on the optimistic ack rather than sticking
+        if (placed && (!game.human.ready.building || NET.active)) _setMode('normal');
         else if (!placed) AUDIO.play('buzz');
         _restoreMouse(ev);
         return;
@@ -732,7 +736,7 @@ const Input = (function () {
     // building selected: set rally point
     const selB = g.selection.map(id => g.buildings.get(id)).filter(Boolean);
     if (selB.length === 1 && selB[0].owner === g.humanSide && DATA.buildings[selB[0].type].factory) {
-      selB[0].rally = { cx, cy };
+      orderRally(selB[0], cx, cy);
       AUDIO.play('click');
       spawnEffect('moveMark', cellCenterX(cx), cellCenterY(cy), { ttl: 14 });
     }

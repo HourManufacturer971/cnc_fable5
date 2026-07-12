@@ -936,6 +936,27 @@ const Render = (function () {
     ctx.textBaseline = 'alphabetic';
   }
 
+  // ---- multiplayer stall notice ----------------------------------------------------------------
+
+  function _drawNetStall(g) {
+    if (typeof NET === 'undefined' || !NET.active || g.status !== 'playing') return;
+    if (g.paused) return;                       // our own pause isn't their fault
+    if (!NET.remotePaused && NET.stalledMs() < 600) return;
+    const s = NET.remotePaused ? 'OPPONENT PAUSED' : 'WAITING FOR OPPONENT…';
+    ctx.font = 'bold 20px monospace';
+    ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(s).width;
+    const cx = C.VIEW_PW / 2, by = C.TAB_H + 60, bh = 34, bw = tw + 40;
+    const bx = Math.round(cx - bw / 2);
+    ctx.fillStyle = 'rgba(20,8,8,0.78)';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = PAL.uiRed; ctx.lineWidth = 1;
+    ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+    ctx.fillStyle = '#e8c8b8';
+    ctx.fillText(s, bx + 20, by + bh / 2 + 1);
+    ctx.textBaseline = 'alphabetic';
+  }
+
   // ---- cursor ---------------------------------------------------------------------------------
 
   function _drawCursor() {
@@ -961,6 +982,7 @@ const Render = (function () {
     _drawTabBar(g);
     _drawSidebar(g);
     _drawObjective(g);
+    _drawNetStall(g);
     _drawEvaBanner();
     if (Input.mouse.inside && !g.paused) _drawCursor();
     shownTick = g.tick;

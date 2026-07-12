@@ -16,7 +16,8 @@ Inspired by the classic RTS genre; contains no assets, names, or code from any o
   inside sim/production/ai/map code. UI/audio/effects may use `Math.random()`.
 - Script load order (index.html): `core.js, data.js, sprites_terrain.js, terrain_paint.js,
   sprites_units.js, sprites_infantry.js, sprites_buildings.js, audio.js, music.js, missions.js,
-  map.js, path.js, fog.js, sim.js, production.js, ai.js, input.js, render.js, main.js`.
+  map.js, path.js, fog.js, sim.js, production.js, ai.js, input.js, render.js, net.js, main.js`
+  (net.js must load after sim/production — it wraps their order functions — and before main).
 - Every file must pass `node --check`.
 
 ## Screen layout (all coordinates in internal 640×400 px)
@@ -77,6 +78,7 @@ define **exactly** the globals listed and may freely call any global listed for 
 | ai.js | `AI` (`init, tick, _peek` — `_peek` is a read-only debug/test hook) |
 | input.js | `Input` (`init, tick, mouse, cursorKind, mode, modeArg`) |
 | render.js | `Render` (`init, frame, worldFromScreen, hitTest`) |
+| net.js | `NET` (P2P lockstep: `host, acceptAnswer, join, testLocal, close, pump, ready, applyTick, postTick, stalledMs, initExplored, checksum`, flags `active/applying/inSim/side/desynced`) |
 | main.js | `Main` (`boot, startGame, endGame`), starts loop, menu DOM wiring |
 
 ## Game state (created by `makeGame` in core.js — read it)
@@ -264,6 +266,45 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 - Render draws a small objective status chip at the top-left of the viewport
   (`HARVEST n / m`, `HOLD OUT mm:ss`, `ECONOMY TARGETS LEFT: n`, or the annihilate
   line); skirmish shows none.
+
+### Multiplayer (net.js — deterministic lockstep, P2P)
+- 1v1 over a WebRTC data channel with MANUAL signaling: host and guest exchange
+  two base64 codes by hand (any chat) — no server, no accounts; the only outside
+  service is a public STUN server for NAT discovery (LAN/same-machine works
+  without it). A `BroadcastChannel` transport (`?mpbc=name&mphost=1&side=`)
+  drives two-tab play on one machine and the automated tests.
+- Lockstep: both clients run the identical sim from the host's seed; only
+  orders travel. Each order is queued locally, broadcast with execution tick
+  `now + DELAY` (5 ticks), and applied on BOTH clients at that tick, gdi's
+  batch before nod's. A client may only advance to tick T once it holds both
+  batches for T; the loop stalls otherwise (render keeps running, "WAITING FOR
+  OPPONENT…" after 600 ms). Batches for a tick horizon are always broadcast
+  BEFORE the barrier check so a stall can never deadlock.
+- Order interception: net.js wraps the global order functions and the
+  Production mutators at load time. Wrappers pass straight through when NET is
+  inactive, when inside the sim step (`NET.inSim` — harvester auto-seek, rally
+  moves, AI), or when executing scheduled commands (`NET.applying`); otherwise
+  they serialize a command. Fog-based validation (`cellOk` shroud test,
+  `launchSuper` explored test) is pre-validation on the issuing client only and
+  is skipped under `NET.applying`.
+- MP start is symmetric and canonical: both sides get an MCV + escort; gdi
+  always takes the map's SW slot, nod the NE one, gdi spawns first (identical
+  entity ids on both clients). `_uid` resets in `makeGame`. AI.tick is skipped
+  (AI.init still runs — a symmetric rng draw). The main loop ticks production
+  in fixed side order (gdi, nod), never human-first.
+- Desync detection: FNV-1a checksum of (tick, unit id/x/y/hp/load, building
+  id/hp/progress, credits, super timers) exchanged every 128 ticks; mismatch →
+  both clients show "DESYNC DETECTED", `game.status = 'desync'`, link closed.
+  Disconnect / Abort mid-game forfeits: the remaining player wins.
+- **Determinism rules all future sim changes must respect**: sim randomness
+  only via `game.rng`; sim behavior must never read `g.shroud`/`g.visible`,
+  `g.humanSide`, or `p.isAI` (for fog filtering use `_exploredFor(g, side)` —
+  per-side maps `g.mpExplored` in MP; for player feedback gate on
+  `p === g.human` / `owner === g.humanSide`, which is cosmetic-only); iterate
+  players in fixed side order; effects/audio/EVA may diverge per client and
+  stay out of the checksum. `Math.sin/cos/atan2` are engine-dependent — pairs
+  on the same browser are safe; cross-browser matches may eventually desync
+  (detected, not prevented).
 
 ### Gameplay feedback (juice)
 - `applyDamage` stamps `target._hitT = game.tick`; render re-draws the sprite twice with
@@ -481,7 +522,8 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 
 - `main.js` exposes `window.game` (live game object) and `Main.startGame` so a headless
   browser can boot straight into a game: `Main.startGame('gdi', {seed: 42})`.
-- Add URL params: `?side=gdi&seed=42&nomenu=1&mission=N` → boot directly into game (skip menu),
+- Add URL params: `?side=gdi&seed=42&nomenu=1&mission=N` (and `mpbc=name&mphost=1`
+  for two-tab multiplayer over BroadcastChannel) → boot directly into game (skip menu),
   `&mute=1` → `AUDIO.setEnabled(false)`.
 - Every module must be defensive at boot: no top-level code that throws if DOM absent
   except main.js boot listener.

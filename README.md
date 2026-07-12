@@ -38,6 +38,36 @@ Construction Yard.
 
 Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1&mission=2`.
 
+## Multiplayer (P2P, no server)
+
+The **Multiplayer** button on the menu starts a 1v1 against another human,
+directly browser-to-browser over WebRTC — there is no game server and no
+account:
+
+1. The **host** picks a faction, clicks *Host Game*, and sends the generated
+   **invite code** to the opponent over any chat.
+2. The **guest** clicks *Join Game*, pastes the invite code, and sends back
+   the generated **reply code**.
+3. The host pastes the reply code, clicks *Connect*, and the match starts on
+   both screens — the guest automatically gets the other faction, and both
+   players start symmetrically with an MCV and escort.
+
+Under the hood it is a classic deterministic-lockstep RTS netcode: both
+browsers run the identical simulation and only your orders travel the wire,
+so bandwidth is tiny. Notes:
+
+- If one player lags or pauses, the other sees *WAITING FOR OPPONENT…* until
+  they catch up. Disconnecting or aborting forfeits the match.
+- Both players should run the **same browser** (e.g. both Chrome) — the sims
+  are checksummed against each other and a divergence ends the match with a
+  desync notice.
+- Connection uses a public STUN server for NAT traversal; on a strict
+  symmetric-NAT network the direct connection may fail (there is no relay).
+  Same LAN always works.
+- For fun/testing on one machine: open two tabs of
+  `?mpbc=room1&mphost=1&side=gdi` and `?mpbc=room1` — they connect through a
+  local channel, no network at all.
+
 ## Controls (classic 1995 scheme)
 
 | Input | Action |
@@ -137,6 +167,9 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   rocky rim, eroded mesa cliffs with wavy sun-caught lips, earthy strata,
   gullies and talus fans, forests with closed canopies and clearings, and
   scattered doodads (grass tufts, flowers, pebbles, cracks, bushes)
+- **P2P multiplayer** — 1v1 deterministic-lockstep netcode over a WebRTC data
+  channel with copy-paste matchmaking codes: serverless, accountless, and
+  checksummed against desyncs (see the Multiplayer section above)
 - **A campaign** — five operations per side with in-universe briefings and
   distinct objectives: annihilate an outpost, bank a chrysalite quota,
   survive a ten-minute onslaught, hunt down the enemy economy, and crack a
@@ -198,7 +231,8 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 
 ## Not included (yet)
 
-FMV, multiplayer, naval units, mid-mission save/load.
+FMV, naval units, mid-mission save/load, multiplayer beyond 1v1 (no relay
+server for hard NATs, no matchmaking lobby).
 
 ## Experimental: pre-rendered 3D sprite pipeline (unused)
 

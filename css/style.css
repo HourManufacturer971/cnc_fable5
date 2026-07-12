@@ -113,6 +113,9 @@ html, body {
   display: flex; align-items: center; justify-content: center;
   background: rgba(0, 0, 0, 0.82);
   z-index: 10;
+  /* panels may scroll on short (landscape phone) screens; the ancestor
+     #wrap sets touch-action:none, so re-allow vertical pans here */
+  touch-action: pan-y;
 }
 .hidden { display: none; }
 .overlay.hidden { display: none; }
@@ -126,6 +129,11 @@ html, body {
   text-align: center;
   color: #d8d0a8;
   max-width: 560px;
+  max-height: 94vh;
+  overflow-y: auto;
+}
+@supports (height: 100dvh) {
+  .panel { max-height: 94dvh; }
 }
 .panel.small { padding: 20px 32px; }
 
@@ -171,6 +179,31 @@ button:active { border-color: #2e2e28; border-top-color: #6a6a60; border-left-co
   display: block; font-size: 11px; margin: 8px 0; color: #b8b09a;
 }
 #speedRow input { width: 100%; }
+
+/* multiplayer lobby */
+#mpSideRow { display: flex; gap: 10px; }
+#mpSideRow button { opacity: 0.55; }
+#mpSideRow button.sel { opacity: 1; border-color: #e0b840; color: #e0b840; }
+#mplobby textarea {
+  width: 100%;
+  height: 64px;
+  box-sizing: border-box;
+  background: #23231e;
+  color: #b8d0a0;
+  border: 2px solid #6a6a60;
+  font-family: inherit;
+  font-size: 10px;
+  resize: none;
+  margin: 4px 0;
+}
+.mpStep {
+  text-align: left;
+  font-size: 11px;
+  color: #b8b09a;
+  margin: 10px 0 2px;
+  letter-spacing: 1px;
+}
+#mpStatus { min-height: 14px; color: #e0b840; }
 
 /* mission select + briefing */
 #missionList button {

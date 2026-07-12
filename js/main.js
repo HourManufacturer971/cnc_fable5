@@ -190,6 +190,7 @@ const Main = (function () {
       $('missions').classList.add('hidden');
       $('menu').classList.remove('hidden');
     });
+    _wireMpLobby();
     $('btnBriefBack').addEventListener('click', () => {
       $('briefing').classList.add('hidden');
       $('missions').classList.remove('hidden');
@@ -223,8 +224,13 @@ const Main = (function () {
     $('speedSlider').addEventListener('input', ev => {
       if (game) game.speed = ev.target.value / 100;
     });
-    $('btnRestart').addEventListener('click', () => { togglePause(false); startGame(mySide, { mission: myMission }); });
+    $('btnRestart').addEventListener('click', () => {
+      if (NET.active) { AUDIO.play('buzz'); return; }   // can't restart a lockstep match
+      togglePause(false);
+      startGame(mySide, { mission: myMission });
+    });
     $('btnAbort').addEventListener('click', () => {
+      NET.close();   // in MP this concedes: the opponent gets the victory
       togglePause(false);
       AUDIO.eva('battleControlTerminated');
       game = null;
@@ -232,6 +238,7 @@ const Main = (function () {
       $('menu').classList.remove('hidden');
     });
     $('btnAgain').addEventListener('click', () => {
+      NET.close();
       $('score').classList.add('hidden');
       const wasMission = !!myMission;
       game = null;
@@ -244,8 +251,14 @@ const Main = (function () {
     });
 
     // URL params for testing: ?side=&seed=&nomenu=1&mute=1&mission=N
+    // &mpbc=name&mphost=1 — two-tab multiplayer over BroadcastChannel
     const q = new URLSearchParams(location.search);
     if (q.get('mute')) { AUDIO.setEnabled(false); MUSIC.setEnabled(false); }
+    if (q.get('mpbc')) {
+      AUDIO.init();
+      NET.testLocal(q.get('mpbc'), q.get('mphost') === '1',
+        q.get('side') || 'gdi', s => console.log('[mp]', s));
+    }
     if (q.get('nomenu')) {
       AUDIO.init();
       startGame(q.get('side') === 'nod' ? 'nod' : 'gdi', {
@@ -258,6 +271,89 @@ const Main = (function () {
       rafStarted = true;
       requestAnimationFrame(loop);
     }
+  }
+
+  // ---- multiplayer lobby ---------------------------------------------------------------
+
+  function _wireMpLobby() {
+    let mpSide = 'gdi';
+    const status = s => { $('mpStatus').textContent = s; };
+    const showFlow = which => {
+      $('mpChoose').classList.toggle('hidden', which !== 'choose');
+      $('mpHostFlow').classList.toggle('hidden', which !== 'host');
+      $('mpJoinFlow').classList.toggle('hidden', which !== 'join');
+    };
+    const copy = (ta) => {
+      ta.select();
+      const fallback = () => {
+        let ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) {}
+        status(ok ? 'Copied to clipboard.' : 'Copy failed — select the code and copy it manually.');
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(ta.value)
+          .then(() => status('Copied to clipboard.'))
+          .catch(fallback);
+      } else fallback();
+    };
+    // async lobby steps: disable the trigger while in flight (double-clicks
+    // would race the shared peer connection) and swallow cancellations
+    const guard = (btn, fn) => () => {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      Promise.resolve()
+        .then(fn)
+        .catch(e => { if (e && e.message !== 'Cancelled') status(e.message || 'Something went wrong.'); })
+        .then(() => { btn.disabled = false; });
+    };
+
+    $('btnMultiplayer').addEventListener('click', () => {
+      AUDIO.init();
+      $('menu').classList.add('hidden');
+      showFlow('choose');
+      $('mpOffer').value = ''; $('mpAnswer').value = '';
+      $('mpJoinOffer').value = ''; $('mpReply').value = '';
+      status('');
+      $('mplobby').classList.remove('hidden');
+    });
+    const sideBtns = { gdi: $('mpSideGdi'), nod: $('mpSideNod') };
+    const pickSide = s => {
+      mpSide = s;
+      sideBtns.gdi.classList.toggle('sel', s === 'gdi');
+      sideBtns.nod.classList.toggle('sel', s === 'nod');
+    };
+    sideBtns.gdi.addEventListener('click', () => pickSide('gdi'));
+    sideBtns.nod.addEventListener('click', () => pickSide('nod'));
+    pickSide('gdi');
+
+    $('btnMpHost').addEventListener('click', () => {
+      showFlow('host');
+      status('Preparing invite code…');
+      NET.host(mpSide, status)
+        .then(code => { $('mpOffer').value = code; })
+        .catch(e => { if (e && e.message !== 'Cancelled') status('Could not start hosting: ' + e.message); });
+    });
+    $('btnMpCopyOffer').addEventListener('click', () => copy($('mpOffer')));
+    $('btnMpConnect').addEventListener('click', guard($('btnMpConnect'), () => {
+      const v = $('mpAnswer').value.trim();
+      if (!v) { status('Paste the reply code first.'); return; }
+      return NET.acceptAnswer(v);
+    }));
+
+    $('btnMpJoin').addEventListener('click', () => { showFlow('join'); status(''); });
+    $('btnMpMakeReply').addEventListener('click', guard($('btnMpMakeReply'), () => {
+      const v = $('mpJoinOffer').value.trim();
+      if (!v) { status('Paste the invite code first.'); return; }
+      status('Preparing reply code…');
+      return NET.join(v, status).then(code => { $('mpReply').value = code; });
+    }));
+    $('btnMpCopyReply').addEventListener('click', () => copy($('mpReply')));
+
+    $('btnMpBack').addEventListener('click', () => {
+      NET.close();
+      $('mplobby').classList.add('hidden');
+      $('menu').classList.remove('hidden');
+    });
   }
 
   // ---- mission select & briefing -----------------------------------------------------
@@ -332,13 +428,14 @@ const Main = (function () {
   function startGame(side, opts) {
     opts = opts || {};
     mySide = side;
-    myMission = opts.mission || null;
+    myMission = opts.mp ? null : (opts.mission || null);
     ended = false;
     $('menu').classList.add('hidden');
     $('score').classList.add('hidden');
     $('pause').classList.add('hidden');
     $('missions').classList.add('hidden');
     $('briefing').classList.add('hidden');
+    $('mplobby').classList.add('hidden');
 
     const mission = myMission;
     game = makeGame({ side, seed: opts.seed !== undefined ? opts.seed : (mission ? mission.seed : undefined) });
@@ -353,19 +450,27 @@ const Main = (function () {
     Fog.init(game);
 
     const hp = game.startPos.human, ap = game.startPos.ai;
-
-    // human: MCV + escort
-    _spawnEscort(game, side, hp, true);
-
-    // AI: pre-deployed conyard + power plant + escort
     const aiSide = enemyOf(side);
-    const fact = makeBuilding('fact', aiSide, ap.cx - 1, ap.cy - 1);
-    fact.buildProgress = 1;
-    addBuilding(fact);
-    const nukeB = makeBuilding('nuke', aiSide, ap.cx - 1, ap.cy + 2);
-    nukeB.buildProgress = 1;
-    addBuilding(nukeB);
-    _spawnEscort(game, aiSide, { cx: ap.cx + 2, cy: ap.cy }, false);
+
+    if (opts.mp) {
+      // multiplayer: two human MCV starts. The side->position mapping and
+      // the spawn ORDER must be canonical — identical on both clients — so
+      // both mint the same entity ids: gdi always takes the SW spot (the
+      // map's "human" slot), nod the NE one, gdi spawns first.
+      _spawnEscort(game, 'gdi', hp, true);
+      _spawnEscort(game, 'nod', ap, true);
+    } else {
+      // human: MCV + escort
+      _spawnEscort(game, side, hp, true);
+      // AI: pre-deployed conyard + power plant + escort
+      const fact = makeBuilding('fact', aiSide, ap.cx - 1, ap.cy - 1);
+      fact.buildProgress = 1;
+      addBuilding(fact);
+      const nukeB = makeBuilding('nuke', aiSide, ap.cx - 1, ap.cy + 2);
+      nukeB.buildProgress = 1;
+      addBuilding(nukeB);
+      _spawnEscort(game, aiSide, { cx: ap.cx + 2, cy: ap.cy }, false);
+    }
 
     // neutral hamlet with its villagers (from map generation, if it found room)
     if (game.decor && game.decor.village) {
@@ -384,14 +489,20 @@ const Main = (function () {
 
     Production.computePower(game.human);
     Production.computePower(game.ai);
-    AI.init(game);
+    AI.init(game);   // in MP this is a symmetric no-op consumer of game.rng
     Input.init(canvas, game);
     Fog.update(game);
+    if (opts.mp) NET.initExplored(game);
 
-    game.camera.x = clamp(cellCenterX(hp.cx) - C.VIEW_W / 2, 0, C.MAP_W * C.CELL - C.VIEW_W);
-    game.camera.y = clamp(cellCenterY(hp.cy) - C.VIEW_H / 2, 0, C.MAP_H * C.CELL - C.VIEW_H);
+    // camera on the LOCAL player's start (in MP that is side-dependent)
+    const myPos = opts.mp ? (side === 'gdi' ? hp : ap) : hp;
+    game.camera.x = clamp(cellCenterX(myPos.cx) - C.VIEW_W / 2, 0, C.MAP_W * C.CELL - C.VIEW_W);
+    game.camera.y = clamp(cellCenterY(myPos.cy) - C.VIEW_H / 2, 0, C.MAP_H * C.CELL - C.VIEW_H);
     game.startTime = Date.now();
-    game.speed = ($('speedSlider').value || 170) / 100;
+    // lockstep pace is set by the slower client, so a local slider would be
+    // misleading in MP — pin both clients to the same fixed speed instead
+    game.speed = opts.mp ? 1.7 : ($('speedSlider').value || 170) / 100;
+    $('speedSlider').disabled = !!opts.mp;
 
     AUDIO.eva('battleControlOnline');
   }
@@ -405,15 +516,32 @@ const Main = (function () {
       const step = 1000 / (C.TPS * (game.speed || 1));
       let guard = 0;
       while (acc >= step && guard < 10) {
+        if (NET.active) {
+          // lockstep barrier: broadcast our order batch for this tick's
+          // horizon (so the peer can always advance), then only step once
+          // the peer's batch for the next tick has arrived
+          const next = game.tick + 1;
+          NET.pump(next);
+          if (!NET.ready(next)) break;
+        }
         acc -= step;
         guard++;
         game.tick++;
+        if (NET.active) NET.applyTick(game.tick);
         Input.tick(game);
-        Production.tick(game, game.human);
-        Production.tick(game, game.ai);
-        Sim.tick(game);
-        AI.tick(game);
+        NET.inSim = true;
+        try {
+          // fixed side order (not human-first): both multiplayer clients
+          // must mint entity ids in the same sequence
+          Production.tick(game, game.players.gdi);
+          Production.tick(game, game.players.nod);
+          Sim.tick(game);
+          if (!NET.active) AI.tick(game);
+        } finally {
+          NET.inSim = false;
+        }
         Fog.update(game);
+        if (NET.active) NET.postTick(game);
         if (game.tick % 15 === 0 && game.tick > 450) _checkEnd();
         if (!game || game.status !== 'playing') break;
       }
@@ -463,12 +591,21 @@ const Main = (function () {
   function endGame(won) {
     if (ended || !game) return;
     ended = true;
+    // an MP forfeit can end the game while the pause menu is up — clear it,
+    // or it lingers on top of the score screen and then the main menu
+    game.paused = false;
+    $('pause').classList.add('hidden');
     game.status = won ? 'won' : 'lost';
     if (won && game.mission) MissionProgress.unlockUpTo(game.mission.n);
     AUDIO.eva(won ? 'missionAccomplished' : 'missionFailed');
 
     const g = game;
     setTimeout(() => {
+      // the match is decided identically on both clients by now (the peer is
+      // at most DELAY ticks behind) — drop the link so post-game menus are
+      // free of it. Closing earlier risks the slower peer reading it as a
+      // forfeit before its own sim reaches the deciding tick.
+      if (NET.active) NET.close();
       if (game !== g) return;   // restarted/aborted before the tally — stale score
       const secs = Math.floor(g.tick / C.TPS);
       const mm = String(Math.floor(secs / 60)).padStart(2, '0');
@@ -498,6 +635,23 @@ const Main = (function () {
     if (!$('menu').classList.contains('hidden')) return;
     game.paused = force !== undefined ? force : !game.paused;
     $('pause').classList.toggle('hidden', !game.paused);
+    if (NET.active) NET.notifyPause(game.paused);   // peer shows OPPONENT PAUSED
+  }
+
+  // desynced lockstep match: no honest winner — show a neutral verdict screen
+  function desyncEnd() {
+    if (!game || ended) return;
+    ended = true;
+    game.paused = false;
+    $('pause').classList.add('hidden');
+    game.status = 'desync';
+    const title = $('scoreTitle');
+    title.textContent = 'MATCH VOID — DESYNC';
+    title.style.color = '#e0b840';
+    $('scoreLines').innerHTML =
+      '<div class="row"><span>The two simulations diverged; the result cannot be scored.</span></div>' +
+      '<div class="row"><span>Using the same browser on both ends makes this very unlikely.</span></div>';
+    $('score').classList.remove('hidden');
   }
 
   if (typeof document !== 'undefined') {
@@ -508,5 +662,5 @@ const Main = (function () {
     }
   }
 
-  return { boot, startGame, endGame, togglePause };
+  return { boot, startGame, endGame, desyncEnd, togglePause };
 })();

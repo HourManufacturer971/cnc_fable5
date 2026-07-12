@@ -213,7 +213,10 @@ const Production = (function () {
     if (!terrainPassable(g.terrain[i])) return false;
     if (g.tib[i] > 0) return false;
     if (g.occ[i]) return false;
-    if (!player.isAI && g.shroud[i] !== 1) return false;
+    // the shroud test uses the LOCAL player's fog, so it is pre-validation
+    // only: multiplayer command execution (NET.applying, the issuer already
+    // checked their own fog) must skip it or the two sims diverge
+    if (!player.isAI && !(typeof NET !== 'undefined' && NET.applying) && g.shroud[i] !== 1) return false;
     return true;
   }
 
@@ -410,7 +413,9 @@ const Production = (function () {
 
   function launchSuper(g, player, cx, cy) {
     if (!superReady(player)) return false;
-    if (!player.isAI && !Fog.isExplored(g, cx, cy)) { AUDIO.play('buzz'); return false; }
+    // fog gate is per-client pre-validation — skipped for lockstep exec
+    if (!player.isAI && !(typeof NET !== 'undefined' && NET.applying) &&
+        !Fog.isExplored(g, cx, cy)) { AUDIO.play('buzz'); return false; }
     if (player.super.key === 'ion') fireIon(g, cx, cy);
     else { fireNuke(g, cx, cy); AUDIO.eva('nukeLaunched'); }
     player.super.timer = player.super.max;

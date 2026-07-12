@@ -255,6 +255,9 @@ function makePlayer(side, isAI) {
 }
 
 function makeGame(opts) {
+  // fresh id sequence per game: multiplayer lockstep needs both clients to
+  // mint identical entity ids, whatever they played before this match
+  _uid = 0;
   const seed = (opts && opts.seed) || ((Math.random() * 1e9) | 0);
   const n = C.MAP_W * C.MAP_H;
   const g = {

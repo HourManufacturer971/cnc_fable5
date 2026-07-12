@@ -32,11 +32,46 @@
           <button data-side="nod">The Serpent Order</button>
         </div>
       </div>
+      <button id="btnMultiplayer">Multiplayer &mdash; vs a friend (P2P)</button>
       <button id="btnInstall" class="hidden">Install as App &mdash; plays fullscreen</button>
       <p class="hint">Classic controls: left-click selects and orders &middot; right-click deselects</p>
       <p class="hint">Touch: tap to select and order &middot; drag to pan &middot; hold then drag to multi-select &middot; two-finger tap deselects</p>
       <p class="hint coarseOnly">Tip: install the game (or Add to Home Screen) to play fullscreen without the browser bar</p>
       <p class="hint">Inspired by the classic real-time strategy games of the 1990s &middot; not affiliated with any other game or publisher</p>
+    </div>
+  </div>
+
+  <div id="mplobby" class="overlay hidden">
+    <div class="panel">
+      <h2>MULTIPLAYER &mdash; P2P</h2>
+      <div id="mpChoose">
+        <p class="hint">Direct browser-to-browser (WebRTC). No account, no server &mdash;
+        exchange two codes with your opponent over any chat.</p>
+        <div id="mpSideRow">
+          <button id="mpSideGdi" class="sel">UDC</button>
+          <button id="mpSideNod">Serpent Order</button>
+        </div>
+        <button id="btnMpHost">Host Game</button>
+        <button id="btnMpJoin">Join Game</button>
+      </div>
+      <div id="mpHostFlow" class="hidden">
+        <p class="mpStep">1. Send this invite code to your opponent:</p>
+        <textarea id="mpOffer" readonly spellcheck="false"></textarea>
+        <button id="btnMpCopyOffer">Copy invite code</button>
+        <p class="mpStep">2. Paste their reply code here and connect:</p>
+        <textarea id="mpAnswer" spellcheck="false"></textarea>
+        <button id="btnMpConnect">Connect</button>
+      </div>
+      <div id="mpJoinFlow" class="hidden">
+        <p class="mpStep">1. Paste the host's invite code:</p>
+        <textarea id="mpJoinOffer" spellcheck="false"></textarea>
+        <button id="btnMpMakeReply">Create reply code</button>
+        <p class="mpStep">2. Send this reply code back, then wait for the game to start:</p>
+        <textarea id="mpReply" readonly spellcheck="false"></textarea>
+        <button id="btnMpCopyReply">Copy reply code</button>
+      </div>
+      <p id="mpStatus" class="hint"></p>
+      <button id="btnMpBack" class="backBtn">Back</button>
     </div>
   </div>
 
@@ -108,6 +143,7 @@
 <script src="js/ai.js"></script>
 <script src="js/input.js"></script>
 <script src="js/render.js"></script>
+<script src="js/net.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

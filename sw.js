@@ -5,7 +5,7 @@
 // fallback so an online player always gets the latest deploy — the cache
 // only answers when the network can't.
 
-const CACHE = 'hw-v2';
+const CACHE = 'hw-v3';
 const CORE = [
   './',
   'index.html',
@@ -29,6 +29,7 @@ const CORE = [
   'js/ai.js',
   'js/input.js',
   'js/render.js',
+  'js/net.js',
   'js/main.js',
   'icons/icon-192.png',
   'icons/icon-512.png',
