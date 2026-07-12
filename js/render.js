@@ -182,6 +182,9 @@ const Render = (function () {
   // hunt through black shroud
   function _huntCount(g) {
     if (!g.ai) return 0;
+    // never against a human opponent: in MP g.ai is the remote player and
+    // revealing their last hidden buildings through shroud would be a fog cheat
+    if (typeof NET !== 'undefined' && NET.active) return 0;
     let bld = 0;
     for (const b of g.buildings.values()) {
       if (b.owner === g.ai.side && !DATA.buildings[b.type].wall) {

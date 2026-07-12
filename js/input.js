@@ -432,6 +432,9 @@ const Input = (function () {
       _hotkeys(ev);
     });
     window.addEventListener('keyup', ev => { keys[ev.key] = false; });
+    // a modifier released while the window is unfocused never sends keyup —
+    // drop everything on blur so Shift/Ctrl can't stick
+    window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
   }
 
   function _setMode(m, arg) {
@@ -581,7 +584,7 @@ const Input = (function () {
       return;
     }
     if (hit.zone === 'icon') {
-      _iconClick(hit);
+      _iconClick(hit, shift);
       return;
     }
     if (hit.zone === 'radar') return; // handled by drag
@@ -643,7 +646,8 @@ const Input = (function () {
       } else AUDIO.play('buzz');
       return;
     }
-    if (ctrl && !ent && ownSel.length) {
+    if (ctrl && !ent && ownSel.some(u =>
+        DATA.units[u.type].weapon && !DATA.units[u.type].air)) {
       const spots = _formationCells(cx, cy, ownSel.length);
       ownSel.forEach((u, i) => {
         const s = spots[Math.min(i, spots.length - 1)];
@@ -768,7 +772,7 @@ const Input = (function () {
     }
   }
 
-  function _iconClick(hit) {
+  function _iconClick(hit, shift) {
     const g = game;
     const p = g.human;
     if (hit.super) {
@@ -787,8 +791,9 @@ const Input = (function () {
       Production.toggleHold(p, hit.key);
       return;
     }
-    // Shift+click queues a batch of five (units only)
-    const batch = keys['Shift'] && Production.categoryOf(hit.key) !== 'building' ? 5 : 1;
+    // Shift+click queues a batch of five (units only) — the event's own
+    // modifier, not the keys map, which can go stale across focus loss
+    const batch = shift && Production.categoryOf(hit.key) !== 'building' ? 5 : 1;
     for (let i = 0; i < batch; i++) {
       if (!Production.tryStart(p, hit.key)) break;
     }
@@ -802,13 +807,13 @@ const Input = (function () {
     game.selection = [];
   }
 
-  function _iconRightClick() {
+  function _iconRightClick(shift) {
     const hit = Render.hitTest(mouse.x, mouse.y);
     if (hit.zone === 'icon' && !hit.super &&
         (hit.state === 'building' || hit.state === 'hold' || hit.state === 'ready' ||
          (hit.count || 0) > 0)) {
       // Shift+right-click clears the whole run of that unit (queue max 20 + active)
-      const times = keys['Shift'] ? 21 : 1;
+      const times = shift ? 21 : 1;
       for (let i = 0; i < times; i++) Production.cancel(game.human, hit.key);
       return true;
     }
@@ -839,9 +844,11 @@ const Input = (function () {
     }
     switch (k.toLowerCase()) {
       case 'a': {
-        // attack-move mode: next click sweeps the army to that spot
+        // attack-move mode: next click sweeps the army to that spot. Air
+        // units can't sweep (no auto-acquire in flight) — they need at least
+        // one ground gun along or the "attack" promise would be a lie
         const armed = _selectedUnits().some(u =>
-          u.owner === g.humanSide && DATA.units[u.type].weapon);
+          u.owner === g.humanSide && DATA.units[u.type].weapon && !DATA.units[u.type].air);
         if (armed) { _setMode(mode === 'amove' ? 'normal' : 'amove'); AUDIO.play('click'); }
         else AUDIO.play('buzz');
         break;
@@ -999,8 +1006,11 @@ const Input = (function () {
     }
 
     const sel = _selectedUnits().filter(u => u.owner === g.humanSide);
-    // Ctrl held = focus-fire mode: attack cursor over any entity
+    // Ctrl held = focus-fire mode: attack cursor over any entity — and over
+    // open ground too, where the click will issue an attack-move sweep
     if (keys['Control'] && ent && sel.some(u => DATA.units[u.type].weapon)) return 'attack';
+    if (keys['Control'] && !ent &&
+        sel.some(u => DATA.units[u.type].weapon && !DATA.units[u.type].air)) return 'attack';
     if (ent && ent.owner === g.humanSide) {
       if (ent.kind === 'unit' && DATA.units[ent.type].deploysTo && sel.length === 1 && sel[0].id === ent.id) {
         return 'deploy';
@@ -1035,7 +1045,7 @@ const Input = (function () {
   document.addEventListener('mouseup', ev => {
     if (ev.button === 2 && ev.target && ev.target.id === 'screen' &&
         game && !game.paused && game.status === 'playing') {
-      if (_iconRightClick()) return;
+      if (_iconRightClick(ev.shiftKey)) return;
       const hit = Render.hitTest(mouse.x, mouse.y);
       if (hit.zone === 'tab-group') {
         game.groups[hit.n] = game.selection.slice(); // empty selection clears
