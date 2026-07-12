@@ -71,7 +71,7 @@ const PAL = {
   // terrain
   grass1: '#4c6832', grass2: '#546e36', grass3: '#42592b', grass4: '#5b7a3c',
   dirt1: '#8f7a4e', dirt2: '#9c8656', dirt3: '#7c6a42',
-  rock1: '#6e6e66', rock2: '#8a8a80', rock3: '#55554e',
+  rock1: '#746c59', rock2: '#8f8570', rock3: '#5b5546',
   water1: '#1e4468', water2: '#28547c', water3: '#356690',
   treeDark: '#1e3416', tree: '#2c4a1e', treeLight: '#3a6128',
   // tiberium
@@ -421,6 +421,7 @@ function applyDamage(target, amount, warhead, attacker) {
   const mult = (DATA.warheads[warhead] || DATA.warheads.he)[d.armor];
   const dmg = Math.max(1, Math.round(amount * mult));
   target.hp -= dmg;
+  target._hitT = game.tick;           // brief white hit-flash (render)
   EV.emit('damaged', target, attacker, dmg);
   if (target.hp <= 0) {
     target.hp = 0;

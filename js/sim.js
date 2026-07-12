@@ -616,6 +616,7 @@ function _harvester(u, d) {
       u.state = 'unload';
       u._unload = 60;
       u._chunk = u.tib / 60;
+      u._paid = 0;
       u.facing = 0; // face the refinery
       u.path = [];
       return;
@@ -634,10 +635,16 @@ function _harvester(u, d) {
     const add = Math.min(u._chunk, u.tib, room);
     p.credits += add;
     u.tib = Math.max(0, u.tib - u._chunk);
+    u._paid = (u._paid || 0) + add;
     if (u._chunk > add + 0.01 && !p.isAI) _evaOnce('silosNeeded', 450);
     if (!p.isAI) g.stats.harvested += add;
     u._unload--;
     if (u._unload <= 0 || u.tib <= 0) {
+      // floating credit readout over the refinery — pay the player the
+      // little dopamine hit along with the money
+      if (!p.isAI && u._paid >= 1) {
+        spawnEffect('cash', u.x, u.y - 10, { ttl: 24, vy: -1.1, amount: Math.round(u._paid) });
+      }
       u.tib = 0;
       u.state = 'harvest';
       if (u.fieldCell) {
@@ -1257,6 +1264,33 @@ function _tickEffects(g) {
   }
 }
 
+// cosmetic damage feedback: hurt buildings and vehicles smoulder. Timed off
+// tick+id (never rng) so the sim's random stream is untouched. Gated on the
+// human having explored the spot (and on cloak) — a puff drifting out of the
+// shroud must not leak the presence of unseen or cloaked enemies.
+function _tickDamageSmoke(g, units, buildings) {
+  for (const b of buildings) {
+    if (b._dead || b.buildProgress < 1) continue;
+    const frac = b.hp / b.maxHp;
+    if (frac >= 0.45) continue;
+    const period = frac < 0.22 ? 10 : 22;             // critical burns harder
+    if ((g.tick + b.id * 7) % period !== 0) continue;
+    if (g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
+    const j = (g.tick * 13 + b.id * 29) & 0xffff;
+    const wpx = b.w * C.CELL, hpx = b.h * C.CELL;
+    spawnEffect('smoke', b.cx * C.CELL + 5 + j % Math.max(1, wpx - 10),
+      b.cy * C.CELL + 4 + (j >> 5) % Math.max(1, hpx >> 1), { vy: -0.5 });
+  }
+  for (const u of units) {
+    if (u._dead || u.cloaked) continue;
+    const d = DATA.units[u.type];
+    if (d.infantry || d.air || u.hp >= u.maxHp * 0.4) continue;
+    if ((g.tick + u.id * 5) % 18 !== 0) continue;
+    if (g.shroud[cellIdx(worldToCell(u.x), worldToCell(u.y))] !== 1) continue;
+    spawnEffect('smoke', u.x + ((u.id * 3 + g.tick) % 7) - 3, u.y - 6, { vy: -0.45 });
+  }
+}
+
 // ---- main tick --------------------------------------------------------------------
 
 const Sim = {
@@ -1270,6 +1304,7 @@ const Sim = {
     for (const b of buildings) {
       if (!b._dead) _tickBuildingWeapon(b);
     }
+    _tickDamageSmoke(g, units, buildings);
     _tickStrikes(g);
     _tickEffects(g);
     _tickTiberium(g);

@@ -40,6 +40,24 @@
     </div>
   </div>
 
+  <div id="missions" class="overlay hidden">
+    <div class="panel">
+      <h2 id="missionsTitle">OPERATIONS</h2>
+      <div id="missionList"></div>
+      <button id="btnMissionsBack" class="backBtn">Back</button>
+    </div>
+  </div>
+
+  <div id="briefing" class="overlay hidden">
+    <div class="panel">
+      <h2 id="briefTitle"></h2>
+      <div id="briefBody" class="brief"></div>
+      <p id="briefObjective"></p>
+      <button id="btnCommence">Commence Operation</button>
+      <button id="btnBriefBack" class="backBtn">Back</button>
+    </div>
+  </div>
+
   <div id="pause" class="overlay hidden">
     <div class="panel small">
       <h2>OPTIONS</h2>
@@ -48,7 +66,7 @@
       <button id="btnMusic">Music: ON</button>
       <button id="btnVoice">Voice: ON</button>
       <button id="btnFullscreen" class="hidden">Fullscreen: OFF</button>
-      <label id="speedRow">Game Speed <input type="range" id="speedSlider" min="50" max="200" value="140"></label>
+      <label id="speedRow">Game Speed <input type="range" id="speedSlider" min="50" max="220" value="170"></label>
       <button id="btnRestart">Restart Mission</button>
       <button id="btnAbort">Abort Mission</button>
     </div>
@@ -81,6 +99,7 @@
 <script src="js/sprites_buildings.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/music.js"></script>
+<script src="js/missions.js"></script>
 <script src="js/map.js"></script>
 <script src="js/path.js"></script>
 <script src="js/fog.js"></script>

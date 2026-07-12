@@ -617,8 +617,10 @@ const Input = (function () {
     if (ctrl && ent && ownSel.length) {
       let acted = false;
       for (const u of ownSel) if (orderAttack(u, ent)) acted = true;
-      if (acted) AUDIO.ack('attack', _selClass());
-      else AUDIO.play('buzz');
+      if (acted) {
+        AUDIO.ack('attack', _selClass());
+        spawnEffect('atkMark', _entX(ent), _entY(ent), { ttl: 14 });
+      } else AUDIO.play('buzz');
       return;
     }
 
@@ -690,8 +692,10 @@ const Input = (function () {
           if (d.engineer && ent.kind === 'building') { orderEnter(u, ent); acted = true; }
           else if (orderAttack(u, ent)) acted = true;
         }
-        if (acted) AUDIO.ack('attack', _selClass());
-        else AUDIO.play('buzz');
+        if (acted) {
+          AUDIO.ack('attack', _selClass());
+          spawnEffect('atkMark', _entX(ent), _entY(ent), { ttl: 14 });
+        } else AUDIO.play('buzz');
       } else {
         _select([ent.id], true); // inspect enemy
       }
@@ -708,6 +712,7 @@ const Input = (function () {
         for (const h of harvs) orderHarvest(h, cx, cy);
         for (const u of ownSel) if (!DATA.units[u.type].harvester) orderMove(u, cx, cy);
         AUDIO.ack('move', _selClass());
+        spawnEffect('moveMark', cellCenterX(cx), cellCenterY(cy), { ttl: 14 });
         return;
       }
       if (terrainPassable(g.terrain[cellIdx(cx, cy)]) || ownSel.some(u => DATA.units[u.type].air)) {
@@ -717,6 +722,7 @@ const Input = (function () {
           orderMove(u, s.cx, s.cy);
         });
         AUDIO.ack('move', _selClass());
+        spawnEffect('moveMark', cellCenterX(cx), cellCenterY(cy), { ttl: 14 });
       } else {
         AUDIO.play('buzz');
       }
@@ -728,6 +734,7 @@ const Input = (function () {
     if (selB.length === 1 && selB[0].owner === g.humanSide && DATA.buildings[selB[0].type].factory) {
       selB[0].rally = { cx, cy };
       AUDIO.play('click');
+      spawnEffect('moveMark', cellCenterX(cx), cellCenterY(cy), { ttl: 14 });
     }
   }
 

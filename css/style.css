@@ -172,6 +172,37 @@ button:active { border-color: #2e2e28; border-top-color: #6a6a60; border-left-co
 }
 #speedRow input { width: 100%; }
 
+/* mission select + briefing */
+#missionList button {
+  display: flex; justify-content: space-between; gap: 20px;
+  text-align: left;
+}
+#missionList button .tag { color: #9a9280; }
+#missionList button:disabled {
+  color: #6a6458; background: #3e3e36; cursor: default;
+  border-color: #4a4a42;
+}
+#missionList button:disabled:hover { background: #3e3e36; color: #6a6458; }
+#missionList button.done .tag { color: #40c040; }
+.backBtn { width: auto; margin: 10px auto 0; padding: 7px 26px; }
+.brief {
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.75;
+  color: #c8c0a0;
+  max-height: 46vh;
+  overflow-y: auto;
+  margin: 0 0 10px;
+}
+.brief p { margin: 0 0 12px; }
+#briefObjective {
+  text-align: left;
+  font-size: 11px;
+  color: #e0b840;
+  margin: 0 0 16px;
+  letter-spacing: 1px;
+}
+
 #scoreLines {
   text-align: left;
   font-size: 13px;

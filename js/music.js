@@ -200,7 +200,62 @@ const MUSIC = (function () {
     order: ['a', 'a', 'b', 'b', 'c', 'b', 'c', 'c', 'd', 'a', 'b', 'b', 'c', 'c', 'd', 'd'],
   };
 
-  const TRACKS = [T1, T2];
+  // A minor, fast. Assault footing: syncopated stabbing riff over relentless
+  // 16ths, tom fills into every fourth bar, short furious call-and-answer.
+  const T3 = {
+    bpm: 128,
+    bars: {
+      a: { k: '1..1..1...1..1..', h: '1111111111111112', s: '....1.......1...' },
+      b: {
+        k: '1..1..1...1..1..', h: '1111111111111112', s: '....1.......1...',
+        bass: [[0, 33, 1], [3, 33, 1], [6, 36, 1], [8, 33, 1], [10, 40, 1], [12, 38, 2], [14, 36, 1]],
+      },
+      c: {
+        k: '1..1..1...1..1..', h: '1111111111111112', s: '....1.......1...',
+        bass: [[0, 33, 1], [3, 33, 1], [6, 36, 1], [8, 33, 1], [10, 40, 1], [12, 38, 2], [14, 36, 1]],
+        lead: [[0, 57, 1], [2, 60, 1], [4, 57, 2], [8, 64, 2], [12, 62, 2], [14, 60, 2]],
+      },
+      d: {
+        k: '1..1..1...1..1..', h: '1111111111111112', s: '....1.......1..1',
+        toms: [[12, 150], [13, 120], [14, 100], [15, 84]],
+        bass: [[0, 31, 1], [3, 31, 1], [6, 35, 1], [8, 31, 1], [10, 38, 1], [12, 36, 2], [14, 33, 1]],
+        lead: [[0, 62, 2], [4, 59, 2], [8, 57, 4]],
+      },
+      e: { h: '..2...2...2...2.', pad: [[33, 40, 45]], bass: [[0, 21, 14]] },
+    },
+    order: ['a', 'b', 'b', 'c', 'b', 'c', 'd', 'e', 'b', 'c', 'c', 'd'],
+  };
+
+  // C minor, slow. Deep-field menace: sub drones, distant toms, a lone cold
+  // motif that answers itself a fifth down. The quiet before the push.
+  const T4 = {
+    bpm: 84,
+    bars: {
+      a: { k: '1...............', pad: [[36, 43, 48]], bass: [[0, 24, 15]] },
+      b: {
+        k: '1.........1.....', h: '....1.......1...',
+        pad: [[36, 43, 48]],
+        bass: [[0, 24, 7], [8, 24, 7]],
+        lead: [[4, 60, 2], [8, 58, 2], [12, 55, 4]],
+      },
+      c: {
+        k: '1.........1.....', h: '....1.......1...',
+        toms: [[6, 96], [14, 78]],
+        pad: [[32, 39, 44]],
+        bass: [[0, 20, 7], [8, 20, 7]],
+        lead: [[4, 55, 2], [8, 53, 2], [12, 51, 4]],
+      },
+      d: {
+        k: '1.....1...1.....', s: '............1...', h: '..1...1...1...1.',
+        bass: [[0, 24, 3], [6, 24, 2], [10, 27, 2], [12, 24, 3]],
+        lead: [[0, 63, 3], [6, 62, 3], [12, 60, 4]],
+      },
+      e: { pad: [[36, 41, 48]], bass: [[0, 29, 15]], h: '......2.......2.' },
+    },
+    order: ['a', 'b', 'b', 'c', 'a', 'b', 'd', 'd', 'c', 'e'],
+  };
+
+  const TRACKS = [T1, T2, T3, T4];
 
   // ---- sequencer -----------------------------------------------------------------
 
@@ -263,12 +318,17 @@ const MUSIC = (function () {
   }
 
   function start() {
-    if (!enabled || running) return;
+    if (!enabled) return;
+    // vary the opener per mission: re-roll on every game start. When the
+    // sequencer is already running (music plays through menus), it simply
+    // picks up the new track at its next scheduled step.
+    step = 0; pos = 0; loops = 0;
+    trackIdx = (Math.random() * TRACKS.length) | 0;
+    if (running) return;
     _ensureCtx();
     if (!ctx) return;
     if (ctx.state === 'suspended') ctx.resume();
     running = true;
-    step = 0; pos = 0; loops = 0;
     nextTime = ctx.currentTime + 0.1;
     timer = setInterval(_tick, 60);
   }

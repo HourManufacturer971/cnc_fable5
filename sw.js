@@ -5,7 +5,7 @@
 // fallback so an online player always gets the latest deploy — the cache
 // only answers when the network can't.
 
-const CACHE = 'hw-v1';
+const CACHE = 'hw-v2';
 const CORE = [
   './',
   'index.html',
@@ -20,6 +20,7 @@ const CORE = [
   'js/sprites_buildings.js',
   'js/audio.js',
   'js/music.js',
+  'js/missions.js',
   'js/map.js',
   'js/path.js',
   'js/fog.js',

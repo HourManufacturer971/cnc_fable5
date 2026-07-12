@@ -6,6 +6,7 @@ const Main = (function () {
   let canvas = null;
   let acc = 0, lastT = 0, rafStarted = false;
   let mySide = 'gdi';
+  let myMission = null;   // current mission definition (null = skirmish)
   let ended = false;
 
   function $(id) { return document.getElementById(id); }
@@ -182,8 +183,19 @@ const Main = (function () {
         // get no surprise fullscreen — they have the pause-menu toggle.
         if (matchMedia('(pointer: coarse)').matches) _maximizeScreen();
         AUDIO.init();
-        startGame(btn.dataset.side);
+        _showMissions(btn.dataset.side);
       });
+    });
+    $('btnMissionsBack').addEventListener('click', () => {
+      $('missions').classList.add('hidden');
+      $('menu').classList.remove('hidden');
+    });
+    $('btnBriefBack').addEventListener('click', () => {
+      $('briefing').classList.add('hidden');
+      $('missions').classList.remove('hidden');
+    });
+    $('btnCommence').addEventListener('click', () => {
+      startGame(mySide, { mission: pendingMission });
     });
 
     $('btnResume').addEventListener('click', () => togglePause(false));
@@ -211,7 +223,7 @@ const Main = (function () {
     $('speedSlider').addEventListener('input', ev => {
       if (game) game.speed = ev.target.value / 100;
     });
-    $('btnRestart').addEventListener('click', () => { togglePause(false); startGame(mySide); });
+    $('btnRestart').addEventListener('click', () => { togglePause(false); startGame(mySide, { mission: myMission }); });
     $('btnAbort').addEventListener('click', () => {
       togglePause(false);
       AUDIO.eva('battleControlTerminated');
@@ -221,24 +233,74 @@ const Main = (function () {
     });
     $('btnAgain').addEventListener('click', () => {
       $('score').classList.add('hidden');
+      const wasMission = !!myMission;
       game = null;
       window.game = null;
-      $('menu').classList.remove('hidden');
+      // after a campaign game, return to the operations list (freshly
+      // rebuilt, so a win shows the next mission unlocked) — not the
+      // faction menu
+      if (wasMission) _showMissions(mySide);
+      else $('menu').classList.remove('hidden');
     });
 
-    // URL params for testing: ?side=&seed=&nomenu=1&mute=1
+    // URL params for testing: ?side=&seed=&nomenu=1&mute=1&mission=N
     const q = new URLSearchParams(location.search);
     if (q.get('mute')) { AUDIO.setEnabled(false); MUSIC.setEnabled(false); }
     if (q.get('nomenu')) {
       AUDIO.init();
-      startGame(q.get('side') === 'nod' ? 'nod' : 'gdi',
-        { seed: q.get('seed') ? +q.get('seed') : undefined });
+      startGame(q.get('side') === 'nod' ? 'nod' : 'gdi', {
+        seed: q.get('seed') ? +q.get('seed') : undefined,
+        mission: q.get('mission') ? MISSIONS[+q.get('mission') - 1] : undefined,
+      });
     }
 
     if (!rafStarted) {
       rafStarted = true;
       requestAnimationFrame(loop);
     }
+  }
+
+  // ---- mission select & briefing -----------------------------------------------------
+
+  let pendingMission = null;
+
+  function _showMissions(side) {
+    mySide = side;
+    $('menu').classList.add('hidden');
+    $('missionsTitle').textContent = 'OPERATIONS — ' + C.SIDE_NAME[side];
+    const list = $('missionList');
+    list.innerHTML = '';
+    const done = MissionProgress.get();
+
+    const skirm = document.createElement('button');
+    skirm.innerHTML = '<span>SKIRMISH</span><span class="tag">RANDOM BATTLEFIELD</span>';
+    skirm.addEventListener('click', () => {
+      $('missions').classList.add('hidden');
+      startGame(mySide);
+    });
+    list.appendChild(skirm);
+
+    for (const m of MISSIONS) {
+      const btn = document.createElement('button');
+      const open = MissionProgress.unlocked(m);
+      const tag = m.n <= done ? 'COMPLETE' : open ? 'READY' : 'LOCKED';
+      btn.innerHTML = `<span>OP ${m.n}: ${m.title}</span><span class="tag">${tag}</span>`;
+      if (m.n <= done) btn.classList.add('done');
+      if (!open) btn.disabled = true;
+      else btn.addEventListener('click', () => _showBriefing(m));
+      list.appendChild(btn);
+    }
+    $('missions').classList.remove('hidden');
+  }
+
+  function _showBriefing(m) {
+    pendingMission = m;
+    $('missions').classList.add('hidden');
+    $('briefTitle').textContent = 'OP ' + m.n + ': ' + m.title;
+    $('briefBody').innerHTML = m.brief[mySide].map(p => `<p>${p}</p>`).join('');
+    $('briefBody').scrollTop = 0;   // the element persists across briefings
+    $('briefObjective').textContent = 'OBJECTIVE: ' + m.objText[mySide];
+    $('briefing').classList.remove('hidden');
   }
 
   function _spawnEscort(g, side, pos, withMcv) {
@@ -270,12 +332,21 @@ const Main = (function () {
   function startGame(side, opts) {
     opts = opts || {};
     mySide = side;
+    myMission = opts.mission || null;
     ended = false;
     $('menu').classList.add('hidden');
     $('score').classList.add('hidden');
     $('pause').classList.add('hidden');
+    $('missions').classList.add('hidden');
+    $('briefing').classList.add('hidden');
 
-    game = makeGame({ side, seed: opts.seed });
+    const mission = myMission;
+    game = makeGame({ side, seed: opts.seed !== undefined ? opts.seed : (mission ? mission.seed : undefined) });
+    game.mission = mission;   // read by ai.js (difficulty) and render.js (objective HUD)
+    if (mission) {
+      if (mission.credits !== undefined) game.human.credits = mission.credits;
+      if (mission.aiCredits !== undefined) game.ai.credits = mission.aiCredits;
+    }
     window.game = game;
     MUSIC.start();
     MAPGEN.generate(game, game.seed);
@@ -320,7 +391,7 @@ const Main = (function () {
     game.camera.x = clamp(cellCenterX(hp.cx) - C.VIEW_W / 2, 0, C.MAP_W * C.CELL - C.VIEW_W);
     game.camera.y = clamp(cellCenterY(hp.cy) - C.VIEW_H / 2, 0, C.MAP_H * C.CELL - C.VIEW_H);
     game.startTime = Date.now();
-    game.speed = ($('speedSlider').value || 140) / 100;
+    game.speed = ($('speedSlider').value || 170) / 100;
 
     AUDIO.eva('battleControlOnline');
   }
@@ -359,18 +430,46 @@ const Main = (function () {
         return b && !DATA.buildings[b.type].wall; // walls alone don't keep you in the game
       });
     const humanAlive = alive(g.human), aiAlive = alive(g.ai);
-    if (humanAlive && aiAlive) return;
-    endGame(humanAlive && !aiAlive);
+    if (!humanAlive) return endGame(false);
+    if (!aiAlive) return endGame(true);    // wiping the enemy wins ANY mission
+
+    // mission objectives beyond annihilation
+    const ob = g.mission && g.mission.objective;
+    if (!ob) return;
+    if (ob.type === 'harvest' && g.stats.harvested >= ob.amount) return endGame(true);
+    if (ob.type === 'survive' && g.tick >= ob.minutes * 60 * C.TPS) return endGame(true);
+    if (ob.type === 'killEconomy') {
+      // arms once the enemy owns a refinery or harvester; wins when the
+      // count returns to zero — no insta-win before the AI has an economy
+      const n = _aiEconomyCount(g);
+      if (n > 0) g._ecoArmed = true;
+      else if (g._ecoArmed) return endGame(true);
+    }
+  }
+
+  function _aiEconomyCount(g) {
+    let n = 0;
+    for (const id of g.ai.buildingIds) {
+      const b = g.buildings.get(id);
+      if (b && b.type === 'proc') n++;
+    }
+    for (const id of g.ai.unitIds) {
+      const u = g.units.get(id);
+      if (u && DATA.units[u.type].harvester) n++;
+    }
+    return n;
   }
 
   function endGame(won) {
     if (ended || !game) return;
     ended = true;
     game.status = won ? 'won' : 'lost';
+    if (won && game.mission) MissionProgress.unlockUpTo(game.mission.n);
     AUDIO.eva(won ? 'missionAccomplished' : 'missionFailed');
 
     const g = game;
     setTimeout(() => {
+      if (game !== g) return;   // restarted/aborted before the tally — stale score
       const secs = Math.floor(g.tick / C.TPS);
       const mm = String(Math.floor(secs / 60)).padStart(2, '0');
       const ss = String(secs % 60).padStart(2, '0');

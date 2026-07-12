@@ -15,8 +15,8 @@ Inspired by the classic RTS genre; contains no assets, names, or code from any o
 - All randomness inside the simulation must use `game.rng()` (seeded) — never `Math.random()`
   inside sim/production/ai/map code. UI/audio/effects may use `Math.random()`.
 - Script load order (index.html): `core.js, data.js, sprites_terrain.js, terrain_paint.js,
-  sprites_units.js, sprites_infantry.js, sprites_buildings.js, audio.js, music.js, map.js, path.js,
-  fog.js, sim.js, production.js, ai.js, input.js, render.js, main.js`.
+  sprites_units.js, sprites_infantry.js, sprites_buildings.js, audio.js, music.js, missions.js,
+  map.js, path.js, fog.js, sim.js, production.js, ai.js, input.js, render.js, main.js`.
 - Every file must pass `node --check`.
 
 ## Screen layout (all coordinates in internal 640×400 px)
@@ -67,7 +67,8 @@ define **exactly** the globals listed and may freely call any global listed for 
 | sprites_infantry.js | fills `SPRITES.infantry[key][side]` for every infantry type, and their `SPRITES.cameo[key]` |
 | sprites_buildings.js | fills `SPRITES.buildings[key][side]` for every building, and their `SPRITES.cameo[key]`, plus `SPRITES.cameo.ion` / `SPRITES.cameo.nuke` |
 | audio.js | `AUDIO` (`init, play, eva, ack, setEnabled, enabled, setVoiceEnabled, voiceEnabled, tickCredits`) |
-| music.js | `MUSIC` (`start, stop, setEnabled, enabled` — original procedural soundtrack) |
+| music.js | `MUSIC` (`start, stop, setEnabled, enabled` — original procedural soundtrack, four tracks, random opener, rotates after two loops) |
+| missions.js | `MISSIONS` (campaign definitions: seed, credits, AI knobs, objective, per-side briefings), `MissionProgress` (localStorage `hw_progress` unlock tracking) |
 | map.js | `MAPGEN` (`generate(game, seed)`) |
 | path.js | `findPath(unit, destCx, destCy, opts?) -> [{cx,cy},...]` |
 | fog.js | `Fog` (`init, revealCircle, update, isExplored`) |
@@ -243,6 +244,37 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   30s). Human wins → EVA `missionAccomplished`, score screen; loses → `missionFailed`.
   Score screen (Main): dark screen, tally lines (time, credits harvested, units
   destroyed/lost, buildings destroyed/lost, score) + "PLAY AGAIN" button → menu.
+
+### Campaign missions (missions.js + main.js)
+- Faction pick opens an **Operations** overlay: SKIRMISH (random map, exactly the old
+  behavior) plus 5 fixed-seed missions, locked in order. Progress = `hw_progress` in
+  localStorage (highest mission number completed); a mission button opens a **briefing**
+  overlay (per-side flavor paragraphs + one-line objective) with COMMENCE / Back.
+- `startGame(side, {mission})` stores the definition on `game.mission`, applies
+  `mission.credits` / `mission.aiCredits`, and uses `mission.seed`. Restart Mission
+  restarts the same mission; `?mission=N` boots one headlessly.
+- Objectives, checked in `Main._checkEnd` (annihilation still wins/loses everything):
+  `harvest {amount}` (win at `stats.harvested >= amount`), `survive {minutes}` (win at
+  the bell), `killEconomy` (arms once the AI owns a refinery or harvester — flag
+  `game._ecoArmed` — then wins when the count returns to zero). Winning unlocks the next
+  mission (`MissionProgress.unlockUpTo`).
+- AI difficulty knobs read from `game.mission` by ai.js: `aiCalm` multiplies wave-cadence
+  delays (first strike + between waves), `aiWaveCap` caps units per strike wave.
+  Skirmish (`game.mission` null) keeps the exact original cadence.
+- Render draws a small objective status chip at the top-left of the viewport
+  (`HARVEST n / m`, `HOLD OUT mm:ss`, `ECONOMY TARGETS LEFT: n`, or the annihilate
+  line); skirmish shows none.
+
+### Gameplay feedback (juice)
+- `applyDamage` stamps `target._hitT = game.tick`; render re-draws the sprite twice with
+  `globalCompositeOperation='lighter'` for 2 ticks — a white hit-flash (units, buildings).
+- Successful move/harvest/rally orders spawn a `moveMark` effect (green collapsing ring,
+  ttl 14); attack orders an `atkMark` (red). Drawn procedurally in `_drawEffect`.
+- Harvester unload accumulates `u._paid`; on completion (human only) spawns a `cash`
+  effect — floating gold `+N` text that drifts up and fades (ttl 24).
+- `_tickDamageSmoke` (sim.js): buildings under 45% hp emit drifting smoke puffs
+  (period 22 ticks, 10 when under 22%); non-air vehicles under 40% hp trail smoke.
+  Timed off tick+id hashes — never `game.rng` — so the sim stream is untouched.
 
 ### Controls (classic left-click scheme)
 - **Left-click**: select own unit(s)/building; with selection on: click enemy → attack;
@@ -438,8 +470,10 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   `Production.tick(each player)` → `Sim.tick` → `AI.tick` → `Fog.update`; render every RAF
   with `Render.frame`. Pause when menu open (`game.paused`).
 - Menu DOM (#menu overlays in index.html): title screen with the two faction emblems
-  (canvas-drawn logos injected), faction buttons UDC / Serpent Order; pause menu (Resume,
-  Restart, Sound on/off, Speed slider 0.5–2, Abort mission); score screen. Esc toggles.
+  (canvas-drawn logos injected), faction buttons UDC / Serpent Order → Operations
+  (mission select) → Briefing → game; pause menu (Resume, Sound/Music/Voice toggles,
+  Fullscreen, Speed slider 0.5–2.2 defaulting to 1.7, Restart mission, Abort mission);
+  score screen. Esc toggles.
 - Win check per rules; on end: `Main.endGame(won)` shows score screen; sound
   `missionAccomplished`/`missionFailed` EVA.
 
@@ -447,7 +481,7 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 
 - `main.js` exposes `window.game` (live game object) and `Main.startGame` so a headless
   browser can boot straight into a game: `Main.startGame('gdi', {seed: 42})`.
-- Add URL params: `?side=gdi&seed=42&nomenu=1` → boot directly into game (skip menu),
+- Add URL params: `?side=gdi&seed=42&nomenu=1&mission=N` → boot directly into game (skip menu),
   `&mute=1` → `AUDIO.setEnabled(false)`.
 - Every module must be defensive at boot: no top-level code that throws if DOM absent
   except main.js boot listener.

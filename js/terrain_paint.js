@@ -97,12 +97,17 @@ const TERRAINPAINT = (function () {
   // dark -> light ground ramps (PAL-adjacent, a step darker & lighter added)
   const GR = ramp(['#374d22', '#42592b', '#4c6832', '#546e36', '#5b7a3c', '#688a46']);
   const DR = ramp(['#59492c', '#6a5a38', '#7c6a42', '#8f7a4e', '#9c8656', '#ab9663']);
-  const RK = ramp(['#41413b', '#4c4c45', '#58584f', '#63635a', '#6f6f66', '#7d7d74']);
+  const RK = ramp(['#464136', '#524c3f', '#5e5748', '#6a6251', '#766d5a', '#857b66']);
   const WET = ramp(['#41371f', '#4d4126', '#5a4c2d', '#665735']);
   // waterline -> deep
   const WR = ramp(['#4b8292', '#3d7490', '#356690', '#2b5880', '#224a6e', '#1a3c5c', '#132e4a']);
   const U_FOAM = u32('#c2dcce'), U_FOAMD = u32('#8fb4ab');
   const U_RIP = u32('#5d92b4'), U_RIPHI = u32('#7fb6d8');
+
+  // earthy cliff-face strata, sun-warmed top -> shadowed base, plus the
+  // darker groove tones erosion gullies cut into the face
+  const CLIFF_F = ['#71654f', '#635844', '#544a39', '#463d2f'];
+  const CLIFF_G = ['#59503e', '#4d4535', '#413a2c', '#352f24'];
 
   // ---- tiny pixel painters (24 px/cell layer) ---------------------------------
 
@@ -147,9 +152,9 @@ const TERRAINPAINT = (function () {
     for (let i = 0; i < n; i++) {
       const px = x + ((h2(x + i, y, 0x5eb) * 7) | 0) - 3;
       const py = y + ((h2(x, y + i, 0x3c1) * 5) | 0) - 2;
-      P(q, px, py + 1, 2, 1, '#55554e');
-      P(q, px, py, 2, 1, '#6e6e66');
-      P(q, px, py, 1, 1, '#8a8a80');
+      P(q, px, py + 1, 2, 1, '#5b5546');
+      P(q, px, py, 2, 1, '#746c59');
+      P(q, px, py, 1, 1, '#8f8570');
     }
   }
 
@@ -187,15 +192,15 @@ const TERRAINPAINT = (function () {
       const inset = Math.max(1, y);
       if (w * 2 + 1 - inset > 0) q.fillRect(cx - w + inset, cy + y, w * 2 + 1 - inset, 1);
     }
-    q.fillStyle = '#3c3c36';
+    q.fillStyle = '#3e392e';
     for (let y = Math.max(1, ry - 1); y <= ry; y++) {
       const w = Math.floor(r * Math.sqrt(Math.max(0, 1 - (y * y) / (ry * ry))) + 0.5);
       const inset = Math.min(w * 2, y + 2);
       if (w * 2 + 1 - inset > 0) q.fillRect(cx - w + inset, cy + y, w * 2 + 1 - inset, 1);
     }
     ell(q, cx - Math.max(1, r >> 2), cy - Math.max(1, ry >> 2), Math.max(1, r - 2), Math.max(1, ry - 2), PAL.rock2);
-    if (r >= 4) ell(q, cx - (r >> 2) - 1, cy - (ry >> 2) - 1, Math.max(1, r - 4), Math.max(1, ry - 3), '#a2a296');
-    if (r >= 5) { q.fillStyle = '#c0c0b4'; q.fillRect(cx - (r >> 1), cy - (ry >> 1), 2, 1); }
+    if (r >= 4) ell(q, cx - (r >> 2) - 1, cy - (ry >> 2) - 1, Math.max(1, r - 4), Math.max(1, ry - 3), '#a89d86');
+    if (r >= 5) { q.fillStyle = '#c6bba3'; q.fillRect(cx - (r >> 1), cy - (ry >> 1), 2, 1); }
     q.fillStyle = PAL.rock3;
     q.fillRect(cx + 1 + ((k * 3) | 0), cy, 1, 2);
     if (r >= 5) { q.fillStyle = '#5a6a42'; q.fillRect(cx - r + 1, cy + (ry >> 1), 2, 1); }
@@ -500,28 +505,71 @@ const TERRAINPAINT = (function () {
           continue;
         }
         if (!nS) {
-          // south-facing cliff wall: sunlit lip, stratified face, dark footing
-          P(q, bx, by + 9, CS, 1, '#8a8a80');
-          P(q, bx, by + 10, CS, 1, '#6e6e64');
-          P(q, bx, by + 11, CS, 11, '#4a4a42');
-          P(q, bx, by + 14, CS, 1, '#3f3f38');           // strata bands
-          P(q, bx, by + 18, CS, 1, '#3b3b34');
-          for (let k = 0; k < 5; k++) {                   // vertical cracks + facets
-            const fx = bx + 1 + ((h2(cx * 5 + k, cy, seed ^ 0xcf1) * 22) | 0);
-            const fl = 4 + ((h2(k, cx + cy, seed ^ 0xcf2) * 7) | 0);
-            P(q, fx, by + 11, 1, fl, '#33332e');
-            if (k < 3) P(q, fx + 1, by + 11, 1, Math.max(2, fl - 3), '#57574e');
+          // south-facing cliff: wavy sun-caught lip, earthy strata that
+          // follow the lip contour, erosion gullies cutting darker grooves,
+          // and talus fans spilling past the footing. Every profile is
+          // sampled in world-pixel space so the silhouette runs unbroken
+          // across cell borders instead of per-cell ruler lines.
+          const below = inMap(cx, cy + 1) ? g.terrain[cellIdx(cx, cy + 1)] : T_ROCK;
+          const spill = below === T_GRASS || below === T_DIRT;
+          for (let dx = 0; dx < CS; dx++) {
+            const x = bx + dx;
+            const lip = by + 7 + ((vnoise(x, cy * 37, 10, seed ^ 0x3aa) * 4.99) | 0);
+            const foot = by + 20 + ((vnoise(x, cy * 53, 14, seed ^ 0x3bb) * 3.99) | 0);
+            const gully = vnoise(x, cy * 71, 7, seed ^ 0x3dd) > 0.72;
+            P(q, x, lip, 1, 1, gully ? '#877a62' : '#a4967a');
+            P(q, x, lip + 1, 1, 1, gully ? '#6c614e' : '#83765f');
+            for (let y = lip + 2; y <= foot; y++) {
+              const f = (y - lip - 2) / Math.max(1, foot - lip - 2);
+              let ci = (f * 4) | 0; if (ci > 3) ci = 3;
+              const dth = h2(x, y, seed ^ 0x3ab);           // speckle dither
+              if (dth < 0.14 && ci > 0) ci--; else if (dth > 0.86 && ci < 3) ci++;
+              let col = (gully ? CLIFF_G : CLIFF_F)[ci];
+              // thin ochre seams undulating with the lip contour
+              const seam = y - lip + ((vnoise(x, y * 3, 9, seed ^ 0x3cc) * 2) | 0);
+              if (!gully && (seam === 5 || seam === 10)) col = '#7c6647';
+              P(q, x, y, 1, 1, col);
+            }
+            P(q, x, foot + 1, 1, 1, '#2f2a21');             // base shadow
+            if (spill) {
+              const tal = vnoise(x, cy * 91, 8, seed ^ 0x3ee);
+              if (tal > 0.48) {
+                const tl = 1 + (((tal - 0.48) * 8) | 0);
+                for (let y = foot + 2; y <= foot + 1 + tl; y++) {
+                  if (h2(x, y, seed ^ 0x3ff) < 0.62) P(q, x, y, 1, 1, (x + y) & 1 ? '#564c3c' : '#655a47');
+                }
+              }
+            }
           }
-          P(q, bx, by + 22, CS, 2, '#2d2d28');
-          pebbles(q, bx + 4 + ((bh * 12) | 0), by + 21, bh);
+          if (spill) pebbles(q, bx + 4 + ((bh * 12) | 0), by + 22, bh);
         }
         if (!nN) {
-          // sunlit top rim
-          P(q, bx, by, CS, 1, '#93938a');
-          P(q, bx, by + 1, CS, 1, '#7c7c74');
+          // sunlit top rim, gently ragged
+          for (let dx = 0; dx < CS; dx++) {
+            const x = bx + dx;
+            const r0 = by + ((vnoise(x, cy * 43, 9, seed ^ 0x4aa) * 2.99) | 0);
+            P(q, x, r0, 1, 1, '#a2977f');
+            P(q, x, r0 + 1, 1, 1, '#867c68');
+          }
         }
-        if (!nW) { P(q, bx, by, 1, CS, '#88887e'); P(q, bx + 1, by, 1, CS, '#70706a'); }
-        if (!nE) { P(q, bx + CS - 2, by, 1, CS, '#45453f'); P(q, bx + CS - 1, by, 1, CS, '#3a3a35'); }
+        if (!nW) {
+          // west-lit flank, meandering
+          for (let dy = 0; dy < CS; dy++) {
+            const y = by + dy;
+            const r0 = bx + ((vnoise(cx * 47, y, 9, seed ^ 0x4bb) * 2.99) | 0);
+            P(q, r0, y, 1, 1, '#8d8370');
+            P(q, r0 + 1, y, 1, 1, '#746b5a');
+          }
+        }
+        if (!nE) {
+          // east-shaded flank, meandering
+          for (let dy = 0; dy < CS; dy++) {
+            const y = by + dy;
+            const r0 = bx + CS - 2 - ((vnoise(cx * 59, y, 9, seed ^ 0x4cc) * 1.99) | 0);
+            P(q, r0, y, 1, 1, '#4b4437');
+            P(q, r0 + 1, y, 1, 1, '#3d382d');
+          }
+        }
         if (nN && nS && nW && nE) {
           // plateau top: sparse crags, cracks and rubble
           if (bh < 0.18) boulder(q, bx + 8 + ((bh * 40) | 0), by + 9 + ((h2(cy, cx, 0xb03) * 8) | 0), 3 + ((bh * 16) | 0), bh);

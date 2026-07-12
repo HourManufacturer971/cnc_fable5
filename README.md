@@ -28,11 +28,15 @@ python3 -m http.server 8000
 
 (Opening `index.html` directly with `file://` also works in most browsers.)
 
-Pick your side — United Defense Coalition or The Serpent Order — and destroy
-the enemy base. You start with an MCV: click it twice to deploy your
+Pick your side — United Defense Coalition or The Serpent Order — then pick
+your battle: a **skirmish** on a random map, or one of five **campaign
+operations**, each with its own briefing, fixed battlefield and objective
+(annihilation, a harvest quota, a timed last stand, an economy hunt, and a
+final assault). Winning an operation unlocks the next; progress is saved in
+your browser. You start with an MCV: click it twice to deploy your
 Construction Yard.
 
-Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1`.
+Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1&mission=2`.
 
 ## Controls (classic 1995 scheme)
 
@@ -130,15 +134,23 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   noise, so grass, dirt, water and rock blend into each other with ragged
   organic edges instead of tile seams; maps get a meandering river with
   fordable crossings and a timber bridge, an animated waterfall at the
-  rocky rim, mesa cliffs with stratified faces, forests with closed
-  canopies and clearings, and scattered doodads (grass tufts, flowers,
-  pebbles, cracks, bushes)
+  rocky rim, eroded mesa cliffs with wavy sun-caught lips, earthy strata,
+  gullies and talus fans, forests with closed canopies and clearings, and
+  scattered doodads (grass tufts, flowers, pebbles, cracks, bushes)
+- **A campaign** — five operations per side with in-universe briefings and
+  distinct objectives: annihilate an outpost, bank a chrysalite quota,
+  survive a ten-minute onslaught, hunt down the enemy economy, and crack a
+  fortress; each tunes the AI's aggression and war chest, wins unlock the
+  next, and an objective chip on the HUD tracks live progress
 - **A civilian hamlet** — farmhouse, cottages and a barn with villagers who
   wander about and flee gunfire; nobody auto-targets them (except the
   fleshlings), but Ctrl+click will
-- **Original soundtrack** — two synthesized tracks in the dark mid-90s RTS
-  style, sequenced live with WebAudio; toggle with Music: ON/OFF in the
-  options menu
+- **Original soundtrack** — four synthesized tracks in the dark mid-90s RTS
+  style, sequenced live with WebAudio (each mission opens on a different
+  one); toggle with Music: ON/OFF in the options menu
+- **Feedback that feels good** — orders answer with collapsing green/red
+  destination rings, hits flash white, harvest deliveries pop floating
+  credit counters, and wounded buildings and vehicles trail smoke
 - **Chrysalite economy** — harvesters (700 credits a load), refineries with
   docking, silos, storage caps, spreading chrysalite fields seeded by blossom
   trees, infantry take damage crossing fields
@@ -186,8 +198,7 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 
 ## Not included (yet)
 
-Campaign missions and FMV, multiplayer, naval units, save/load, difficulty
-levels.
+FMV, multiplayer, naval units, mid-mission save/load.
 
 ## Experimental: pre-rendered 3D sprite pipeline (unused)
 

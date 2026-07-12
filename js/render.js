@@ -184,6 +184,16 @@ const Render = (function () {
     ctx.fillRect(x + 2, y + 2, Math.max(2, Math.round((w - 4) * frac)), 4);
   }
 
+  // brief white-out on freshly hit entities: re-draw the sprite additively
+  // twice, which pushes it toward white without needing ctx.filter support
+  function _hitFlash(draw) {
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.7;
+    draw(); draw();
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
   function _drawBrackets(x, y, w, h) {
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 2;
@@ -246,6 +256,12 @@ const Render = (function () {
     if (b.type === 'gun' && set.turret) {
       drawSpr(set.turret[b.turretFacing & 15], x, y - 8);
     }
+    if (b._hitT !== undefined && g.tick - b._hitT < 2) {
+      _hitFlash(() => {
+        drawSpr(frame, x, y);
+        if (b.type === 'gun' && set.turret) drawSpr(set.turret[b.turretFacing & 15], x, y - 8);
+      });
+    }
     if (b.repairing && (g.tick >> 3) & 1 && SPRITES.fx.wrench) {
       const wr = SPRITES.fx.wrench[0];
       drawSpr(wr, x + (b.w * C.CELL * Z - wr.width * sca(wr)) / 2,
@@ -271,8 +287,10 @@ const Render = (function () {
         img = set.stand[f8][0] || set.stand[f8];
       }
       if (!img || !img.width) img = set.stand[f8];
-      drawSpr(img, Math.round(X(u.x) - img.width * sca(img) / 2),
-        Math.round(Y(u.y) - img.height * sca(img) / 2));
+      const ix = Math.round(X(u.x) - img.width * sca(img) / 2);
+      const iy = Math.round(Y(u.y) - img.height * sca(img) / 2);
+      drawSpr(img, ix, iy);
+      if (u._hitT !== undefined && g.tick - u._hitT < 2) _hitFlash(() => drawSpr(img, ix, iy));
       return;
     }
 
@@ -303,6 +321,12 @@ const Render = (function () {
       if (img && img.width) drawSpr(img, x, y);
     }
     if (cloakAlpha) ctx.globalAlpha = 1;
+    if (u._hitT !== undefined && g.tick - u._hitT < 2) {
+      _hitFlash(() => {
+        drawSpr(body, x, y);
+        if (set.turret) drawSpr(set.turret[u.turretFacing & 15], x, y);
+      });
+    }
   }
 
   // ---- effects ---------------------------------------------------------------------------
@@ -357,6 +381,39 @@ const Render = (function () {
           drawSpr(img, Math.round(X(e.x) - img.width * sca(img) / 2),
             Math.round(Y(e.y) - img.height * sca(img) / 2));
         }
+        return;
+      }
+      case 'moveMark': case 'atkMark': {
+        // order confirmation: a ring collapsing onto the destination
+        const f = e.tick / (e.ttl || 14);
+        const col = e.name === 'moveMark' ? '#50e050' : '#f04030';
+        const x = X(e.x), y = Y(e.y);
+        ctx.globalAlpha = 0.9 - f * 0.55;
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, 4 + (1 - f) * 16, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = col;
+        ctx.fillRect(x - 2, y - 2, 4, 4);
+        ctx.globalAlpha = 1;
+        return;
+      }
+      case 'cash': {
+        // floating credit readout, drifts up and fades
+        const f = e.tick / (e.ttl || 24);
+        ctx.globalAlpha = f < 0.65 ? 1 : 1 - (f - 0.65) / 0.35;
+        ctx.font = 'bold 16px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const s = '+' + e.amount;
+        ctx.fillStyle = '#101008';
+        ctx.fillText(s, X(e.x) + 1, Y(e.y) + 1);
+        ctx.fillStyle = PAL.uiGold;
+        ctx.fillText(s, X(e.x), Y(e.y));
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'alphabetic';
+        ctx.globalAlpha = 1;
         return;
       }
       default: {
@@ -834,6 +891,51 @@ const Render = (function () {
     ctx.restore();
   }
 
+  // ---- mission objective HUD line --------------------------------------------------------------
+
+  function _objStatus(g) {
+    const m = g.mission;
+    if (!m) return null;   // skirmish: no objective chrome
+    const ob = m.objective;
+    if (ob.type === 'harvest') {
+      return 'HARVEST ' + Math.min(ob.amount, Math.floor(g.stats.harvested)) + ' / ' + ob.amount;
+    }
+    if (ob.type === 'survive') {
+      const left = Math.max(0, ob.minutes * 60 * C.TPS - g.tick);
+      const s = Math.ceil(left / C.TPS);
+      return 'HOLD OUT ' + String((s / 60) | 0).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+    }
+    if (ob.type === 'killEconomy') {
+      let n = 0;
+      for (const id of g.ai.buildingIds) {
+        const b = g.buildings.get(id);
+        if (b && b.type === 'proc') n++;
+      }
+      for (const id of g.ai.unitIds) {
+        const u = g.units.get(id);
+        if (u && DATA.units[u.type].harvester) n++;
+      }
+      return n > 0 ? 'ECONOMY TARGETS LEFT: ' + n : 'FIND THE ENEMY ECONOMY';
+    }
+    return 'DESTROY ALL ENEMY FORCES';
+  }
+
+  function _drawObjective(g) {
+    const s = _objStatus(g);
+    if (!s) return;
+    ctx.font = 'bold 16px monospace';
+    ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(s).width;
+    const bx = 8, by = C.TAB_H + 8, bh = 26;
+    ctx.fillStyle = 'rgba(8,14,10,0.6)';
+    ctx.fillRect(bx, by, tw + 16, bh);
+    ctx.strokeStyle = 'rgba(224,184,64,0.5)'; ctx.lineWidth = 1;
+    ctx.strokeRect(bx + 0.5, by + 0.5, tw + 15, bh - 1);
+    ctx.fillStyle = PAL.uiGold;
+    ctx.fillText(s, bx + 8, by + bh / 2 + 1);
+    ctx.textBaseline = 'alphabetic';
+  }
+
   // ---- cursor ---------------------------------------------------------------------------------
 
   function _drawCursor() {
@@ -858,6 +960,7 @@ const Render = (function () {
     _drawViewport(g);
     _drawTabBar(g);
     _drawSidebar(g);
+    _drawObjective(g);
     _drawEvaBanner();
     if (Input.mouse.inside && !g.paused) _drawCursor();
     shownTick = g.tick;

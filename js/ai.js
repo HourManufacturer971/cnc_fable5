@@ -10,10 +10,15 @@
 const AI = (function () {
   let S = null;
 
+  // mission difficulty knobs (missions.js): cadence multiplier + wave-size cap
+  function _calm(g) { return (g.mission && g.mission.aiCalm) || 1; }
+  function _waveCap(g) { return (g.mission && g.mission.aiWaveCap) || 9; }
+
   function init(g) {
     S = {
       wave: 0,
-      nextWaveAt: 2700 + ((g.rng() * 900) | 0),   // first strike ~3-4 min
+      // first strike ~3-4 min at calm 1, scaled by the mission's cadence
+      nextWaveAt: Math.round((2700 + ((g.rng() * 900) | 0)) * _calm(g)),
       staging: null,        // {ids:[], target:id, launchAt, cell:{cx,cy}}
       brokeSince: -1,
       builtHpad: false,
@@ -335,7 +340,8 @@ const AI = (function () {
           }
         }
         S.staging = null;
-        S.nextWaveAt = g.tick + 1800 + ((g.rng() * 1100) | 0); // 2-3.2 min between launches
+        // 2-3.2 min between launches at calm 1
+        S.nextWaveAt = g.tick + Math.round((1800 + ((g.rng() * 1100) | 0)) * _calm(g));
       }
       return;
     }
@@ -344,15 +350,20 @@ const AI = (function () {
     // gather the strike force: everything idle beyond a small home garrison
     const idle = _military(g, p).filter(u => u.state === 'idle' && !DATA.units[u.type].air);
     const garrison = 2;
-    const need = Math.min(3 + S.wave, 9);
+    const need = Math.min(3 + S.wave, _waveCap(g));
     if (idle.length - garrison < need) {
       S.nextWaveAt = g.tick + 300; // keep producing, check again shortly
       return;
     }
-    // garrison keeps the units closest to home
+    // garrison keeps the units closest to home. Missions with an explicit
+    // wave cap also cap the launched force itself — otherwise a long calm
+    // gap accumulates a strike far bigger than the mission intends
+    // (skirmish keeps the classic everything-but-the-garrison launch).
     idle.sort((a, b) =>
       dist(b.x, b.y, baseX, baseY) - dist(a.x, a.y, baseX, baseY));
-    const force = idle.slice(0, idle.length - garrison);
+    let launch = idle.length - garrison;
+    if (g.mission && g.mission.aiWaveCap) launch = Math.min(launch, g.mission.aiWaveCap);
+    const force = idle.slice(0, launch);
     const cell = _stageCell(g, p);
     let i = 0;
     for (const u of force) {
