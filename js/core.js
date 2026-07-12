@@ -312,6 +312,7 @@ function makeUnit(type, owner, cx, cy) {
     state: 'idle',
     cooldown: 0,
     tib: 0,                // harvester load in credits
+    kills: 0,              // veterancy: 3 = veteran, 6 = elite
     ammo: d.ammo || 0,
     cloaked: false, decloakTicks: 0,
     anim: 0,

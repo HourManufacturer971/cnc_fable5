@@ -134,14 +134,45 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   ~10 ticks from the current cell (`game.tib` -= 25), auto-move across the field, when full
   (or field exhausted and >0 load) drive to own refinery dock cell (the cell just south of
   the refinery's middle column), unload over ~60 ticks adding credits gradually
-  (respect storage cap; excess is lost + EVA `silosNeeded`), then return to last field.
+  (respect storage cap; excess is lost + EVA `silosNeeded` and a red `-N` popup when ≥50
+  evaporates), then return to last field.
   Idle harvesters auto-seek visible chrysalite. New refinery spawns a free harvester beside it.
+- Harvester field discipline: target cells are LEASHED to ~20 cells of the home dock while
+  local crystal lasts; when the neighborhood is dry an EMPTY harvester treks unleashed to
+  whatever is left on the map (never idles the economy to death). Known-unreachable cells
+  are blacklisted (`u._noReach`) for ~60s.
+- Dock etiquette (`_shoveIdle`): a returning harvester within 4 cells of its dock nudges
+  FRIENDLY idle ground units off the dock cell and off its next path cell (orderMove to a
+  free neighbor, never onto another dock). Enemy units are a legitimate blockade and stay.
+- Sealed dock rescue: in `return`, if the path's END cell can't reach within 1.5 cells of
+  the dock (walled in — findPath retargets blocked destinations, so emptiness is not the
+  signal) the harvester re-books to any OTHER refinery whose dock its path can actually
+  reach (`u._procId`); if none exists, the human owner gets EVA `harvesterStranded` + a
+  radar ping (throttled ~30s).
+- Under fire, a harvester announces `harvesterUnderAttack` + radar ping (throttled ~20s,
+  human owner only — cosmetic, never sim-affecting).
+- `Production.canPlace` REJECTS any own-building footprint covering one of your refinery
+  dock cells, and a new refinery whose dock cell would be off-map/impassable/built-over.
+- Default factory rally (`_defaultRally`) is 2 cells south of the factory but dodges to
+  the nearest cell that isn't on/adjacent to an own refinery dock — fresh units must never
+  congregate where harvesters unload. An explicitly-set `fac.rally` is respected as-is.
 - Storage: refinery 1000, silo 1500. `player.storage` = sum over owned finished buildings.
   Credits over storage bleed away (clamped on add).
 - Chrysalite growth: every ~75 ticks a few random chrysalite cells with value ≥ 125 spread 25 to
   a random adjacent grass/dirt cell (new cells start at 25, cap C.TIB_MAX=300); blossom
-  trees seed/refill adjacent cells more aggressively. Infantry standing on chrysalite take
-  1 hp per 8 ticks (chem warrior `e5` immune).
+  trees seed/refill adjacent cells more aggressively. Growth throttles as the map saturates
+  (>550 live cells: fewer spreads; >850: none) so unharvested fields plateau. Infantry
+  standing on chrysalite take 1 hp per 8 ticks (chem warrior `e5` immune).
+- **Supply crates** (`g.crates`, sim state, in the MP checksum): every 10s there's a 40%
+  chance a crate spawns on a random passable, unoccupied, chrysalite-free cell (max 2 live,
+  expire after 3 min). Any gdi/nod ground unit entering the cell consumes it (checked every
+  5 ticks via `g.occ`); effect rolls on `game.rng`: <0.5 cash 1200-2000 (ignores storage
+  caps — found money), <0.65 heal every owned unit to full, <0.8 the picker gains +3 kills
+  (instant promotion), <0.95 a free mtnk/ltnk beside the crate (800 scrap if no room),
+  else map-wide recon (explored for that side; shroud too if it's the local human's).
+  Feedback (EVA `crateSalvage/crateRepairs/crateUnit/crateRecon`, effects) is humanSide-
+  gated and cosmetic. Drawn as a small blinking supply box; blinking white radar dot
+  (explored cells only).
 
 ### Power
 - `Production.computePower(player)` recomputes `player.power` (sum of DATA `power` /
@@ -192,7 +223,18 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 - Units auto-acquire: idle combat units scan every 8 ticks for nearest enemy within
   `sight+1` cells and attack (harvester/mcv/apc/engineer never auto-attack; they FLEE:
   harvester heads to refinery when hit). Attackers chase up to ~4 cells past their
-  guardAnchor then return. Defensive buildings (gtwr, atwr, gun, obli, sam) auto-target
+  guardAnchor then return.
+- **Attack-move** (`orderAttackMove(u, cx, cy)`, state `amove`, `u._amove={cx,cy}`): sweep
+  toward the cell, auto-acquiring every 8 ticks; acquisition sets `targetId`/`state='attack'`
+  DIRECTLY (not via orderAttack) so `_amove` survives, and when the target dies the unit
+  re-issues the sweep to the stored destination. Any explicit player order (move/attack/
+  stop) clears `_amove`. Non-combat and air units delegate to plain move. Networked as the
+  `amv` command.
+- **Veterancy**: gdi/nod units track `u.kills` (credited in `killEntity` to a living
+  attacker of a different side; civilian victims don't count). `vetLevel(u)`: ≥3 kills =
+  veteran (+20% weapon damage, silver chevron), ≥6 = elite (+40%, gold chevrons, self-heals
+  1hp/24 ticks). Promotion of your own unit: EVA `unitPromoted` + rising gold-chevron
+  effect. Kills and crates are mixed into the MP checksum. Defensive buildings (gtwr, atwr, gun, obli, sam) auto-target
   nearest enemy in range every 4 ticks (sam only antiAir). Obelisk: 2s charge-up sound+glow
   before each shot, laser beam effect, needs power. Units return fire when damaged (if
   attacker in range & targetable).
@@ -213,7 +255,7 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   `transport.cargo`, kept alive only by that reference); `unloadCargo(transport)` disembarks
   everyone into free nearby cells. A destroyed transport kills its cargo.
 - Aircraft (`orca`, `heli`): fly ignoring terrain/occupancy (state 'air'), have `ammo`
-  (orca 6 rockets, heli 10 mg bursts, from DATA), fly to target, orbit-strafe firing until
+  (orca 6 rockets, heli 15 mg bursts, from DATA), fly to target, orbit-strafe firing until
   ammo out, then auto-return to a free `hpad` to rearm (ammo refills over ~5s). Only
   `antiAir` weapons can hit them. Drawn with drop-shadow, bob animation, above everything.
 - Stealth tank `stnk`: `cloaked=true` unless firing (decloak 45 ticks) or within 2 cells of
@@ -228,7 +270,10 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 ### Superweapons
 - UDC: `eye` finished → orbital lance, charge `C.SUPER_TICKS.ion = 5400` ticks (6 min). Ready →
   EVA `ionReady`, cameo READY; click cameo → target mode → click map: white-blue beam column
-  effect, `900 dmg` warhead `laser` splash 36px at point after ~1s. Then recharges.
+  effect, `800 dmg` warhead `laser` splash 36px at point after ~1s (INVARIANT: leaves a
+  900hp conyard at sliver hp instead of one-shotting it). Then recharges.
+- Both fires push a radar `strike` ping AND a `g._strikes` entry — render draws a pulsing
+  red reticle + cross at the aim point during the warning seconds (explored cells only).
 - Serpent Order: `tmpl` finished → nuke, `C.SUPER_TICKS.nuke = 6300`. EVA `nukeReady`/`nukeLaunched`;
   missile drops after 3s: `600 dmg` warhead `he`, splash 84px, leaves scorch, screen flash
   + shake. Superweapon state lives on `player.super`; timers tick in Production.tick; only
@@ -320,6 +365,21 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 - `_tickDamageSmoke` (sim.js): buildings under 45% hp emit drifting smoke puffs
   (period 22 ticks, 10 when under 22%); non-air vehicles under 40% hp trail smoke.
   Timed off tick+id hashes — never `game.rng` — so the sim stream is untouched.
+- **Radar pings** (`g._pings`, per-client COSMETIC buffer, capped 24, never checksummed):
+  base-attack, harvester-attack, harvester-stranded, crate and superweapon `strike` events
+  push `{x,y,kind,t}`; radar draws expanding rings (strike red, harv gold, else orange,
+  90-tick life). `Space` jumps the camera to the newest ping.
+- Base-attack alarm: building damage accumulates in `g._atkAcc` (decays after 300 quiet
+  ticks); at ≥50 total the human owner gets EVA `baseUnderAttack` (throttled 30s) + ping —
+  a stray potshot no longer triggers the klaxon.
+- `insufficientFunds` nag escalates: 15s → 30s → 60s → 120s between repeats
+  (`g._fundsNags`), reset the moment a harvester delivers ≥1 credit.
+- HUD balance shows `$ N /storage` (suffix hidden until the first refinery); both turn red
+  when credits ride the cap — the moment loads start evaporating.
+- **Hunt mode** (`_huntCount`, render-only): enemy down to ≤3 non-wall buildings AND zero
+  combat units → gold `TARGETS REMAINING: n` chip (playing state, takes precedence over
+  the mission-objective line) and the surviving enemy buildings blink on radar. Pure
+  render read of sim state — legal in MP (both clients compute identically).
 
 ### Controls (classic left-click scheme)
 - **Left-click**: select own unit(s)/building; with selection on: click enemy → attack;
@@ -330,10 +390,17 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 - **Right-click**: deselect / cancel mode (placement, repair, sell, super target). NO
   right-click orders — authentic to the original.
 - Shift+click adds/removes from selection. Double-click a unit selects all visible of type.
+- Ctrl+click on open GROUND with combat units selected = attack-move to that spot (`A` also
+  arms an attack-move mode: attack cursor, next left-click sweeps there in formation).
+  Ctrl+click on an ENTITY stays focus-fire — entity beats ground.
 - Ctrl+1..9 assign group; 1..9 select; double-tap centers camera.
 - Keyboard scroll: arrows; edge scroll when mouse at viewport edge (cursor becomes scroll
   arrow; red no-scroll variant at map bounds). `H` jump to conyard. `S` stop. `G` guard.
   `Esc` → pause menu / cancels modes. `D` deploy MCV. `T` select same type on screen.
+  `E` select every armed unit on screen. `Space` jump camera to the newest radar ping
+  (preventDefault so the page never scrolls).
+- Shift+click a unit icon queues 5 at once; Shift+right-click cancels/refunds the whole
+  batch (buildings stay single — placement is one at a time anyway).
 - Cursor kinds: `default, scroll(8 dirs), noscroll(8), select, move, nomove, attack, enter,
   capture, harvest, deploy, nodeploy, sell, nosell, repair, norepair, super`.
 - Selected entities draw the classic **white corner brackets** + health bar (green >2/3,
@@ -395,8 +462,9 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   Personality by side (UDC: tanks+AGT; Serpent: turrets/spire+buggy/ltnk/arty swarm).
 - Loop (~every 30 ticks): strict-priority build goals: power ahead of drain → proc →
   barracks/hand → weap/afld → proc #2 → hq → defenses (want grows with wave count AND the
-  game clock, up to 9, arced toward the player) → fix/hpad → proc #3-4 late → tech (eye/
-  tmpl) → silos when storage is tight → superweapon on player's densest cluster.
+  game clock, up to 9, arced toward the player; only the first 4 block tech) → tech
+  (eye/tmpl, after 4 defenses stand and `g.tick > 6000`) → remaining defenses → fix/hpad →
+  proc #3-4 late → silos when storage is tight → superweapon on player's densest cluster.
   The first goal blocked only by credits becomes the SAVINGS TARGET (`S.savingFor`):
   new unit starts pause (harvesters exempt, and never below a 9-strong army floor) so
   the treasury can climb; each goal's bar is capped at `p.storage - 200` so a
@@ -409,14 +477,23 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   personality; group attackers; first wave at ~3-4 min, then every ~2.5-3.5 min send
   everything idle at the player's base. Each wave picks an APPROACH BEARING (rotations of
   the direct line, `APPROACHES` = 0/±0.55/±1.1/±1.7 rad; early waves near-frontal, the
-  repertoire widening with the wave count) and stages 13-18 cells from the player's base
-  on that bearing, so attacks come from varying directions.
+  repertoire widening with the wave count) and runs TWO-PHASE staging: gather 13-18 cells
+  from the player's base on that bearing (leash 600 ticks), then advance AS A GROUP to a
+  forward point 7-11 cells out, then strike together (60% closed up or +380 ticks) — no
+  dribbling in.
   Defend: units near base intercept intruders. If AI has no conyard but has money+weap →
   build mcv? (skip — too fancy; just keep fighting).
 - AI places buildings on a spiral search around its conyard obeying `Production.canPlace`.
 - AI ignores shroud, does not cheat resources (its harvesters really harvest), except: if
   fully broke (<100 credits) for 60s straight and no harvester, gets a 2000 credit "bailout"
-  (keeps the game moving; the original's AIs got map-triggered money too).
+  — but ONLY while it can still rebuild an economy (own conyard, or a refinery already
+  planned/under way). A beaten AI with neither sits on its stumps instead of respawning
+  money forever (endgame drag fix).
+- Skirmish difficulty presets (Operations menu → SKIRMISH EASY/NORMAL/HARD) ride the same
+  knobs campaign missions use, as a pseudo-mission on `game.mission` (no `n`, no
+  `objective`): EASY `{aiCalm:1.7, aiWaveCap:6, aiCredits:3500}`, NORMAL null, HARD
+  `{aiCalm:0.65, aiCredits:9000}`. `startGame` applies `aiCredits` to the AI treasury;
+  restart preserves the preset; no unlock writes for skirmish (guard on `mission.n`).
 
 ### Audio (`audio.js`) — all synthesized, no samples
 - WebAudio: build each SFX from oscillators/noise buffers with quick envelopes. Names used
@@ -524,9 +601,9 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   with `Render.frame`. Pause when menu open (`game.paused`).
 - Menu DOM (#menu overlays in index.html): title screen with the two faction emblems
   (canvas-drawn logos injected), faction buttons UDC / Serpent Order → Operations
-  (mission select) → Briefing → game; pause menu (Resume, Sound/Music/Voice toggles,
-  Fullscreen, Speed slider 0.5–2.2 defaulting to 1.7, Restart mission, Abort mission);
-  score screen. Esc toggles.
+  (three SKIRMISH difficulty rows, then the five campaign ops) → Briefing → game; pause
+  menu (Resume, Sound/Music/Voice toggles, Fullscreen, Speed slider 0.5–2.2 defaulting
+  to 1.7, Restart mission, Abort mission); score screen. Esc toggles.
 - Win check per rules; on end: `Main.endGame(won)` shows score screen; sound
   `missionAccomplished`/`missionFailed` EVA.
 
@@ -542,5 +619,6 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 
 ## Non-goals
 
-Campaign missions/FMV, multiplayer, naval, save/load, walls/sandbags, veterancy, difficulty
-levels. Keep the door open but do not build.
+FMV, naval, mid-mission save/load, multiplayer beyond 1v1. Keep the door open but do not
+build. (Campaign missions, 1v1 multiplayer, walls, veterancy, and difficulty levels have
+since graduated out of this list and are specified above.)

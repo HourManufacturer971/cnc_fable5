@@ -75,7 +75,7 @@ function _nearestEnemy(e, rangeCells, opts) {
     for (const b of g.buildings.values()) {
       if (b.owner === e.owner || b._dead) continue;
       if (b.owner === 'civ' && e.owner !== 'mut') continue;
-      if (DATA.buildings[b.type].wall) continue; // walls aren't worth auto-fire
+      if (DATA.buildings[b.type].wall && !opts.walls) continue; // walls aren't worth auto-fire
       const d = _distTo(ex, ey, b);
       if (d > maxD) continue;
       // defensive structures draw fire first: the deadlier the tower, the
@@ -89,6 +89,14 @@ function _nearestEnemy(e, rangeCells, opts) {
 }
 
 // ---- effects & bullets -------------------------------------------------------
+
+// cosmetic radar ping (never read by the sim — like effects, may differ
+// per client). Space jumps the camera to the newest one.
+function _ping(g, x, y, kind) {
+  const list = g._pings || (g._pings = []);
+  list.push({ x, y, tick: g.tick, kind });
+  if (list.length > 24) list.splice(0, list.length - 24);
+}
 
 function spawnEffect(name, x, y, opts) {
   const e = Object.assign({ name, x, y, frame: 0, tick: 0 }, opts || {});
@@ -210,8 +218,19 @@ function _dischargeWeapon(shooter, w, target, m) {
   _maybePlay(w.sound, m.x, m.y);
 }
 
+// veterancy: 3 kills = veteran (+20% damage), 6 = elite (+40% and self-heal).
+// Kills are sim state (counted in killEntity), so this is lockstep-safe.
+function vetLevel(u) {
+  const k = u.kills || 0;
+  return k >= 6 ? 2 : k >= 3 ? 1 : 0;
+}
+
 function _fireWeapon(shooter, w, target) {
   const d = _data(shooter);
+  if (shooter.kind === 'unit') {
+    const lvl = vetLevel(shooter);
+    if (lvl) w = Object.assign({}, w, { dmg: w.dmg * (1 + 0.2 * lvl) });
+  }
   const facing = shooter.kind === 'unit'
     ? (d.turret ? shooter.turretFacing : shooter.facing)
     : shooter.turretFacing;
@@ -235,6 +254,7 @@ function orderMove(u, cx, cy) {
   const d = DATA.units[u.type];
   u.targetId = 0;
   u.guardAnchor = null;
+  u._amove = null;
   if (d.air) {
     u.state = 'air-move';
     u.moveTarget = { cx, cy };
@@ -254,14 +274,37 @@ function orderAttack(u, target, keepAnchor) {
   const w = _pickWeapon(u, target);
   if (!_canTarget(w, target)) return false;
   u.targetId = target.id;
+  u._amove = null;   // an explicit target overrides an attack-move sweep
   if (!keepAnchor) u.guardAnchor = null;
   if (d.air) { u.state = 'air-attack'; _releasePad(u); }
   else u.state = 'attack';
   return true;
 }
 
+// attack-move: march to (cx,cy), engaging anything encountered on the way and
+// resuming the march after each kill. The classic missing verb — without it
+// a push either walks blind or needs a click per target.
+function orderAttackMove(u, cx, cy) {
+  const d = DATA.units[u.type];
+  // units that can't fight (or fight on their own terms) just move
+  if (!d.weapon || d.harvester || d.deploysTo || d.engineer || d.air) {
+    orderMove(u, cx, cy);
+    return true;
+  }
+  u.targetId = 0;
+  u.guardAnchor = null;
+  u.state = 'amove';
+  u.moveTarget = { cx, cy };
+  u._amove = { cx, cy };
+  u._amRetries = 0;
+  u.path = findPath(u, cx, cy);
+  u.pathi = 0;
+  return true;
+}
+
 function orderHarvest(u, cx, cy) {
   if (!DATA.units[u.type].harvester) return;
+  u._procId = 0;   // re-pick the refinery for the new field
   u.state = 'harvest';
   u.fieldCell = { cx, cy };
   u.targetId = 0;
@@ -387,6 +430,7 @@ function stopUnit(u) {
   u.pathi = 0;
   u.targetId = 0;
   u.moveTarget = null;
+  u._amove = null;
   u.state = 'idle';
   u.guardAnchor = { x: u.x, y: u.y };
 }
@@ -487,13 +531,21 @@ function _combat(u, d) {
   const g = game;
   const t = getEnt(u.targetId);
   if (!t || t._dead || (t.kind === 'unit' && t.cloaked && t.owner !== u.owner && _cloakBlind(g, u.owner))) {
-    // target gone: return to guard anchor if any
+    // target gone: resume an attack-move sweep, else return to guard anchor
     u.targetId = 0;
+    if (u._amove) {
+      const dest = u._amove;
+      orderAttackMove(u, dest.cx, dest.cy);
+      return;
+    }
     if (u.guardAnchor) {
       const a = u.guardAnchor;
       orderMove(u, worldToCell(a.x), worldToCell(a.y));
       u.guardAnchor = a;
-    } else u.state = 'idle';
+    } else {
+      u.state = 'idle';
+      u.path = []; u.pathi = 0;   // don't leave a stale route behind
+    }
     return;
   }
   const w = _pickWeapon(u, t);
@@ -534,6 +586,20 @@ function _combat(u, d) {
     if (!u.path.length || u.pathi >= u.path.length || (g.tick + u.id) % 20 === 0) {
       u.path = findPath(u, tcx, tcy, { range: Math.max(0.5, w.range - 0.25) });
       u.pathi = 0;
+      if (!u.path.length) {
+        // walled out — no route toward the target. Rather than idling at the
+        // rampart forever (which made a closed wall an absolute defense),
+        // switch fire to whatever enemy structure stands in the way, walls
+        // included, and chew through.
+        u._noRoute = (u._noRoute || 0) + 1;
+        if (u._noRoute >= 4) {
+          u._noRoute = 0;
+          const blocker = _nearestEnemy(u, d.sight + 2, { walls: true });
+          if (blocker && blocker.id !== u.targetId && _canTarget(_pickWeapon(u, blocker), blocker)) {
+            u.targetId = blocker.id;
+          }
+        }
+      } else u._noRoute = 0;
     }
     _stepAlongPath(u, d);
   }
@@ -550,19 +616,23 @@ function _exploredFor(g, side) {
   return g.players[side].isAI ? null : g.shroud;
 }
 
-function _findTibCell(u, radius) {
+function _findTibCell(u, radius, anchor) {
   const g = game;
   const cx = worldToCell(u.x), cy = worldToCell(u.y);
   const expl = _exploredFor(g, u.owner);
   let best = null, bestD = Infinity;
   const r0 = Math.max(0, cx - radius), r1 = Math.min(C.MAP_W - 1, cx + radius);
   const s0 = Math.max(0, cy - radius), s1 = Math.min(C.MAP_H - 1, cy + radius);
+  // leash: don't wander further than ~20 cells from home (the refinery) —
+  // a harvester that crosses the map for one crystal usually dies out there
+  const LEASH = 20 * 20;
   for (let y = s0; y <= s1; y++) {
     for (let x = r0; x <= r1; x++) {
       const i = cellIdx(x, y);
       if (g.tib[i] <= 0) continue;
       if (u._noReach && u._noReach.has(i)) continue;   // known-unreachable cells
       if (expl && expl[i] !== 1) continue;
+      if (anchor && ((x - anchor.cx) ** 2 + (y - anchor.cy) ** 2) > LEASH) continue;
       const o = g.occ[i];
       if (o && o !== u.id) continue;
       const dd = (x - cx) * (x - cx) + (y - cy) * (y - cy);
@@ -585,6 +655,34 @@ function _nearestProc(u) {
 }
 
 function _procDock(b) { return { cx: b.cx + 1, cy: b.cy + b.h }; }
+
+function _isDockCell(g, side, cx, cy) {
+  for (const id of g.players[side].buildingIds) {
+    const b = g.buildings.get(id);
+    if (!b || b.type !== 'proc') continue;
+    if (cx === b.cx + 1 && cy === b.cy + b.h) return true;
+  }
+  return false;
+}
+
+// dock etiquette: a friendly unit idling where a working harvester needs to
+// stand gets stepped aside. Enemy units are a legitimate blockade and stay.
+function _shoveIdle(g, u, cx, cy) {
+  const o = g.occ[cellIdx(cx, cy)];
+  if (!o || o === u.id) return false;
+  const blk = g.units.get(o);
+  if (!blk || blk._dead || blk.owner !== u.owner) return false;
+  if (blk.type === 'harv' || blk.state !== 'idle' || DATA.units[blk.type].air) return false;
+  const dirs = [[0, 1], [1, 1], [-1, 1], [1, 0], [-1, 0], [0, -1], [1, -1], [-1, -1]];
+  for (const [dx, dy] of dirs) {
+    const nx = cx + dx, ny = cy + dy;
+    if (!inMap(nx, ny) || !isPassable(nx, ny, blk)) continue;
+    if (_isDockCell(g, u.owner, nx, ny)) continue;   // don't trade one blockage for another
+    orderMove(blk, nx, ny);
+    return true;
+  }
+  return false;
+}
 
 function _harvester(u, d) {
   const g = game;
@@ -609,19 +707,26 @@ function _harvester(u, d) {
     // find more tiberium nearby; cells no path can reach (sealed forest
     // pockets, walled-off fields) get blacklisted for a while so the sweep
     // moves on instead of re-targeting them forever
+    const home = _nearestProc(u);
+    const homeDock = home ? _procDock(home) : null;
     let tries = 8;
-    for (const r of [3, 6, 10, 16, 24, 40]) {
-      let c;
-      while ((c = _findTibCell(u, r))) {
-        const path = findPath(u, c.cx, c.cy);
-        if (path.length) {
-          u.path = path;
-          u.pathi = 0;
-          return;
+    // the leash is a preference, not a law: pass 1 stays near home, and if
+    // the local area is mined DRY an empty harvester treks to whatever is
+    // left on the map rather than idling the economy to death
+    for (const anchor of (u.tib === 0 ? [homeDock, null] : [homeDock])) {
+      for (const r of (anchor ? [3, 6, 10, 16, 24, 40] : [64])) {
+        let c;
+        while ((c = _findTibCell(u, r, anchor))) {
+          const path = findPath(u, c.cx, c.cy);
+          if (path.length) {
+            u.path = path;
+            u.pathi = 0;
+            return;
+          }
+          if (g.tick - (u._noReachAt || -1e9) > 900) { u._noReach = new Set(); u._noReachAt = g.tick; }
+          u._noReach.add(cellIdx(c.cx, c.cy));
+          if (--tries <= 0) return;  // resume next tick, blacklist kept
         }
-        if (g.tick - (u._noReachAt || -1e9) > 900) { u._noReach = new Set(); u._noReachAt = g.tick; }
-        u._noReach.add(cellIdx(c.cx, c.cy));
-        if (--tries <= 0) return;  // resume next tick, blacklist kept
       }
     }
     if (u.tib > 0) { u.state = 'return'; u.path = []; }
@@ -629,7 +734,10 @@ function _harvester(u, d) {
     return;
   }
   if (u.state === 'return') {
-    const proc = _nearestProc(u);
+    // prefer the refinery this trip already chose (set below when the
+    // nearest one turned out to be unreachable), else the nearest
+    let proc = u._procId ? g.buildings.get(u._procId) : null;
+    if (!proc || proc._dead || proc.type !== 'proc') { u._procId = 0; proc = _nearestProc(u); }
     if (!proc) {
       if (g.tick % 30 === 0) u.state = u.tib > 0 ? 'return' : 'idle'; // retry / stand down
       return;
@@ -639,9 +747,10 @@ function _harvester(u, d) {
     // can always unload instead of wedging beside an occupied dock
     if (dist(u.x, u.y, cellCenterX(dock.cx), cellCenterY(dock.cy)) <= C.CELL * 1.5) {
       u.state = 'unload';
-      u._unload = 60;
-      u._chunk = u.tib / 60;
+      u._unload = 35;              // quicker turnaround keeps the economy moving
+      u._chunk = u.tib / 35;
       u._paid = 0;
+      u._procId = 0;
       u.facing = 0; // face the refinery
       u.path = [];
       return;
@@ -649,6 +758,49 @@ function _harvester(u, d) {
     if (!u.path.length || u.pathi >= u.path.length || (g.tick + u.id) % 25 === 0) {
       u.path = findPath(u, dock.cx, dock.cy);
       u.pathi = 0;
+      // a sealed dock produces either an EMPTY path or a best-effort path
+      // that ends too far away to ever unload (findPath retargets a blocked
+      // destination to the nearest passable cell, reachable or not)
+      const last = u.path.length ? u.path[u.path.length - 1] : null;
+      const reaches = last &&
+        dist(cellCenterX(last.cx), cellCenterY(last.cy),
+             cellCenterX(dock.cx), cellCenterY(dock.cy)) <= C.CELL * 1.5;
+      if (!reaches &&
+          dist(u.x, u.y, cellCenterX(dock.cx), cellCenterY(dock.cy)) > C.CELL * 1.5) {
+        // try every OTHER refinery for a genuinely reachable dock before
+        // giving up — and if none works, tell the player instead of
+        // wedging silently.
+        let found = null;
+        for (const id of g.players[u.owner].buildingIds) {
+          const b = g.buildings.get(id);
+          if (!b || b.type !== 'proc' || b.buildProgress < 1 || b.id === proc.id) continue;
+          const d2 = _procDock(b);
+          const alt = findPath(u, d2.cx, d2.cy);
+          const altLast = alt.length ? alt[alt.length - 1] : null;
+          if (altLast &&
+              dist(cellCenterX(altLast.cx), cellCenterY(altLast.cy),
+                   cellCenterX(d2.cx), cellCenterY(d2.cy)) <= C.CELL * 1.5) {
+            found = b; u.path = alt; u.pathi = 0; break;
+          }
+        }
+        if (found) {
+          u._procId = found.id;
+        } else if (u.owner === g.humanSide && g.tick >= (g._strandPingAt || 0)) {
+          g._strandPingAt = g.tick + 450;
+          _evaOnce('harvesterStranded', 900);
+          _ping(g, u.x, u.y, 'harv');
+        }
+      }
+    }
+    // approaching a crowded dock: nudge friendly idlers off the dock cell and
+    // off our next step so the delivery can actually land
+    if ((g.tick + u.id) % 20 === 0 &&
+        dist(u.x, u.y, cellCenterX(dock.cx), cellCenterY(dock.cy)) <= C.CELL * 4) {
+      _shoveIdle(g, u, dock.cx, dock.cy);
+      if (u.pathi < u.path.length) {
+        const nxt = u.path[u.pathi];
+        _shoveIdle(g, u, nxt.cx, nxt.cy);
+      }
     }
     _stepAlongPath(u, d);
     _harvWatchdog(u);
@@ -661,16 +813,23 @@ function _harvester(u, d) {
     p.credits += add;
     u.tib = Math.max(0, u.tib - u._chunk);
     u._paid = (u._paid || 0) + add;
+    u._lost = (u._lost || 0) + Math.max(0, Math.min(u._chunk, 700) - add);
     // feedback for the LOCAL player only (in MP the opponent is also human)
     if (u._chunk > add + 0.01 && p === g.human) _evaOnce('silosNeeded', 450);
     if (p === g.human) g.stats.harvested += add;
+    if (add >= 1 && p === g.human) g._fundsNags = 0;   // money flowing again: reset the nag escalation
     u._unload--;
     if (u._unload <= 0 || u.tib <= 0) {
       // floating credit readout over the refinery — pay the player the
-      // little dopamine hit along with the money
+      // little dopamine hit along with the money. Overflow that evaporated
+      // against the storage cap shows in red so the loss is legible.
       if (p === g.human && u._paid >= 1) {
         spawnEffect('cash', u.x, u.y - 10, { ttl: 24, vy: -1.1, amount: Math.round(u._paid) });
       }
+      if (p === g.human && (u._lost || 0) >= 50) {
+        spawnEffect('cash', u.x + 8, u.y - 2, { ttl: 26, vy: -0.9, amount: -Math.round(u._lost) });
+      }
+      u._lost = 0;
       u.tib = 0;
       u.state = 'harvest';
       if (u.fieldCell) {
@@ -680,9 +839,12 @@ function _harvester(u, d) {
     }
     return;
   }
-  // idle: auto-seek (whole-map radius, staggered)
+  // idle: auto-seek (leashed to the refinery while local crystal lasts,
+  // unleashed once the neighborhood is dry — same policy as the sweep above)
   if ((g.tick + u.id) % 30 === 0) {
-    const c = _findTibCell(u, 40);
+    const home = _nearestProc(u);
+    const c = _findTibCell(u, 40, home ? _procDock(home) : null) ||
+              _findTibCell(u, 64, null);
     if (c) orderHarvest(u, c.cx, c.cy);
     else _clearDock(u);
   }
@@ -914,6 +1076,8 @@ function _tickUnit(u) {
   const d = DATA.units[u.type];
   if (u.cooldown > 0) u.cooldown--;
   if (u.decloakTicks > 0) u.decloakTicks--;
+  // elite units field-repair themselves (any state, slow)
+  if (vetLevel(u) >= 2 && u.hp < u.maxHp && (g.tick + u.id) % 24 === 0) u.hp++;
 
   if (d.air) { _aircraft(u, d); return; }
   if (d.harvester) {
@@ -945,6 +1109,37 @@ function _tickUnit(u) {
         u.state = 'idle';
         u._blockRetries = 0;
         if (!u.guardAnchor) u.guardAnchor = { x: u.x, y: u.y };
+      }
+      break;
+    }
+    case 'amove': {
+      // attack-move: march toward the destination, engaging anything that
+      // enters sight; _combat resumes the march when the target falls
+      if ((g.tick + u.id) % 8 === 0 && d.weapon) {
+        const w = DATA.weapons[d.weapon];
+        const t = _nearestEnemy(u, d.sight + 1, { antiAir: !!(w.antiAir || d.weapon2), airOnly: !!w.airOnly });
+        if (t && _canTarget(_pickWeapon(u, t), t)) {
+          // engage directly (not via orderAttack — that would erase _amove)
+          u.targetId = t.id;
+          u.state = 'attack';
+          break;
+        }
+      }
+      const r = _stepAlongPath(u, d);
+      if (r === 'arrived') {
+        u.state = 'idle';
+        u._amove = null;
+        u.path = []; u.pathi = 0;
+        if (!u.guardAnchor) u.guardAnchor = { x: u.x, y: u.y };
+      } else if (r === 'blocked') {
+        if ((u._amRetries = (u._amRetries || 0) + 1) <= 8 && u._amove) {
+          u.path = findPath(u, u._amove.cx, u._amove.cy);
+          u.pathi = 0;
+        } else {
+          u.state = 'idle';
+          u._amove = null;
+          u.path = []; u.pathi = 0;
+        }
       }
       break;
     }
@@ -1040,6 +1235,92 @@ function _tickBuildingWeapon(b) {
 
 // ---- tiberium growth -----------------------------------------------------------
 
+// ---- crates: battlefield goodies in the classic mold ---------------------------
+// Deterministic (game.rng inside the sim step). A crate sits on a passable
+// cell until a gdi/nod ground unit rolls over it; contents favor cash.
+
+function _crateEffect(g, c, u) {
+  const p = g.players[u.owner];
+  const mine = u.owner === g.humanSide;
+  const roll = g.rng();
+  if (roll < 0.5) {
+    // salvage: credits (ignores silo caps — found money, not refined)
+    const amt = 1200 + ((g.rng() * 9) | 0) * 100;
+    p.credits += amt;
+    if (mine) {
+      spawnEffect('cash', cellCenterX(c.cx), cellCenterY(c.cy) - 8, { ttl: 26, vy: -1.1, amount: amt });
+      _evaOnce('crateSalvage', 30);
+    }
+  } else if (roll < 0.65) {
+    // field repairs: every unit this side owns heals to full
+    for (const o of g.units.values()) if (o.owner === u.owner) o.hp = o.maxHp;
+    if (mine) _evaOnce('crateRepairs', 30);
+  } else if (roll < 0.8) {
+    // combat data: the picker jumps a veterancy tier
+    u.kills = (u.kills || 0) + 3;
+    if (mine) {
+      _evaOnce('unitPromoted', 30);
+      spawnEffect('promote', u.x, u.y - 14, { ttl: 20, vy: -0.6 });
+    }
+  } else if (roll < 0.95) {
+    // a mothballed tank, if there's room beside the crate
+    const key = u.owner === 'gdi' ? 'mtnk' : 'ltnk';
+    let placed = false;
+    for (let r = 1; r <= 2 && !placed; r++) {
+      for (let dy = -r; dy <= r && !placed; dy++) {
+        for (let dx = -r; dx <= r && !placed; dx++) {
+          if (inMap(c.cx + dx, c.cy + dy) && isPassable(c.cx + dx, c.cy + dy)) {
+            addUnit(makeUnit(key, u.owner, c.cx + dx, c.cy + dy));
+            placed = true;
+          }
+        }
+      }
+    }
+    if (!placed) p.credits += 800;   // no room: scrap value
+    if (mine) _evaOnce('crateUnit', 30);
+  } else {
+    // recon cache: the picker's side sees the whole map (per-side fog)
+    if (g.mpExplored) g.mpExplored[u.owner].fill(1);
+    if (u.owner === g.humanSide) {
+      g.shroud.fill(1);
+      _evaOnce('crateRecon', 30);
+    } else if (!mine) {
+      // AI already sees everything in SP — give it scrap instead
+      if (!g.mpExplored) p.credits += 800;
+    }
+  }
+}
+
+function _tickCrates(g) {
+  const crates = g.crates || (g.crates = []);
+  // pickup sweep (cheap: <=2 crates, occ lookup per crate)
+  if (g.tick % 5 === 0) {
+    for (let i = crates.length - 1; i >= 0; i--) {
+      const c = crates[i];
+      const o = g.occ[cellIdx(c.cx, c.cy)];
+      if (!o) continue;
+      const u = g.units.get(o);
+      if (!u || u._dead || (u.owner !== 'gdi' && u.owner !== 'nod')) continue;
+      crates.splice(i, 1);
+      _crateEffect(g, c, u);
+    }
+  }
+  // spawn / expiry
+  if (g.tick % 150 !== 0) return;
+  for (let i = crates.length - 1; i >= 0; i--) {
+    if (g.tick - crates[i].born > 2700) crates.splice(i, 1);
+  }
+  if (crates.length >= 2 || g.rng() > 0.4) return;
+  for (let tries = 0; tries < 20; tries++) {
+    const cx = 2 + ((g.rng() * (C.MAP_W - 4)) | 0);
+    const cy = 2 + ((g.rng() * (C.MAP_H - 4)) | 0);
+    const i = cellIdx(cx, cy);
+    if (!terrainPassable(g.terrain[i]) || g.occ[i] || g.tib[i] > 0) continue;
+    crates.push({ cx, cy, born: g.tick });
+    break;
+  }
+}
+
 function _tickTiberium(g) {
   if (g.tick % 75 !== 0) return;
   if (!g._blossoms) {
@@ -1048,9 +1329,14 @@ function _tickTiberium(g) {
       if (g.terrain[i] === 5) g._blossoms.push(i);
     }
   }
+  // growth throttles as the map saturates: unharvested fields plateau
+  // instead of carpeting whole quadrants
+  let total = 0;
+  for (let i = 0; i < g.tib.length; i++) if (g.tib[i] > 0) total++;
+  if (total > 850) return;
   const rich = [];
   for (let i = 0; i < g.tib.length; i++) if (g.tib[i] >= 125) rich.push(i);
-  const spreads = Math.min(6, rich.length);
+  const spreads = Math.min(total > 550 ? 3 : 6, rich.length);
   for (let s = 0; s < spreads; s++) {
     const i = rich[(g.rng() * rich.length) | 0];
     const cx = i % C.MAP_W, cy = (i / C.MAP_W) | 0;
@@ -1110,6 +1396,19 @@ function killEntity(ent, attacker) {
   const g = game;
   const human = g.humanSide;
 
+  // veterancy credit: combat units earn ranks off real enemies (no farming
+  // villagers). Promotion feedback is per-client cosmetic.
+  if (attacker && attacker.kind === 'unit' && !attacker._dead &&
+      attacker.owner !== ent.owner && ent.owner !== 'civ' &&
+      (attacker.owner === 'gdi' || attacker.owner === 'nod')) {
+    const before = vetLevel(attacker);
+    attacker.kills = (attacker.kills || 0) + 1;
+    if (vetLevel(attacker) > before && attacker.owner === g.humanSide) {
+      _evaOnce('unitPromoted', 90);
+      spawnEffect('promote', attacker.x, attacker.y - 14, { ttl: 20, vy: -0.6 });
+    }
+  }
+
   if (ent.kind === 'unit') {
     const d = DATA.units[ent.type];
     removeUnit(ent);
@@ -1165,11 +1464,24 @@ function killEntity(ent, attacker) {
 }
 
 // return fire / flee when damaged; base-under-attack warning
-EV.on('damaged', function (target, attacker) {
+EV.on('damaged', function (target, attacker, dmg) {
   const g = game;
   if (!g || !attacker || attacker.owner === target.owner) return;
   if (target.kind === 'building') {
-    if (target.owner === g.humanSide) _evaOnce('baseUnderAttack', 450);
+    if (target.owner === g.humanSide) {
+      // scale the alarm to real damage: a stray potshot shouldn't cry wolf.
+      // The accumulator decays by going stale (reset after 20s of quiet).
+      if (g.tick - (g._atkAt || -1e9) > 300) g._atkAcc = 0;
+      g._atkAcc = (g._atkAcc || 0) + (dmg || 0);
+      g._atkAt = g.tick;
+      if (g._atkAcc >= 50) {
+        _evaOnce('baseUnderAttack', 450);
+        if (g.tick >= (g._atkPingAt || 0)) {
+          g._atkPingAt = g.tick + 150;
+          _ping(g, _entX(target), _entY(target), 'attack');
+        }
+      }
+    }
     // auto-repair: damaged finished buildings start repairing on their own
     // (costs credits per hp as usual; the repair toggle can still switch it off)
     if (target.buildProgress >= 1 && !target.repairing && target.hp < target.maxHp &&
@@ -1190,6 +1502,13 @@ EV.on('damaged', function (target, attacker) {
     return;
   }
   if (d.harvester) {
+    if (target.owner === g.humanSide) {
+      _evaOnce('harvesterUnderAttack', 450);
+      if (g.tick >= (g._harvPingAt || 0)) {
+        g._harvPingAt = g.tick + 300;
+        _ping(g, target.x, target.y, 'harv');
+      }
+    }
     if (target.state !== 'return' && target.state !== 'unload') {
       const proc = _nearestProc(target);
       if (proc) { target.state = 'return'; target.path = []; }
@@ -1217,6 +1536,7 @@ function fireIon(a, b, c) {
   const cx = typeof a === 'number' ? a : b;
   const cy = typeof a === 'number' ? b : c;
   AUDIO.play('ionHum');
+  _ping(g, cellCenterX(cx), cellCenterY(cy), 'strike');
   _strikes(g).push({ kind: 'ion', cx, cy, t: 15 });
 }
 
@@ -1225,6 +1545,7 @@ function fireNuke(a, b, c) {
   const cx = typeof a === 'number' ? a : b;
   const cy = typeof a === 'number' ? b : c;
   AUDIO.play('nukeSiren');
+  _ping(g, cellCenterX(cx), cellCenterY(cy), 'strike');
   _strikes(g).push({ kind: 'nuke', cx, cy, t: 45 });
 }
 
@@ -1241,7 +1562,7 @@ function _tickStrikes(g) {
     if (s.kind === 'ion') {
       AUDIO.play('ionBlast');
       spawnEffect('ionBeam', x, y, { ttl: 12 });
-      _splashDamage(x, y, 900, 'laser', 36, null);
+      _splashDamage(x, y, 800, 'laser', 36, null);   // leaves a 900hp conyard at sliver hp instead of one-shotting it
       spawnEffect('scorch', x, y);
     } else {
       AUDIO.play('nukeBoom');
@@ -1334,6 +1655,7 @@ const Sim = {
     _tickStrikes(g);
     _tickEffects(g);
     _tickTiberium(g);
+    _tickCrates(g);
     _tickCloak(g);
   },
 };

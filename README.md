@@ -77,6 +77,7 @@ so bandwidth is tiny. Notes:
 | Left-drag with a wall ready | Place a whole run of wall segments (extra segments charge on placement) |
 | **Right-click** | **Deselect / cancel mode** (no right-click orders — classic-RTS convention) |
 | Ctrl+click | Focus fire: force-attack ANY unit or building (friend, foe or neutral) |
+| `A`, then click ground (or Ctrl+click open ground) | **Attack-move**: sweep to the spot, engaging every enemy met on the way |
 | Shift+click | Add/remove from selection |
 | Double-click | Select all visible units of that type |
 | Click selected MCV (or `D`) | Deploy into Construction Yard |
@@ -89,7 +90,10 @@ so bandwidth is tiny. Notes:
 | `H` | Center on Construction Yard |
 | `S` / `G` | Stop / guard |
 | `T` | Select same type on screen |
+| `E` | Select every combat unit on screen |
+| `Space` | Jump the camera to the latest radar alert (base attacked, harvester in trouble, incoming superweapon) |
 | `P` | Set the selected factory building as primary for its kind |
+| Shift+click a unit icon | Queue 5 at once (Shift+right-click cancels the whole batch) |
 | Arrow keys / screen edges | Scroll the map |
 | Two-finger touchpad scroll (or mouse wheel) | Pan the map |
 | `Esc` | Options menu / cancel placement, sell, repair, targeting |
@@ -187,8 +191,13 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   destination rings, hits flash white, harvest deliveries pop floating
   credit counters, and wounded buildings and vehicles trail smoke
 - **Chrysalite economy** — harvesters (700 credits a load), refineries with
-  docking, silos, storage caps, spreading chrysalite fields seeded by blossom
-  trees, infantry take damage crossing fields
+  docking, silos, storage caps (the HUD balance shows yours, and turns red
+  as loads start evaporating), spreading chrysalite fields seeded by blossom
+  trees, infantry take damage crossing fields. Harvesters work the fields
+  near home first and trek farther only when the neighborhood runs dry,
+  shoulder idle friendlies off the dock, reroute to a sister refinery if
+  theirs is walled off, and cry for help when attacked or stranded —
+  and you can't accidentally wall off your own dock: placement refuses it
 - **Power** — low power halves production speed, kills the radar, and disables
   the Beam Spire, Advanced Guard Tower, and SAM sites
 - **Construction** — the classic sidebar with clock-wipe cameos, adjacency
@@ -208,6 +217,19 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   rockets, artillery arcs, splash damage with friendly fire, tanks crush
   infantry underfoot when a move order paths over them, stealth tank
   cloaking, Behemoth self-repair
+- **Veterancy** — units are promoted at 3 kills (veteran: +20% damage,
+  silver chevron) and 6 kills (elite: +40% and slow self-healing, gold
+  chevrons), with a promotion sparkle and announcer call
+- **Supply crates** — salvage crates appear around the wilderness and hold
+  a random find: a cash stash, field repairs for your whole army, combat
+  data (instant promotion), a mothballed tank, or a map-wide recon sweep
+- **Radar alerts** — attacks on your base or harvesters, stranded
+  harvesters, and incoming superweapons ring the minimap and announce
+  themselves; `Space` snaps the camera to the latest alert, and a pulsing
+  red reticle marks a superweapon's aim point for the final seconds
+- **Endgame hunt mode** — when an enemy is down to its last few buildings
+  with no army left, a TARGETS REMAINING counter appears and the survivors
+  blink on radar, so finishing the match never turns into a shroud-crawl
 - **Pathfinding** — infantry bias their routes away from chrysalite (still
   crossable if it's the only way through); a chrysalite-free route always
   connects the two bases
@@ -223,11 +245,13 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 - **Skirmish AI** — plans its base by role (power tucked behind, refineries at
   the chrysalite, defense arc facing you) and KEEPS developing it all game:
   it saves toward second and third refineries, a growing harvester fleet,
-  and a defense perimeter that thickens as the war drags on. Attacks mass at
-  a staging point on a different approach bearing each wave — frontal at
-  first, then sweeping in from the flanks — on a sustained 2-4 minute
+  radar and superweapon tech, and a defense perimeter that thickens as the
+  war drags on. Attacks mass at a staging point on a different approach
+  bearing each wave — frontal at first, then sweeping in from the flanks —
+  move up as one group, and strike together on a sustained 2-4 minute
   cadence that scales up; it garrisons its home and fires its superweapon
-  at your densest cluster
+  at your densest cluster. Skirmish comes in **EASY / NORMAL / HARD** from
+  the Operations menu (wave cadence, wave size, and AI war chest)
 - **Tactical announcer & comms** — a synthesized in-universe radio voice
   (built live from oscillators + formant filters, never browser text-to-speech)
   calls out events — "Construction complete", "Unit ready", "Base under

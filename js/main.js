@@ -7,6 +7,7 @@ const Main = (function () {
   let acc = 0, lastT = 0, rafStarted = false;
   let mySide = 'gdi';
   let myMission = null;   // current mission definition (null = skirmish)
+  let mySkirmish = null;  // skirmish difficulty preset (null = normal)
   let ended = false;
 
   function $(id) { return document.getElementById(id); }
@@ -227,7 +228,7 @@ const Main = (function () {
     $('btnRestart').addEventListener('click', () => {
       if (NET.active) { AUDIO.play('buzz'); return; }   // can't restart a lockstep match
       togglePause(false);
-      startGame(mySide, { mission: myMission });
+      startGame(mySide, { mission: myMission, skirmish: mySkirmish });
     });
     $('btnAbort').addEventListener('click', () => {
       NET.close();   // in MP this concedes: the opponent gets the victory
@@ -368,13 +369,22 @@ const Main = (function () {
     list.innerHTML = '';
     const done = MissionProgress.get();
 
-    const skirm = document.createElement('button');
-    skirm.innerHTML = '<span>SKIRMISH</span><span class="tag">RANDOM BATTLEFIELD</span>';
-    skirm.addEventListener('click', () => {
-      $('missions').classList.add('hidden');
-      startGame(mySide);
-    });
-    list.appendChild(skirm);
+    // skirmish at three difficulties: the knobs the campaign already uses
+    // (wave cadence, wave cap, AI war chest) exposed straight to the player
+    const DIFFS = [
+      ['EASY',   { skirmish: 'EASY', aiCalm: 1.7, aiWaveCap: 6, aiCredits: 3500 }],
+      ['NORMAL', null],
+      ['HARD',   { skirmish: 'HARD', aiCalm: 0.65, aiCredits: 9000 }],
+    ];
+    for (const [tag, diff] of DIFFS) {
+      const skirm = document.createElement('button');
+      skirm.innerHTML = `<span>SKIRMISH — ${tag}</span><span class="tag">RANDOM BATTLEFIELD</span>`;
+      skirm.addEventListener('click', () => {
+        $('missions').classList.add('hidden');
+        startGame(mySide, { skirmish: diff });
+      });
+      list.appendChild(skirm);
+    }
 
     for (const m of MISSIONS) {
       const btn = document.createElement('button');
@@ -429,6 +439,7 @@ const Main = (function () {
     opts = opts || {};
     mySide = side;
     myMission = opts.mp ? null : (opts.mission || null);
+    mySkirmish = opts.mp ? null : (opts.skirmish || null);
     ended = false;
     $('menu').classList.add('hidden');
     $('score').classList.add('hidden');
@@ -439,11 +450,15 @@ const Main = (function () {
 
     const mission = myMission;
     game = makeGame({ side, seed: opts.seed !== undefined ? opts.seed : (mission ? mission.seed : undefined) });
-    game.mission = mission;   // read by ai.js (difficulty) and render.js (objective HUD)
+    // ai.js reads its difficulty knobs off game.mission — a skirmish
+    // difficulty preset rides the same channel (it has no objective/n, so
+    // the HUD chip and campaign unlock logic ignore it)
+    game.mission = mission || mySkirmish || null;
     if (mission) {
       if (mission.credits !== undefined) game.human.credits = mission.credits;
-      if (mission.aiCredits !== undefined) game.ai.credits = mission.aiCredits;
     }
+    const aiCr = (mission && mission.aiCredits) || (mySkirmish && mySkirmish.aiCredits);
+    if (aiCr !== undefined && aiCr !== null) game.ai.credits = aiCr;
     window.game = game;
     MUSIC.start();
     MAPGEN.generate(game, game.seed, mission && mission.holdout ? { holdout: true } : undefined);
@@ -598,7 +613,7 @@ const Main = (function () {
     game.paused = false;
     $('pause').classList.add('hidden');
     game.status = won ? 'won' : 'lost';
-    if (won && game.mission) MissionProgress.unlockUpTo(game.mission.n);
+    if (won && game.mission && game.mission.n) MissionProgress.unlockUpTo(game.mission.n);
     AUDIO.eva(won ? 'missionAccomplished' : 'missionFailed');
 
     const g = game;

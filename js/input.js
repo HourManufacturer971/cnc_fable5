@@ -611,13 +611,29 @@ const Input = (function () {
       if (Production.launchSuper(g, g.human, cx, cy)) _setMode('normal');
       return;
     }
+    if (mode === 'amove') {
+      // attack-move: sweep to the clicked spot, engaging everything en route
+      const am = _selectedUnits().filter(u => u.owner === g.humanSide);
+      if (am.length) {
+        const spots = _formationCells(cx, cy, am.length);
+        am.forEach((u, i) => {
+          const s = spots[Math.min(i, spots.length - 1)];
+          orderAttackMove(u, s.cx, s.cy);
+        });
+        AUDIO.ack('attack', _selClass());
+        spawnEffect('atkMark', cellCenterX(cx), cellCenterY(cy), { ttl: 14 });
+      } else AUDIO.play('buzz');
+      _setMode('normal');
+      return;
+    }
 
     // ---- normal mode: classic left-click scheme ----
     const ent = _entAt(w.x, w.y);
     const sel = _selectedUnits();
     const ownSel = sel.filter(u => u.owner === g.humanSide);
 
-    // Ctrl+click: focus fire on ANY unit or building — friend, foe or neutral
+    // Ctrl+click: focus fire on ANY unit or building — friend, foe or neutral;
+    // Ctrl+click on open GROUND is attack-move (same as the A hotkey)
     if (ctrl && ent && ownSel.length) {
       let acted = false;
       for (const u of ownSel) if (orderAttack(u, ent)) acted = true;
@@ -625,6 +641,16 @@ const Input = (function () {
         AUDIO.ack('attack', _selClass());
         spawnEffect('atkMark', _entX(ent), _entY(ent), { ttl: 14 });
       } else AUDIO.play('buzz');
+      return;
+    }
+    if (ctrl && !ent && ownSel.length) {
+      const spots = _formationCells(cx, cy, ownSel.length);
+      ownSel.forEach((u, i) => {
+        const s = spots[Math.min(i, spots.length - 1)];
+        orderAttackMove(u, s.cx, s.cy);
+      });
+      AUDIO.ack('attack', _selClass());
+      spawnEffect('atkMark', cellCenterX(cx), cellCenterY(cy), { ttl: 14 });
       return;
     }
 
@@ -761,7 +787,11 @@ const Input = (function () {
       Production.toggleHold(p, hit.key);
       return;
     }
-    Production.tryStart(p, hit.key);
+    // Shift+click queues a batch of five (units only)
+    const batch = keys['Shift'] && Production.categoryOf(hit.key) !== 'building' ? 5 : 1;
+    for (let i = 0; i < batch; i++) {
+      if (!Production.tryStart(p, hit.key)) break;
+    }
   }
 
   function _rightClick() {
@@ -775,8 +805,11 @@ const Input = (function () {
   function _iconRightClick() {
     const hit = Render.hitTest(mouse.x, mouse.y);
     if (hit.zone === 'icon' && !hit.super &&
-        (hit.state === 'building' || hit.state === 'hold' || hit.state === 'ready')) {
-      Production.cancel(game.human, hit.key);
+        (hit.state === 'building' || hit.state === 'hold' || hit.state === 'ready' ||
+         (hit.count || 0) > 0)) {
+      // Shift+right-click clears the whole run of that unit (queue max 20 + active)
+      const times = keys['Shift'] ? 21 : 1;
+      for (let i = 0; i < times; i++) Production.cancel(game.human, hit.key);
       return true;
     }
     return false;
@@ -805,6 +838,39 @@ const Input = (function () {
       return;
     }
     switch (k.toLowerCase()) {
+      case 'a': {
+        // attack-move mode: next click sweeps the army to that spot
+        const armed = _selectedUnits().some(u =>
+          u.owner === g.humanSide && DATA.units[u.type].weapon);
+        if (armed) { _setMode(mode === 'amove' ? 'normal' : 'amove'); AUDIO.play('click'); }
+        else AUDIO.play('buzz');
+        break;
+      }
+      case 'e': {
+        // select every armed unit on screen (the "grab the army" key)
+        const ids = [];
+        for (const u of g.units.values()) {
+          if (u.owner !== g.humanSide) continue;
+          const ud = DATA.units[u.type];
+          if (!ud.weapon || ud.harvester) continue;
+          const sx = (u.x - g.camera.x) * 2, sy = (u.y - g.camera.y) * 2;
+          if (sx >= 0 && sx <= C.VIEW_PW && sy >= 0 && sy <= C.VIEW_PH) ids.push(u.id);
+        }
+        if (ids.length) { _select(ids, false); AUDIO.play('click'); }
+        break;
+      }
+      case ' ': {
+        // jump to the newest alert ping (base attacked, harvester in trouble,
+        // incoming superweapon)
+        const pings = g._pings;
+        if (pings && pings.length) {
+          const p2 = pings[pings.length - 1];
+          g.camera.x = clamp(p2.x - C.VIEW_W / 2, 0, C.MAP_W * C.CELL - C.VIEW_W);
+          g.camera.y = clamp(p2.y - C.VIEW_H / 2, 0, C.MAP_H * C.CELL - C.VIEW_H);
+        }
+        ev.preventDefault();   // space must never "click" a focused menu button
+        break;
+      }
       case 'h': {
         for (const id of g.human.buildingIds) {
           const b = g.buildings.get(id);
@@ -925,6 +991,7 @@ const Input = (function () {
 
     if (mode === 'place') return 'default';
     if (mode === 'super') return 'super';
+    if (mode === 'amove') return 'attack';
     const ent = _entAt(w.x, w.y);
     if (mode === 'sell') return ent && ent.kind === 'building' && ent.owner === g.humanSide ? 'sell' : 'nosell';
     if (mode === 'repair') {

@@ -7,7 +7,7 @@ const DATA = {};
 // warhead damage multiplier vs armor class
 DATA.warheads = {
   sa:    { none: 1.0, light: 0.55, heavy: 0.28, wood: 0.30, concrete: 0.18 }, // small arms
-  he:    { none: 0.95, light: 0.65, heavy: 0.45, wood: 0.90, concrete: 0.55 }, // high explosive
+  he:    { none: 0.80, light: 0.65, heavy: 0.45, wood: 0.90, concrete: 0.55 }, // high explosive
   ap:    { none: 0.30, light: 0.75, heavy: 1.00, wood: 0.65, concrete: 0.80 }, // armor piercing
   fire:  { none: 1.30, light: 0.60, heavy: 0.30, wood: 1.00, concrete: 0.45 },
   laser: { none: 1.0, light: 1.0, heavy: 1.0, wood: 1.0, concrete: 1.0 },
@@ -25,20 +25,20 @@ DATA.weapons = {
   mg50:      { dmg: 22, range: 3.5, rof: 10, speed: 0, warhead: 'sa', splash: 0, sound: 'mgun' },
   cannon75:  { dmg: 42, range: 4.0, rof: 32, speed: 8, warhead: 'ap', splash: 8, sound: 'cannon' },
   cannon90:  { dmg: 55, range: 4.25, rof: 34, speed: 8, warhead: 'ap', splash: 8, sound: 'cannon' },
-  cannon120: { dmg: 75, range: 4.5, rof: 40, speed: 8, warhead: 'ap', splash: 10, sound: 'cannon' },
+  cannon120: { dmg: 75, range: 4.5, rof: 36, speed: 8, warhead: 'ap', splash: 10, sound: 'cannon' },
   mammothTusk: { dmg: 40, range: 5.0, rof: 40, speed: 6, warhead: 'he', splash: 16, homing: true, antiAir: true, sound: 'rocket' },
-  rocket227: { dmg: 55, range: 6.5, rof: 45, speed: 7, warhead: 'he', splash: 18, homing: true, antiAir: true, sound: 'rocket' },
+  rocket227: { dmg: 55, range: 7.5, rof: 45, speed: 7, warhead: 'he', splash: 18, homing: true, antiAir: true, sound: 'rocket' },
   bikeRockets: { dmg: 40, range: 4.0, rof: 30, speed: 7, warhead: 'ap', splash: 8, homing: true, antiAir: true, sound: 'rocket' },
   flameTank: { dmg: 55, range: 2.5, rof: 26, speed: 0, warhead: 'fire', splash: 16, sound: 'flame' },
   stealthMissile: { dmg: 50, range: 4.5, rof: 36, speed: 7, warhead: 'he', splash: 12, homing: true, sound: 'rocket' },
   arty155:   { dmg: 90, range: 6.0, rof: 55, speed: 4, warhead: 'he', splash: 22, arc: true, inaccurate: true, sound: 'cannon' },
   orcaRockets: { dmg: 50, range: 3.5, rof: 18, speed: 7, warhead: 'ap', splash: 10, homing: true, sound: 'rocket' },
   heliMg:    { dmg: 25, range: 3.0, rof: 8, speed: 0, warhead: 'sa', splash: 0, sound: 'mgun' },
-  gtwrMg:    { dmg: 22, range: 4.0, rof: 10, speed: 0, warhead: 'sa', splash: 0, sound: 'mgun' },
+  gtwrMg:    { dmg: 22, range: 4.5, rof: 10, speed: 0, warhead: 'sa', splash: 0, sound: 'mgun' },
   atwrMissile: { dmg: 90, range: 5.5, rof: 26, speed: 8, warhead: 'he', splash: 10, homing: true, antiAir: true, sound: 'rocket' },
   slime:     { dmg: 30, range: 1.3, rof: 22, speed: 0, warhead: 'fire', splash: 8, sound: 'flame' },
   gunTurret: { dmg: 45, range: 4.75, rof: 30, speed: 8, warhead: 'ap', splash: 8, sound: 'cannon' },
-  obelisk:   { dmg: 400, range: 7.0, rof: 90, speed: 0, warhead: 'laser', splash: 0, charge: 30, sound: 'laser' },
+  obelisk:   { dmg: 400, range: 7.0, rof: 90, speed: 0, warhead: 'laser', splash: 0, charge: 30, sound: 'laser' }, // INVARIANT: 400 exactly one-shots a Medium Tank (hp 400) — the Spire's identity; revisit BOTH if either number moves
   samMissile: { dmg: 60, range: 5.5, rof: 25, speed: 9, warhead: 'he', splash: 8, homing: true, antiAir: true, airOnly: true, sound: 'rocket' },
 };
 
@@ -50,20 +50,20 @@ DATA.units = {
   e2:   { name: 'Grenadier', cost: 160, hp: 50, speed: 1.3, sight: 3, armor: 'none', weapon: 'grenade', infantry: true, side: 'gdi', factory: 'infantry', prereq: [] },
   e3:   { name: 'Rocket Soldier', cost: 300, hp: 45, speed: 0.9, sight: 3, armor: 'none', weapon: 'dragon', infantry: true, side: null, factory: 'infantry', prereq: [] },
   e4:   { name: 'Flamethrower', cost: 200, hp: 70, speed: 1.1, sight: 3, armor: 'none', weapon: 'flamer', infantry: true, side: 'nod', factory: 'infantry', prereq: [] },
-  e5:   { name: 'Chem Warrior', cost: 300, hp: 70, speed: 1.1, sight: 3, armor: 'none', weapon: 'chemspray', infantry: true, side: 'nod', factory: 'infantry', prereq: ['tmpl'], tibImmune: true },
+  e5:   { name: 'Chem Warrior', cost: 300, hp: 70, speed: 1.1, sight: 3, armor: 'none', weapon: 'chemspray', infantry: true, side: 'nod', factory: 'infantry', prereq: ['hq'], tibImmune: true },
   e6:   { name: 'Engineer', cost: 500, hp: 25, speed: 1.1, sight: 2, armor: 'none', weapon: null, infantry: true, side: null, factory: 'infantry', prereq: [], engineer: true },
-  rmbo: { name: 'Commando', cost: 1000, hp: 80, speed: 1.4, sight: 5, armor: 'none', weapon: 'sniper', infantry: true, side: null, factory: 'infantry', prereq: ['hq'], antiBuildingBonus: 6 },
+  rmbo: { name: 'Commando', cost: 1000, hp: 80, speed: 1.4, sight: 5, armor: 'none', weapon: 'sniper', infantry: true, side: null, factory: 'infantry', prereq: ['hq'], antiBuildingBonus: 4 },
   // vehicles
-  jeep: { name: 'Scout Truck', cost: 400, hp: 150, speed: 3.0, sight: 4, armor: 'light', weapon: 'mg50', side: 'gdi', factory: 'vehicle', prereq: [], turn: 2 },
+  jeep: { name: 'Scout Truck', cost: 400, hp: 175, speed: 3.0, sight: 4, armor: 'light', weapon: 'mg50', side: 'gdi', factory: 'vehicle', prereq: [], turn: 2 },
   bggy: { name: 'Raider Buggy', cost: 300, hp: 140, speed: 3.2, sight: 4, armor: 'light', weapon: 'mg50', side: 'nod', factory: 'vehicle', prereq: [], turn: 2 },
-  bike: { name: 'Recon Bike', cost: 500, hp: 90, speed: 3.8, sight: 4, armor: 'light', weapon: 'bikeRockets', side: 'nod', factory: 'vehicle', prereq: [], turn: 3 },
+  bike: { name: 'Recon Bike', cost: 500, hp: 130, speed: 3.8, sight: 4, armor: 'light', weapon: 'bikeRockets', side: 'nod', factory: 'vehicle', prereq: [], turn: 3 },
   apc:  { name: 'APC', cost: 700, hp: 200, speed: 2.8, sight: 4, armor: 'heavy', weapon: 'mg50', side: 'gdi', factory: 'vehicle', prereq: ['pyle'], crush: true, turn: 2, transport: 5 },
   ltnk: { name: 'Light Tank', cost: 600, hp: 300, speed: 2.2, sight: 4, armor: 'heavy', weapon: 'cannon75', side: 'nod', factory: 'vehicle', prereq: [], crush: true, turret: true, turn: 1 },
   mtnk: { name: 'Medium Tank', cost: 800, hp: 400, speed: 2.0, sight: 4, armor: 'heavy', weapon: 'cannon90', side: 'gdi', factory: 'vehicle', prereq: [], crush: true, turret: true, turn: 1 },
-  htnk: { name: 'Behemoth Tank', cost: 1500, hp: 600, speed: 1.4, sight: 5, armor: 'heavy', weapon: 'cannon120', weapon2: 'mammothTusk', side: 'gdi', factory: 'vehicle', prereq: ['fix'], crush: true, turret: true, turn: 1, selfHeal: true, dualBarrel: true },
+  htnk: { name: 'Behemoth Tank', cost: 1500, hp: 700, speed: 1.4, sight: 5, armor: 'heavy', weapon: 'cannon120', weapon2: 'mammothTusk', side: 'gdi', factory: 'vehicle', prereq: ['fix'], crush: true, turret: true, turn: 1, selfHeal: true, dualBarrel: true },
   ftnk: { name: 'Flame Tank', cost: 800, hp: 300, speed: 2.2, sight: 4, armor: 'heavy', weapon: 'flameTank', side: 'nod', factory: 'vehicle', prereq: [], crush: true, turn: 1 },
   stnk: { name: 'Stealth Tank', cost: 900, hp: 110, speed: 3.0, sight: 4, armor: 'light', weapon: 'stealthMissile', side: 'nod', factory: 'vehicle', prereq: ['hq'], stealth: true, turn: 2 },
-  arty: { name: 'Artillery', cost: 450, hp: 75, speed: 1.6, sight: 4, armor: 'light', weapon: 'arty155', side: 'nod', factory: 'vehicle', prereq: [], turn: 1 },
+  arty: { name: 'Artillery', cost: 550, hp: 75, speed: 1.6, sight: 4, armor: 'light', weapon: 'arty155', side: 'nod', factory: 'vehicle', prereq: [], turn: 1 },
   msam: { name: 'Rocket Launcher', cost: 800, hp: 100, speed: 1.8, sight: 4, armor: 'light', weapon: 'rocket227', side: 'gdi', factory: 'vehicle', prereq: ['hq'], turn: 1 },
   harv: { name: 'Harvester', cost: 1400, hp: 600, speed: 1.8, sight: 2, armor: 'light', weapon: null, side: null, factory: 'vehicle', prereq: ['proc'], harvester: true, turn: 1 },
   mcv:  { name: 'MCV', cost: 5000, hp: 600, speed: 1.4, sight: 2, armor: 'light', weapon: null, side: null, factory: 'vehicle', prereq: ['fix'], deploysTo: 'fact', turn: 1 },
@@ -74,12 +74,12 @@ DATA.units = {
   c2:   { name: 'Civilian', cost: 0, hp: 25, speed: 1.0, sight: 2, armor: 'none', weapon: null, side: null, factory: null, prereq: [], infantry: true, civilian: true },
   // aircraft
   orca: { name: 'Kestrel', cost: 1200, hp: 125, speed: 4.0, sight: 5, armor: 'light', weapon: 'orcaRockets', side: 'gdi', factory: 'air', prereq: [], air: true, ammo: 6 },
-  heli: { name: 'Gunship', cost: 1200, hp: 125, speed: 3.6, sight: 5, armor: 'light', weapon: 'heliMg', side: 'nod', factory: 'air', prereq: [], air: true, ammo: 10 },
+  heli: { name: 'Gunship', cost: 1200, hp: 125, speed: 3.6, sight: 5, armor: 'light', weapon: 'heliMg', side: 'nod', factory: 'air', prereq: [], air: true, ammo: 15 },
 };
 
 // buildings. w,h in cells. power +out, drain -.
 DATA.buildings = {
-  fact: { name: 'Construction Yard', cost: 5000, hp: 500, w: 3, h: 2, armor: 'wood', sight: 4, power: 30, drain: 0, side: null, prereq: [] },
+  fact: { name: 'Construction Yard', cost: 5000, hp: 900, w: 3, h: 2, armor: 'wood', sight: 4, power: 30, drain: 0, side: null, prereq: [] },
   nuke: { name: 'Power Plant', cost: 300, hp: 300, w: 2, h: 2, armor: 'wood', sight: 2, power: 100, drain: 0, side: null, prereq: [] },
   nuk2: { name: 'Adv. Power Plant', cost: 700, hp: 400, w: 2, h: 2, armor: 'wood', sight: 2, power: 200, drain: 0, side: null, prereq: ['nuke'] },
   proc: { name: 'Refinery', cost: 2000, hp: 450, w: 3, h: 2, armor: 'wood', sight: 4, power: 0, drain: 30, side: null, prereq: ['nuke'], storage: 1000, freeUnit: 'harv' },
@@ -98,7 +98,7 @@ DATA.buildings = {
   atwr: { name: 'Adv. Guard Tower', cost: 1000, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 60, side: 'gdi', prereq: ['hq'], weapon: 'atwrMissile', needsPower: true, defense: true, threat: 0.9 },
   gun:  { name: 'Gun Turret', cost: 600, hp: 400, w: 1, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 20, side: 'nod', prereq: ['hand'], weapon: 'gunTurret', turret: true, defense: true, threat: 0.5 },
   obli: { name: 'Beam Spire', cost: 1500, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 150, side: 'nod', prereq: ['hq'], weapon: 'obelisk', needsPower: true, defense: true, threat: 0.9 },
-  sam:  { name: 'SAM Site', cost: 750, hp: 300, w: 2, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 25, side: 'nod', prereq: ['hand'], weapon: 'samMissile', needsPower: true, defense: true, threat: 0.3 },
+  sam:  { name: 'SAM Site', cost: 550, hp: 300, w: 2, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 25, side: 'nod', prereq: ['hand'], weapon: 'samMissile', needsPower: true, defense: true, threat: 0.3 },
   // neutral village structures — never buildable, owned by 'civ'
   vil1: { name: 'Farmhouse', cost: 0, hp: 250, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true },
   vil2: { name: 'Cottage', cost: 0, hp: 200, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true },
@@ -143,6 +143,13 @@ DATA.eva = {
   battleControlOnline: 'Command network online',
   battleControlTerminated: 'Command network offline',
   reinforcements: 'Reinforcements have arrived',
+  harvesterUnderAttack: 'Harvester under attack',
+  harvesterStranded: 'Harvester unable to reach refinery',
+  unitPromoted: 'Unit promoted',
+  crateSalvage: 'Salvage secured',
+  crateRepairs: 'Field repairs complete',
+  crateUnit: 'Reinforcement secured',
+  crateRecon: 'Recon data acquired',
 };
 
 // unit voice acknowledgments (AUDIO.ack(kind, cls)) — per unit class

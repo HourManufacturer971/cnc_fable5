@@ -215,12 +215,16 @@ const AI = (function () {
     if (_planned(g, p, 'hq') < 1) return pick('hq', 900);
 
     // defense line grows with the war — with the war CLOCK as well as the
-    // wave count, so a long game keeps thickening the perimeter
+    // wave count. Until the superweapon tech building exists the perimeter
+    // goal caps at 4, so the ever-rising defense appetite can't starve the
+    // nuke/lance out of the build order forever (it used to).
+    const tech = side === 'gdi' ? 'eye' : 'tmpl';
+    const techDone = _planned(g, p, tech) >= 1;
     const defWant = Math.min(2 + Math.floor(S.wave / 2) + Math.floor(g.tick / 4500), 9);
     const defHave = _defenseSpots(g, p).length +
       (p.queues.building && ROLE[p.queues.building.key] === 'defense' ? 1 : 0) +
       (p.ready.building && ROLE[p.ready.building] === 'defense' ? 1 : 0);
-    if (defHave < defWant) {
+    if (defHave < (techDone ? defWant : Math.min(defWant, 4))) {
       const want = DEF_PLAN[side][Math.min(defHave, DEF_PLAN[side].length - 1)];
       if (Production.prereqOk(p, want)) return pick(want, 500);
     }
@@ -230,9 +234,12 @@ const AI = (function () {
     if (!S.builtHpad && Production.prereqOk(p, 'hpad')) return pick('hpad', 2000);
     // late-game economy keeps pace with the growing army bill
     if (_planned(g, p, 'proc') < 3 && g.tick > 5000) return pick('proc', 1500);
+    if (!techDone && Production.prereqOk(p, tech) && g.tick > 6000) return pick(tech, 2200);
+    if (defHave < defWant) {
+      const want = DEF_PLAN[side][Math.min(defHave, DEF_PLAN[side].length - 1)];
+      if (Production.prereqOk(p, want)) return pick(want, 500);
+    }
     if (_planned(g, p, 'proc') < 4 && g.tick > 12000) return pick('proc', 2500);
-    const tech = side === 'gdi' ? 'eye' : 'tmpl';
-    if (_planned(g, p, tech) < 1 && Production.prereqOk(p, tech)) return pick(tech, 2200);
     if (p.storage - p.credits < 400 && Production.prereqOk(p, 'silo') &&
         _planned(g, p, 'silo') < 4) return pick('silo', 500);
     return null;
@@ -240,7 +247,7 @@ const AI = (function () {
 
   const WEIGHTS = {
     gdi: [['e1', 2], ['e2', 2], ['e3', 2], ['jeep', 2], ['mtnk', 5], ['msam', 2], ['htnk', 2], ['orca', 1]],
-    nod: [['e1', 2], ['e3', 2], ['e4', 2], ['bggy', 2], ['bike', 2], ['ltnk', 5], ['arty', 2], ['ftnk', 2], ['stnk', 1], ['heli', 1]],
+    nod: [['e1', 2], ['e3', 2], ['e4', 2], ['e5', 1], ['bggy', 2], ['bike', 2], ['ltnk', 5], ['arty', 2], ['ftnk', 2], ['stnk', 1], ['heli', 1]],
   };
 
   // kind: 'infantry' | 'vehicle' | 'air' — each factory line picks only its
@@ -348,13 +355,52 @@ const AI = (function () {
     const baseY = cyd ? (cyd.cy + 1) * C.CELL : cellCenterY(g.startPos.ai.cy);
 
     if (S.staging) {
-      // launch when most of the force has gathered, or on timeout
       const alive = S.staging.ids.map(id => g.units.get(id)).filter(Boolean);
       if (!alive.length) { S.staging = null; return; }
       const sc = S.staging.cell;
       const near = alive.filter(u =>
         dist(u.x, u.y, cellCenterX(sc.cx), cellCenterY(sc.cy)) < 6 * C.CELL).length;
-      if (near >= alive.length * 0.7 || g.tick >= S.staging.launchAt) {
+
+      if (S.staging.phase === 'gather') {
+        // gathered: don't attack yet — advance AS A GROUP to a forward point
+        // just outside the enemy base, so the strike lands together instead
+        // of trickling in over a minute of travel (the old dribble problem)
+        if (near >= alive.length * 0.7 || g.tick >= S.staging.launchAt) {
+          let target = getEnt(S.staging.target);
+          if (!target || target._dead) target = _nearestHumanTarget(g, { x: baseX, y: baseY });
+          if (!target) { S.staging = null; return; }
+          S.staging.target = target.id;
+          const hs = g.startPos.human;
+          const back = Math.atan2(baseY / C.CELL - hs.cy, baseX / C.CELL - hs.cx) + S.approachAng;
+          let fwd = null;
+          for (let r = 7; r <= 11 && !fwd; r++) {
+            const cx = Math.round(worldToCell(_entXSafe(target)) + Math.cos(back) * r);
+            const cy = Math.round(worldToCell(_entYSafe(target)) + Math.sin(back) * r);
+            for (let dr = 0; dr < 3 && !fwd; dr++) {
+              for (let dy = -dr; dy <= dr && !fwd; dy++) {
+                for (let dx = -dr; dx <= dr && !fwd; dx++) {
+                  if (inMap(cx + dx, cy + dy) && isPassable(cx + dx, cy + dy)) fwd = { cx: cx + dx, cy: cy + dy };
+                }
+              }
+            }
+          }
+          if (!fwd) fwd = sc;
+          let i = 0;
+          for (const u of alive) {
+            const dx = (i % 3) - 1, dy = ((i / 3) | 0) % 3 - 1;
+            orderMove(u, clamp(fwd.cx + dx, 0, C.MAP_W - 1), clamp(fwd.cy + dy, 0, C.MAP_H - 1));
+            i++;
+          }
+          S.staging.phase = 'strike';
+          S.staging.cell = fwd;
+          S.staging.launchAt = g.tick + 380;
+        }
+        return;
+      }
+
+      // strike phase: once the group has closed up at the forward point (or
+      // the leash runs out), everyone attacks at once
+      if (near >= alive.length * 0.6 || g.tick >= S.staging.launchAt) {
         let target = getEnt(S.staging.target);
         if (!target || target._dead) target = _nearestHumanTarget(g, { x: baseX, y: baseY });
         if (target) {
@@ -405,6 +451,7 @@ const AI = (function () {
       ids: force.map(u => u.id),
       target: target ? target.id : 0,
       cell,
+      phase: 'gather',
       launchAt: g.tick + 600,  // longer leash: crossing a ford takes time
     };
     // aircraft join the strike directly (they rearm on their own)
@@ -451,8 +498,12 @@ const AI = (function () {
 
     if (g.tick % 30 !== 7) return; // main cadence
 
-    // bailout if fully starved with no way back
-    if (p.credits < 100 && _unitCount(g, p, 'harv') === 0) {
+    // bailout if fully starved with no way back — but only while the AI can
+    // still actually rebuild (conyard or refinery standing). A beaten AI on
+    // its last barracks must not drip-fund itself forever and drag the
+    // endgame out.
+    if (p.credits < 100 && _unitCount(g, p, 'harv') === 0 &&
+        (_conyard(g, p) || _planned(g, p, 'proc') > 0)) {
       if (S.brokeSince < 0) S.brokeSince = g.tick;
       else if (g.tick - S.brokeSince > 900) { p.credits += 2000; S.brokeSince = -1; }
     } else S.brokeSince = -1;

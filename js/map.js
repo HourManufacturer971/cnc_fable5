@@ -556,7 +556,7 @@ const MAPGEN = (function () {
         const off = 7 + rng() * 2; // 7..9
         const fx = clamp(Math.round(st.cx + dx * off), 2, W - 3);
         const fy = clamp(Math.round(st.cy + dy * off), 2, H - 3);
-        const count = 100 + ((rng() * 41) | 0); // 100..140
+        const count = 130 + ((rng() * 41) | 0); // 130..170 — the opening field carries the early game
         placeField(g, rng, fx, fy, count, starts, reach);
       }
     }

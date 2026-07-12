@@ -94,7 +94,7 @@ const Render = (function () {
           const iy = C.STRIP_Y + i * C.STRIP_SPACING;
           if (y >= iy && y < iy + C.CAMEO_PH) {
             const item = list[game.human.scroll[strip] + i];
-            if (item) return { zone: 'icon', strip, key: item.key, state: item.state, super: !!item.super };
+            if (item) return { zone: 'icon', strip, key: item.key, state: item.state, super: !!item.super, count: item.count || 0 };
           }
         }
       }
@@ -177,12 +177,55 @@ const Render = (function () {
     }
   }
 
+  // endgame assist: when the enemy is down to a few structures and fields no
+  // combat units, the radar gives up their positions so the finale isn't a
+  // hunt through black shroud
+  function _huntCount(g) {
+    if (!g.ai) return 0;
+    let bld = 0;
+    for (const b of g.buildings.values()) {
+      if (b.owner === g.ai.side && !DATA.buildings[b.type].wall) {
+        if (++bld > 3) return 0;
+      }
+    }
+    if (!bld) return 0;
+    for (const u of g.units.values()) {
+      const d = DATA.units[u.type];
+      if (u.owner === g.ai.side && d.weapon && !d.harvester) return 0;
+    }
+    return bld;
+  }
+
   // live blips, drawn every frame directly onto the composed frame
   function _drawRadarBlips(g) {
+    const hunt = _huntCount(g) > 0;
     for (const b of g.buildings.values()) {
-      if (g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
+      if (!hunt && g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
+      if (hunt && b.owner !== g.ai.side && g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
       ctx.fillStyle = OWNER_COLOR[b.owner] || '#ccc';
       ctx.fillRect(C.MM_X + b.cx * MMC, C.MM_Y + b.cy * MMC, b.w * MMC, b.h * MMC);
+    }
+    // crates blink white where explored
+    if (g.crates && ((g.tick >> 3) & 1)) {
+      ctx.fillStyle = '#fff';
+      for (const c of g.crates) {
+        if (g.shroud[cellIdx(c.cx, c.cy)] === 1) ctx.fillRect(C.MM_X + c.cx * MMC, C.MM_Y + c.cy * MMC, MMC, MMC);
+      }
+    }
+    // alert pings: expanding rings for ~6s (Space jumps to the newest)
+    if (g._pings) {
+      for (const p2 of g._pings) {
+        const age = g.tick - p2.tick;
+        if (age > 90 || age < 0) continue;
+        const mx = C.MM_X + (p2.x / C.CELL) * MMC, my = C.MM_Y + (p2.y / C.CELL) * MMC;
+        ctx.strokeStyle = p2.kind === 'strike' ? '#ff4030' : p2.kind === 'harv' ? '#ffd23c' : '#ff8040';
+        ctx.globalAlpha = 1 - age / 90;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(mx, my, 3 + ((age % 30) / 30) * 9, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
     }
     for (const u of g.units.values()) {
       const cx = worldToCell(u.x), cy = worldToCell(u.y);
@@ -211,6 +254,21 @@ const Render = (function () {
     ctx.fillRect(x, y, w, 8);
     ctx.fillStyle = _healthColor(frac);
     ctx.fillRect(x + 2, y + 2, Math.max(2, Math.round((w - 4) * frac)), 4);
+  }
+
+  // veterancy chevrons beside the unit (gold at elite)
+  function _drawRank(u, X, Y) {
+    const lvl = typeof vetLevel !== 'undefined' ? vetLevel(u) : 0;
+    if (!lvl) return;
+    const x = Math.round(X(u.x)) + 12, y0 = Math.round(Y(u.y)) - 16;
+    ctx.strokeStyle = lvl >= 2 ? '#ffd23c' : '#d8d0a8';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < lvl; i++) {
+      const yy = y0 + i * 5;
+      ctx.beginPath();
+      ctx.moveTo(x - 4, yy + 4); ctx.lineTo(x, yy); ctx.lineTo(x + 4, yy + 4);
+      ctx.stroke();
+    }
   }
 
   // brief white-out on freshly hit entities: re-draw the sprite additively
@@ -320,6 +378,7 @@ const Render = (function () {
       const iy = Math.round(Y(u.y) - img.height * sca(img) / 2);
       drawSpr(img, ix, iy);
       if (u._hitT !== undefined && g.tick - u._hitT < 2) _hitFlash(() => drawSpr(img, ix, iy));
+      _drawRank(u, X, Y);
       return;
     }
 
@@ -356,6 +415,7 @@ const Render = (function () {
         if (set.turret) drawSpr(set.turret[u.turretFacing & 15], x, y);
       });
     }
+    _drawRank(u, X, Y);
   }
 
   // ---- effects ---------------------------------------------------------------------------
@@ -429,19 +489,36 @@ const Render = (function () {
         return;
       }
       case 'cash': {
-        // floating credit readout, drifts up and fades
+        // floating credit readout, drifts up and fades (red when negative —
+        // a harvester load lost against full silos)
         const f = e.tick / (e.ttl || 24);
         ctx.globalAlpha = f < 0.65 ? 1 : 1 - (f - 0.65) / 0.35;
         ctx.font = 'bold 16px monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        const s = '+' + e.amount;
+        const s = (e.amount >= 0 ? '+' : '') + e.amount;
         ctx.fillStyle = '#101008';
         ctx.fillText(s, X(e.x) + 1, Y(e.y) + 1);
-        ctx.fillStyle = PAL.uiGold;
+        ctx.fillStyle = e.amount >= 0 ? PAL.uiGold : PAL.uiRed;
         ctx.fillText(s, X(e.x), Y(e.y));
         ctx.textAlign = 'left';
         ctx.textBaseline = 'alphabetic';
+        ctx.globalAlpha = 1;
+        return;
+      }
+      case 'promote': {
+        // rising gold chevron burst on a freshly promoted unit
+        const f = e.tick / (e.ttl || 20);
+        ctx.globalAlpha = 1 - f * 0.8;
+        ctx.strokeStyle = PAL.uiGold;
+        ctx.lineWidth = 2;
+        const x = X(e.x), y = Y(e.y);
+        for (let i = 0; i < 2; i++) {
+          const yy = y + i * 7;
+          ctx.beginPath();
+          ctx.moveTo(x - 7, yy + 5); ctx.lineTo(x, yy); ctx.lineTo(x + 7, yy + 5);
+          ctx.stroke();
+        }
         ctx.globalAlpha = 1;
         return;
       }
@@ -512,6 +589,19 @@ const Render = (function () {
       }
     }
 
+    // goodie crates (under everything that moves)
+    if (g.crates) {
+      for (const c of g.crates) {
+        if (g.shroud[cellIdx(c.cx, c.cy)] !== 1) continue;
+        const x = X(c.cx * C.CELL), y = Y(c.cy * C.CELL);
+        ctx.fillStyle = '#101008'; ctx.fillRect(x + 9, y + 11, 32, 26);
+        ctx.fillStyle = '#8a6a3c'; ctx.fillRect(x + 11, y + 13, 28, 22);
+        ctx.fillStyle = '#6a4f2a'; ctx.fillRect(x + 11, y + 22, 28, 3);
+        ctx.fillStyle = (g.tick >> 3) & 1 ? '#ffd23c' : '#c8a84c';
+        ctx.fillRect(x + 23, y + 13, 4, 22);
+      }
+    }
+
     // buildings sorted by cy
     const blds = Array.from(g.buildings.values()).sort((a, b) => a.cy - b.cy);
     for (const b of blds) _drawBuilding(g, b, X, Y);
@@ -549,6 +639,22 @@ const Render = (function () {
     // effects (non-ground)
     for (const e of g.effects) {
       if (e.name !== 'scorch' && e.name !== 'crater') _drawEffect(g, e, X, Y);
+    }
+
+    // incoming superweapon: pulsing reticle at the aim point (3s of warning
+    // the siren gives you a location for)
+    if (g._strikes) {
+      for (const s of g._strikes) {
+        if (!Fog.isExplored(g, s.cx, s.cy)) continue;
+        const x = X(cellCenterX(s.cx)), y = Y(cellCenterY(s.cy));
+        ctx.strokeStyle = ((g.tick >> 2) & 1) ? '#ff4030' : '#a02418';
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(x, y, 18 + (s.t % 10), 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x - 26, y); ctx.lineTo(x + 26, y);
+        ctx.moveTo(x, y - 26); ctx.lineTo(x, y + 26);
+        ctx.stroke();
+      }
     }
 
     // air units on top
@@ -712,8 +818,15 @@ const Render = (function () {
       creditsShown += clamp(diff, -step, step);
       if (Math.abs(diff) > 2) AUDIO.tickCredits();
     }
-    ctx.fillStyle = PAL.uiGold;
-    ctx.fillText('$ ' + creditsShown, C.VIEW_PW - 180, 8);
+    // storage cap shown beside the balance; red when the silos are full —
+    // that's when harvester loads start evaporating
+    const full = g.human.storage > 0 && g.human.credits >= g.human.storage - 1;
+    ctx.fillStyle = full ? PAL.uiRed : PAL.uiGold;
+    ctx.fillText('$ ' + creditsShown, C.VIEW_PW - 220, 8);
+    if (g.human.storage > 0) {   // "/0" before the first refinery is just noise
+      ctx.fillStyle = full ? PAL.uiRed : '#8a836e';
+      ctx.fillText('/' + Math.floor(g.human.storage), C.VIEW_PW - 220 + ctx.measureText('$ ' + creditsShown).width + 6, 8);
+    }
 
     // mission timer + side
     const secs = Math.floor(g.tick / C.TPS);
@@ -924,8 +1037,12 @@ const Render = (function () {
   // ---- mission objective HUD line --------------------------------------------------------------
 
   function _objStatus(g) {
+    // endgame assist beats everything: show how many targets are left once
+    // the enemy is broken (skirmish and campaign alike)
+    const hunt = _huntCount(g);
+    if (hunt && g.status === 'playing') return 'TARGETS REMAINING: ' + hunt;
     const m = g.mission;
-    if (!m) return null;   // skirmish: no objective chrome
+    if (!m || !m.objective) return null;   // skirmish: no objective chrome
     const ob = m.objective;
     if (ob.type === 'harvest') {
       return 'TREASURY ' + Math.min(ob.amount, Math.floor(g.human.credits)) + ' / ' + ob.amount;

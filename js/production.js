@@ -229,6 +229,22 @@ const Production = (function () {
         if (!cellOk(g, player, cx + x, cy + y)) return false;
       }
     }
+    // never let a building sit on one of your refineries' DOCK cells — a
+    // sealed dock silently starves the economy (the AI already refuses
+    // this via _crowdsRefinery; the player deserves the same guard rail).
+    // Likewise a NEW refinery must be born with a usable dock cell.
+    for (const id of player.buildingIds) {
+      const b = g.buildings.get(id);
+      if (!b || b.type !== 'proc') continue;
+      const dcx = b.cx + 1, dcy = b.cy + b.h;
+      if (dcx >= cx && dcx < cx + d.w && dcy >= cy && dcy < cy + d.h) return false;
+    }
+    if (key === 'proc') {
+      const dcx = cx + 1, dcy = cy + d.h;
+      if (!inMap(dcx, dcy) || !terrainPassable(g.terrain[cellIdx(dcx, dcy)])) return false;
+      const o = g.occ[cellIdx(dcx, dcy)];
+      if (o) { const e = getEnt(o); if (e && e.kind === 'building') return false; }
+    }
     for (const id of player.buildingIds) {
       const b = g.buildings.get(id);
       if (!b || b.buildProgress < 1) continue;
@@ -399,10 +415,41 @@ const Production = (function () {
     if (d.harvester) {
       u.state = 'harvest'; // auto-seek
     } else {
-      const rally = fac.rally || { cx: fac.cx + ((fac.w / 2) | 0), cy: fac.cy + fac.h + 2 };
+      const rally = fac.rally || _defaultRally(g, player, fac);
       orderMove(u, rally.cx, rally.cy);
     }
     return true;
+  }
+
+  // fresh units must not congregate on a refinery dock: a squad parked there
+  // starves the whole economy (harvesters can never unload). Only the DEFAULT
+  // rally dodges docks — a rally the player set deliberately is respected.
+  function _nearOwnDock(g, player, cx, cy) {
+    for (const id of player.buildingIds) {
+      const b = g.buildings.get(id);
+      if (!b || b.type !== 'proc') continue;
+      const dx = cx - (b.cx + 1), dy = cy - (b.cy + b.h);
+      if (dx * dx + dy * dy <= 2) return true;   // the dock cell or touching it
+    }
+    return false;
+  }
+
+  function _defaultRally(g, player, fac) {
+    const base = { cx: fac.cx + ((fac.w / 2) | 0), cy: fac.cy + fac.h + 2 };
+    if (!_nearOwnDock(g, player, base.cx, base.cy)) return base;
+    for (let r = 1; r <= 6; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const cx = base.cx + dx, cy = base.cy + dy;
+          if (!inMap(cx, cy)) continue;
+          if (_nearOwnDock(g, player, cx, cy)) continue;
+          if (!terrainPassable(g.terrain[cellIdx(cx, cy)])) continue;
+          return { cx, cy };
+        }
+      }
+    }
+    return base;
   }
 
   // ---- superweapons ----------------------------------------------------------------
@@ -469,7 +516,15 @@ const Production = (function () {
       const mult = cat === 'building' ? 1 : Math.min(2.5, 1 + 0.5 * (_countFactories(player, cat) - 1));
       const drip = (job.total / job.ticksTotal) * mult;
       if (player.credits < drip) {
-        if (human) _evaOnceLocal(g, 'insufficientFunds', 225);
+        if (human && g.tick >= (g.evaCooldowns.insufficientFunds || 0)) {
+          // escalating throttle: chronic poverty shouldn't drone every 15s —
+          // the nag spaces out (15s, 30s, 60s, 120s) until money flows again
+          // (the unload handler resets g._fundsNags on a real delivery)
+          const nag = Math.min(g._fundsNags || 0, 3);
+          g.evaCooldowns.insufficientFunds = g.tick + 225 * Math.pow(2, nag);
+          g._fundsNags = (g._fundsNags || 0) + 1;
+          AUDIO.eva('insufficientFunds');
+        }
         continue;
       }
       player.credits -= drip;
@@ -540,6 +595,18 @@ const Production = (function () {
         addUnit(u);
         u.state = 'harvest';
       }
+    }
+    // a new helipad ships with its aircraft (the classic bundle — the pad
+    // price includes the first airframe)
+    if (d.freeUnitAir) {
+      const key = player.side === 'gdi' ? 'orca' : 'heli';
+      const u = makeUnit(key, player.side, b.cx, b.cy);
+      u.x = (b.cx + b.w / 2) * C.CELL;
+      u.y = (b.cy + b.h / 2) * C.CELL;
+      u.ammo = DATA.units[key].ammo || 0;
+      addUnit(u);
+      b.claimedBy = u.id;
+      u.padId = b.id;
     }
     // "new construction options" when the tech tree grows
     if (_isHuman(player)) {

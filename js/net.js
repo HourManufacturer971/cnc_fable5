@@ -337,7 +337,9 @@ const NET = (function () {
     for (const u of g.units.values()) {
       mix(u.id); mix(Math.round(u.x * 16)); mix(Math.round(u.y * 16));
       mix(Math.round(u.hp)); mix(u.tib ? Math.round(u.tib) : 0);
+      mix(u.kills || 0);   // veterancy scales damage — sim-relevant
     }
+    if (g.crates) for (const c of g.crates) { mix(c.cx); mix(c.cy); mix(c.born); }
     for (const b of g.buildings.values()) {
       mix(b.id); mix(Math.round(b.hp)); mix(Math.round(b.buildProgress * 64));
     }
@@ -388,7 +390,7 @@ const NET = (function () {
 
   // the real implementations, captured at load time
   const R = {
-    orderMove, orderAttack, orderHarvest, orderDeploy, orderEnter,
+    orderMove, orderAttack, orderAttackMove, orderHarvest, orderDeploy, orderEnter,
     orderBoard, unloadCargo, stopUnit, orderRally,
     tryStart: Production.tryStart, cancel: Production.cancel,
     toggleHold: Production.toggleHold, place: Production.place,
@@ -415,6 +417,7 @@ const NET = (function () {
     const p = g.players[s];
     switch (c.o) {
       case 'mv': { const u = _unit(g, c.id, s); if (u) R.orderMove(u, c.cx, c.cy); break; }
+      case 'amv': { const u = _unit(g, c.id, s); if (u) R.orderAttackMove(u, c.cx, c.cy); break; }
       case 'atk': { const u = _unit(g, c.id, s); const t = getEnt(c.tid); if (u && t && !t._dead) R.orderAttack(u, t); break; }
       case 'hrv': { const u = _unit(g, c.id, s); if (u) R.orderHarvest(u, c.cx, c.cy); break; }
       case 'dep': { const u = _unit(g, c.id, s); if (u) R.orderDeploy(u); break; }
@@ -440,6 +443,10 @@ const NET = (function () {
   orderMove = function (u, cx, cy) {
     if (_passthru()) return R.orderMove(u, cx, cy);
     _q({ o: 'mv', id: u.id, cx, cy }); return true;
+  };
+  orderAttackMove = function (u, cx, cy) {
+    if (_passthru()) return R.orderAttackMove(u, cx, cy);
+    _q({ o: 'amv', id: u.id, cx, cy }); return true;
   };
   orderAttack = function (u, target, keepAnchor) {
     if (_passthru()) return R.orderAttack(u, target, keepAnchor);
