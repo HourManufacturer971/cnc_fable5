@@ -207,7 +207,8 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   as loads start evaporating), spreading chrysalite fields seeded by blossom
   trees, infantry take damage crossing fields. Harvesters work the fields
   near home first and trek farther only when the neighborhood runs dry,
-  aim for the richest pocket instead of the nearest crumb, spread across
+  aim for the richest pocket instead of the nearest crumb, commit to a
+  distant full field once the local one is down to scraps, spread across
   the field instead of queueing on one cell,
   shoulder idle friendlies off the dock, reroute to a sister refinery if
   theirs is walled off, and cry for help when attacked or stranded —
@@ -219,8 +220,11 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 - **Full roster** — Minigunner, Grenadier, Rocket Soldier, Flamethrower, Chem
   Warrior, Engineer (captures buildings), Commando; Scout Truck, Buggy, Recon Bike,
   APC (carries up to 5 infantry), Light/Medium/Behemoth/Flame/Stealth Tanks,
-  Artillery, Rocket Launcher, Harvester, MCV; Kestrel and Gunship with helipad
-  rearming; Serpent Order vehicles arrive by cargo plane at the Airstrip. The Behemoth
+  Artillery, Rocket Launcher, Harvester, MCV; Kestrel and Gunship fly home to
+  rearm on their own after a strike (and resume the target if it still
+  stands), pads hand off automatically between airframes, and selected
+  aircraft show their remaining ammo as pips; Serpent Order vehicles arrive
+  by cargo plane at the Airstrip. The Behemoth
   Tank is visibly bigger than the rest and fires twin cannon shots.
 - **Defenses** — Guard Tower, Advanced Guard Tower, Gun Turret, SAM Site, and
   the Beam Spire with its charge-up laser; concrete walls place in
@@ -240,7 +244,9 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 - **Radar alerts** — attacks on your base or harvesters, stranded
   harvesters, and incoming superweapons ring the minimap and announce
   themselves; `Space` snaps the camera to the latest alert, and a pulsing
-  red reticle marks a superweapon's aim point for the final seconds
+  red reticle marks a superweapon's aim point for the final seconds. A
+  blinking **IDLE HARV** chip appears on the tab bar when your economy has
+  genuinely stalled — click it to jump through the idle harvesters
 - **Endgame hunt mode** — when an enemy is down to its last few buildings
   with no army left, a TARGETS REMAINING counter appears and the survivors
   blink on radar, so finishing the match never turns into a shroud-crawl

@@ -403,16 +403,15 @@ const AI = (function () {
       }
 
       // strike phase: once the group has closed up at the forward point (or
-      // the leash runs out), everyone attacks at once
+      // the leash runs out), everyone sweeps in as an ATTACK-MOVE onto the
+      // target — the wave fights through whatever stands in the way instead
+      // of tunnel-visioning one building while turrets shoot it in the back
       if (near >= alive.length * 0.6 || g.tick >= S.staging.launchAt) {
         let target = getEnt(S.staging.target);
         if (!target || target._dead) target = _nearestHumanTarget(g, { x: baseX, y: baseY });
         if (target) {
-          for (const u of alive) {
-            if (!orderAttack(u, target)) {
-              orderMove(u, worldToCell(_entXSafe(target)), worldToCell(_entYSafe(target)));
-            }
-          }
+          const tcx = worldToCell(_entXSafe(target)), tcy = worldToCell(_entYSafe(target));
+          for (const u of alive) orderAttackMove(u, tcx, tcy);
         }
         S.staging = null;
         // 2-3.2 min between launches at calm 1

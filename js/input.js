@@ -577,6 +577,7 @@ const Input = (function () {
       return;
     }
     if (hit.zone === 'tab-group') { _recallGroup(hit.n, shift); return; }
+    if (hit.zone === 'idle-harv') { _cycleIdleHarv(); return; }
     if (hit.zone === 'arrow') { _scrollStrip(hit.strip, hit.dir); return; }
     if (hit.zone === 'btn') {
       if (hit.which === 'repair') { _setMode(mode === 'repair' ? 'normal' : 'repair'); AUDIO.play('click'); }
@@ -818,6 +819,23 @@ const Input = (function () {
     for (let i = 0; i < batch; i++) {
       if (!Production.tryStart(p, hit.key)) break;
     }
+  }
+
+  // jump through the idle harvesters, one per click: select + center camera
+  function _cycleIdleHarv() {
+    const g = game;
+    const idle = [];
+    for (const id of g.human.unitIds) {
+      const u = g.units.get(id);
+      if (u && !u._dead && DATA.units[u.type].harvester && u.state === 'idle') idle.push(u);
+    }
+    if (!idle.length) { AUDIO.play('buzz'); return; }
+    g._idleHarvIx = ((g._idleHarvIx || 0) + 1) % idle.length;
+    const u = idle[g._idleHarvIx];
+    _select([u.id], false);
+    g.camera.x = clamp(u.x - C.VIEW_W / 2, 0, C.MAP_W * C.CELL - C.VIEW_W);
+    g.camera.y = clamp(u.y - C.VIEW_H / 2, 0, C.MAP_H * C.CELL - C.VIEW_H);
+    AUDIO.play('click');
   }
 
   function _rightClick() {

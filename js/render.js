@@ -68,6 +68,8 @@ const Render = (function () {
         const i = ((x - C.GROUP_X) / C.GROUP_SPACING) | 0;
         if (x - (C.GROUP_X + i * C.GROUP_SPACING) < C.GROUP_W) return { zone: 'tab-group', n: i + 1 };
       }
+      if (game && _idleHarvCount(game) > 0 &&
+          x >= C.VIEW_PW - 360 && x < C.VIEW_PW - 236) return { zone: 'idle-harv' };
       return { zone: 'tab' };
     }
     if (x < C.VIEW_PW) return { zone: 'viewport' };
@@ -265,6 +267,16 @@ const Render = (function () {
     ctx.fillRect(x, y, w, 8);
     ctx.fillStyle = _healthColor(frac);
     ctx.fillRect(x + 2, y + 2, Math.max(2, Math.round((w - 4) * frac)), 4);
+  }
+
+  // idle own harvesters — a stalled economy the player should know about
+  function _idleHarvCount(g) {
+    let n = 0;
+    for (const id of g.human.unitIds) {
+      const u = g.units.get(id);
+      if (u && !u._dead && DATA.units[u.type].harvester && u.state === 'idle') n++;
+    }
+    return n;
   }
 
   // wrench blink over a vehicle the repair pad is healing
@@ -737,6 +749,17 @@ const Render = (function () {
             px += pw + gap;
           }
         }
+        // aircraft ammo pips: filled = a shot left before the rearm run
+        if (ud.air && ud.ammo) {
+          const n = ud.ammo;
+          const pw = Math.max(2, Math.min(6, Math.floor((cs - (n - 1)) / n)));
+          let px = x + cs / 2 - (n * pw + (n - 1)) / 2;
+          for (let i = 0; i < n; i++) {
+            ctx.fillStyle = i < e.ammo ? '#f8b830' : 'rgba(255,255,255,0.25)';
+            ctx.fillRect(px, y - 20, pw, 5);
+            px += pw + 1;
+          }
+        }
       } else {
         const x = X(e.cx * C.CELL), y = Y(e.cy * C.CELL);
         _drawBrackets(x, y, e.w * cs, e.h * cs);
@@ -854,6 +877,15 @@ const Render = (function () {
     }
     // storage cap shown beside the balance; red when the silos are full —
     // that's when harvester loads start evaporating
+    // idle harvester alert: only shows when the economy has actually stalled
+    // (harvesters idle only once every reachable field is gone or blocked);
+    // click it to jump to the next idle one
+    const idleHarv = _idleHarvCount(g);
+    if (idleHarv > 0 && ((g.tick >> 4) & 1) === 0) {
+      ctx.fillStyle = '#d8c020';
+      ctx.fillText('IDLE HARV: ' + idleHarv, C.VIEW_PW - 356, 8);
+    }
+
     const full = g.human.storage > 0 && g.human.credits >= g.human.storage - 1;
     ctx.fillStyle = full ? PAL.uiRed : PAL.uiGold;
     ctx.fillText('$ ' + creditsShown, C.VIEW_PW - 220, 8);

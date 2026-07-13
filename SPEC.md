@@ -148,6 +148,10 @@ crate when destroyed (see Crates).
   `dist² − (3x3 richness)/100 + 60·crowd`, where crowd counts other own harvesters whose
   current target sits within 3 cells — the fleet aims at fat pockets and spreads out
   instead of stacking on the same dying crumb (all sim-state reads, deterministic).
+  COMMITMENT (`_pickTibTarget`): when the best leashed cell's 3x3 pocket is under 400
+  (a dying field), an EMPTY harvester runs a richness-first sweep of the whole map
+  (`score = 0.1·dist² − rich`) and commits to any field ≥3× richer than the local scraps —
+  no more grinding 25-credit crumbs while a full field sits two screens away.
 - Dock etiquette (`_shoveIdle`): a returning harvester within 4 cells of its dock nudges
   FRIENDLY idle ground units off the dock cell and off its next path cell (orderMove to a
   free neighbor, never onto another dock). Enemy units are a legitimate blockade and stay.
@@ -275,7 +279,11 @@ crate when destroyed (see Crates).
   everyone into free nearby cells. A destroyed transport kills its cargo.
 - Aircraft (`orca`, `heli`): fly ignoring terrain/occupancy (state 'air'), have `ammo`
   (orca 6 rockets, heli 15 mg bursts, from DATA), fly to target, orbit-strafe firing until
-  ammo out, then auto-return to a free `hpad` to rearm (ammo refills over ~5s). Only
+  ammo out, then auto-return to a free `hpad` to rearm (ammo refills over ~5s) and RESUME
+  the old target if it still stands. Pad claims cycle: a rearmed bird lifts off and clears
+  the pad the moment another empty own airframe is waiting, and an empty bird with no free
+  pad re-asks every ~3s (a pad may free up or get built later) — a wing larger than its
+  pads still keeps flying. Selected aircraft show AMMO PIPS under the health bar. Only
   `antiAir` weapons can hit them. Drawn with drop-shadow, bob animation, above everything.
 - Stealth tank `stnk`: `cloaked=true` unless firing (decloak 45 ticks) or within 2 cells of
   enemy infantry/defense. Cloaked units invisible to enemy (AI ignores), drawn as shimmer
@@ -399,6 +407,10 @@ crate when destroyed (see Crates).
   (`g._fundsNags`), reset the moment a harvester delivers ≥1 credit.
 - HUD balance shows `$ N /storage` (suffix hidden until the first refinery); both turn red
   when credits ride the cap — the moment loads start evaporating.
+- IDLE HARV chip (tab bar, blinking): appears only when own harvesters are idle — which
+  only happens once every reachable field is gone or blocked, i.e. the economy has
+  actually stalled. Clicking it cycles through the idle harvesters (select + center).
+  Render/input only, per-client.
 - **Hunt mode** (`_huntCount`, render-only): enemy down to ≤3 non-wall buildings AND zero
   combat units → gold `TARGETS REMAINING: n` chip (playing state, takes precedence over
   the mission-objective line) and the surviving enemy buildings AND units show on radar.
@@ -505,7 +517,9 @@ crate when destroyed (see Crates).
   repertoire widening with the wave count) and runs TWO-PHASE staging: gather 13-18 cells
   from the player's base on that bearing (leash 600 ticks), then advance AS A GROUP to a
   forward point 7-11 cells out, then strike together (60% closed up or +380 ticks) — no
-  dribbling in.
+  dribbling in. The strike is an ATTACK-MOVE sweep onto the target cell, so the wave
+  fights through whatever it meets instead of tunnel-visioning one building while
+  turrets shoot it in the back.
   Defend: units near base intercept intruders. If AI has no conyard but has money+weap →
   build mcv? (skip — too fancy; just keep fighting).
 - AI places buildings on a spiral search around its conyard obeying `Production.canPlace`.

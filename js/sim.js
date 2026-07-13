@@ -624,7 +624,7 @@ function _exploredFor(g, side) {
   return g.players[side].isAI ? null : g.shroud;
 }
 
-function _findTibCell(u, radius, anchor) {
+function _findTibCell(u, radius, anchor, richFirst) {
   const g = game;
   const cx = worldToCell(u.x), cy = worldToCell(u.y);
   const expl = _exploredFor(g, u.owner);
@@ -667,11 +667,28 @@ function _findTibCell(u, radius, anchor) {
         const ax = x - rv.cx, ay = y - rv.cy;
         if (ax * ax + ay * ay <= 9) crowd++;
       }
-      const score = dd - rich / 100 + crowd * 60;
-      if (score < bestScore) { bestScore = score; best = { cx: x, cy: y }; }
+      // normal runs are distance-first (rich pocket as tiebreak); the
+      // COMMIT decision is richness-first (distance as tiebreak) — it asks
+      // "where is the best field", not "what is underfoot"
+      const score = richFirst
+        ? dd * 0.1 - rich + crowd * 60
+        : dd - rich / 100 + crowd * 60;
+      if (score < bestScore) { bestScore = score; best = { cx: x, cy: y, rich }; }
     }
   }
   return best;
+}
+
+// One decision for "where should this harvester mine": stay leashed to the
+// refinery while the neighborhood still has meat on it, but once the local
+// best is a dying crumb-patch, COMMIT to the richest far field instead of
+// grinding out 25-credit scraps forever.
+function _pickTibTarget(u, homeDock) {
+  const local = _findTibCell(u, 40, homeDock);
+  if (local && local.rich >= 400) return local;          // still a real field
+  const far = _findTibCell(u, 64, null, true);           // richness-first sweep
+  if (far && (!local || far.rich >= (local.rich || 0) * 3)) return far;
+  return local || far;
 }
 
 function _nearestProc(u) {
@@ -742,26 +759,25 @@ function _harvester(u, d) {
     const home = _nearestProc(u);
     const homeDock = home ? _procDock(home) : null;
     let tries = 8;
-    // the leash is a preference, not a law: pass 1 stays near home; pass 2
-    // unleashes — an EMPTY harvester treks the whole map rather than idling
-    // the economy to death, while a PARTIAL one only tops off close by, so
-    // a harvester that trekked to a far field keeps eating it until full
-    // instead of round-tripping home after every single cell
-    for (const anchor of [homeDock, null]) {
-      for (const r of (anchor ? [3, 6, 10, 16, 24, 40] : (u.tib === 0 ? [64] : [10]))) {
-        let c;
-        while ((c = _findTibCell(u, r, anchor))) {
-          const path = findPath(u, c.cx, c.cy);
-          if (path.length) {
-            u.path = path;
-            u.pathi = 0;
-            return;
-          }
-          if (g.tick - (u._noReachAt || -1e9) > 900) { u._noReach = new Set(); u._noReachAt = g.tick; }
-          u._noReach.add(cellIdx(c.cx, c.cy));
-          if (--tries <= 0) return;  // resume next tick, blacklist kept
-        }
+    // EMPTY harvesters make the full stay-or-commit decision (leash while
+    // the local field is real, trek when it's crumbs — _pickTibTarget);
+    // PARTIAL ones stay leashed or top off close to where they stand, so a
+    // far-field trekker keeps eating until full instead of round-tripping
+    // home after every single cell
+    const pick = () => u.tib === 0
+      ? _pickTibTarget(u, homeDock)
+      : (_findTibCell(u, 40, homeDock) || _findTibCell(u, 10, null));
+    let c;
+    while ((c = pick())) {
+      const path = findPath(u, c.cx, c.cy);
+      if (path.length) {
+        u.path = path;
+        u.pathi = 0;
+        return;
       }
+      if (g.tick - (u._noReachAt || -1e9) > 900) { u._noReach = new Set(); u._noReachAt = g.tick; }
+      u._noReach.add(cellIdx(c.cx, c.cy));
+      if (--tries <= 0) return;  // resume next tick, blacklist kept
     }
     if (u.tib > 0) { u.state = 'return'; u.path = []; }
     else { u.state = 'idle'; _clearDock(u); }
@@ -889,8 +905,7 @@ function _harvester(u, d) {
     // auto-seek would drag the patient off the table half-repaired
     if (u.hp < u.maxHp && _onRepairPad(g, u)) return;
     const home = _nearestProc(u);
-    const c = _findTibCell(u, 40, home ? _procDock(home) : null) ||
-              _findTibCell(u, 64, null);
+    const c = _pickTibTarget(u, home ? _procDock(home) : null);
     if (c) orderHarvest(u, c.cx, c.cy);
     else _clearDock(u);
   }
@@ -1034,11 +1049,26 @@ function _aircraft(u, d) {
     // rearmed: resume attack if the old target is alive
     const t = u._resume ? getEnt(u._resume) : null;
     u._resume = 0;
-    if (t && !t._dead) orderAttack(u, t);
-    else u.state = 'idle';
+    if (t && !t._dead) { orderAttack(u, t); return; }   // orderAttack frees the pad
+    // an empty airframe circling for this pump? lift off and clear the pad —
+    // otherwise a parked full bird starves the rest of the wing forever
+    let waiting = false;
+    for (const id of g.players[u.owner].unitIds) {
+      const o = g.units.get(id);
+      if (o && !o._dead && o.id !== u.id && DATA.units[o.type].air && o.ammo <= 0) { waiting = true; break; }
+    }
+    if (waiting) {
+      pad.claimedBy = 0;
+      u.padId = 0;
+      orderMove(u, clamp(pad.cx + 3, 0, C.MAP_W - 1), clamp(pad.cy + 2, 0, C.MAP_H - 1));
+    } else {
+      u.state = 'idle';   // stay parked, keep the claim: it's OUR pad slot
+    }
     return;
   }
-  // idle: hover (bob handled by render via anim)
+  // idle: hover (bob handled by render via anim) — but an empty airframe
+  // keeps asking for a pad: one may free up or get built later
+  if (u.ammo <= 0 && (d.ammo || 0) > 0 && (g.tick + u.id) % 45 === 0) _goRearm(u, d);
 }
 
 function _goRearm(u, d) {
