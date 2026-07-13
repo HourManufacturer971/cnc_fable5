@@ -497,12 +497,20 @@ function _stepAlongPath(u, d) {
     u.pathi++;
     u._commit = -1;
     u.anim++;
-    if (u.pathi >= u.path.length) return 'arrived';
   } else {
     u.x += (nx - u.x) / dd * spd;
     u.y += (ny - u.y) / dd * spd;
     u.anim++;
   }
+  // dust kicked up by vehicles rolling over bare dirt (cosmetic;
+  // hash-timed off tick+id, never game.rng)
+  if (!d.infantry && !d.air && !u.cloaked && (g.tick + u.id) % 8 === 0 &&
+      g.terrain[cellIdx(curCx, curCy)] === 1) {
+    const a = angleOf16(u.facing);
+    spawnEffect('dust', u.x - Math.sin(a) * 8, u.y + Math.cos(a) * 8,
+      { ttl: 14, vx: -Math.sin(a) * 0.3, vy: Math.cos(a) * 0.3 });
+  }
+  if (u.pathi >= u.path.length) return 'arrived';
   return 'moving';
 }
 

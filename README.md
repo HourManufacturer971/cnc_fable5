@@ -201,7 +201,10 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   one); toggle with Music: ON/OFF in the options menu
 - **Feedback that feels good** — orders answer with collapsing green/red
   destination rings, hits flash white, harvest deliveries pop floating
-  credit counters, and wounded buildings and vehicles trail smoke
+  credit counters, and wounded buildings and vehicles trail smoke. Units
+  cast soft contact shadows, vehicles kick up dust on dirt roads, big
+  explosions throw a shockwave ring and tumbling debris, sunlight glints
+  off the river, and the crystal fields sparkle
 - **Chrysalite economy** — harvesters (700 credits a load), refineries with
   docking, silos, storage caps (the HUD balance shows yours, and turns red
   as loads start evaporating), spreading chrysalite fields seeded by blossom

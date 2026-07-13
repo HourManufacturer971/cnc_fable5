@@ -386,6 +386,16 @@ crate when destroyed (see Crates).
 - Depth: buildings and ground units draw in ONE painter's pass sorted by baseline
   (building = footprint bottom edge, unit = feet at y + CELL/2), so units pass BEHIND
   tall structures and in front of their feet. Air units, bullets, effects stay on top.
+- Contact shadows: infantry and ground vehicles cast a soft SE-offset ellipse (skipped
+  while cloaked); air keeps its separate drop-shadow + bob.
+- Vehicles rolling over bare dirt kick up drifting dust puffs (spawned in
+  `_stepAlongPath` every 8 ticks off tick+id hash — cosmetic, never `game.rng`).
+- Big explosions (`expL`) get a shockwave ring (first 8 ticks) and six gravity-drooping
+  debris fragments on top of the sprite frames (`_bigBoomExtras`, deterministic off
+  position — no rng, no state).
+- Living ground: phase-quantized hash glitter (`_gl`, render-only) puts brief sun glints
+  on open water and sparkles on chrysalite cells in view. No sim reads beyond
+  terrain/tib; shroud draws over it as usual.
 - Pad repairs blink a small gold wrench over the vehicle (`u._fixT`, `_drawWrench`).
 - `applyDamage` stamps `target._hitT = game.tick`; render re-draws the sprite twice with
   `globalCompositeOperation='lighter'` for 2 ticks — a white hit-flash (units, buildings).

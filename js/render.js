@@ -258,6 +258,13 @@ const Render = (function () {
 
   // ---- entity drawing -----------------------------------------------------------------
 
+  // tiny stateless hash in [0,1) for per-frame glitter effects
+  function _gl(a, b, c) {
+    let h = (a * 374761393 + b * 668265263 + c * 2246822519) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  }
+
   function _healthColor(frac) {
     return frac > 2 / 3 ? PAL.uiGreen : frac > 1 / 3 ? '#d8c020' : PAL.uiRed;
   }
@@ -411,6 +418,12 @@ const Render = (function () {
       if (!img || !img.width) img = set.stand[f8];
       const ix = Math.round(X(u.x) - img.width * sca(img) / 2);
       const iy = Math.round(Y(u.y) - img.height * sca(img) / 2);
+      if (!u.cloaked) {   // soft contact shadow grounds the sprite
+        ctx.fillStyle = 'rgba(10,12,8,0.20)';
+        ctx.beginPath();
+        ctx.ellipse(X(u.x) + 1, Y(u.y) + 8, 6, 2.4, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
       drawSpr(img, ix, iy);
       if (u._hitT !== undefined && g.tick - u._hitT < 2) _hitFlash(() => drawSpr(img, ix, iy));
       _drawRank(u, X, Y);
@@ -432,6 +445,14 @@ const Render = (function () {
       ctx.ellipse(X(u.x), Y(u.y) + 24, 16, 6, 0, 0, Math.PI * 2);
       ctx.fill();
       y -= 16 + Math.round(Math.sin(u.anim / 6) * 4);
+    } else if (!u.cloaked) {
+      // ground vehicles get a soft contact shadow, offset to the SE like
+      // the buildings' cast shadows
+      const rx = body.width * s * 0.34;
+      ctx.fillStyle = 'rgba(10,12,8,0.22)';
+      ctx.beginPath();
+      ctx.ellipse(X(u.x) + 2, Y(u.y) + body.height * s * 0.26, rx, rx * 0.34, 0, 0, Math.PI * 2);
+      ctx.fill();
     }
 
     const cloakAlpha = u.cloaked && u.owner === g.humanSide;
@@ -559,7 +580,19 @@ const Render = (function () {
         ctx.globalAlpha = 1;
         return;
       }
+      case 'dust': {
+        // drifting tan puff behind vehicles on dirt
+        const f = e.tick / (e.ttl || 14);
+        ctx.globalAlpha = 0.26 * (1 - f);
+        ctx.fillStyle = '#b39d72';
+        ctx.beginPath();
+        ctx.arc(X(e.x), Y(e.y), 3 + f * 7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        return;
+      }
       default: {
+        if (e.name === 'expL') _bigBoomExtras(e, X, Y);
         const frames = SPRITES.fx[e.name];
         if (!frames || !frames.length) return;
         const img = frames[Math.min(e.frame, frames.length - 1)];
@@ -567,6 +600,35 @@ const Render = (function () {
           Math.round(Y(e.y) - img.height * sca(img) / 2));
       }
     }
+  }
+
+  // big explosions get a shockwave ring and a handful of debris arcs on top
+  // of the sprite frames (deterministic off position+tick, no rng)
+  function _bigBoomExtras(e, X, Y) {
+    const t = e.tick;
+    const x = X(e.x), y = Y(e.y);
+    if (t < 8) {
+      ctx.globalAlpha = 0.5 * (1 - t / 8);
+      ctx.strokeStyle = '#ffe8c0';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(x, y, 8 + t * 7, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (t < 14) {
+      const seed = ((e.x * 7 + e.y * 13) | 0) % 97;
+      for (let i = 0; i < 6; i++) {
+        const h = Math.sin(seed + i * 37.7) * 0.5 + 0.5;
+        const a = (i / 6) * Math.PI * 2 + h * 1.2;
+        const sp = 2.6 + h * 2.2;
+        const dx = Math.sin(a) * sp * t;
+        const dy = -Math.cos(a) * sp * t * 0.6 + 0.22 * t * t;   // gravity droop
+        ctx.globalAlpha = 1 - t / 14;
+        ctx.fillStyle = i % 2 ? '#2a2620' : '#e8a040';
+        ctx.fillRect(x + dx - 1, y + dy - 1, 3, 3);
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 
   // ---- viewport ------------------------------------------------------------------------------
@@ -623,6 +685,38 @@ const Render = (function () {
         // per-cell jitter breaks the crystal clusters off the cell grid
         const tj = (cx * 0x9e37 ^ cy * 0x85eb) & 63;
         ctx.drawImage(timg, X(cx * C.CELL + (tj & 7) - 3), Y(cy * C.CELL + (tj >> 3) - 4), cs, cs);
+      }
+    }
+
+    // living ground: brief sun glints on open water, sparkles on crystal.
+    // Purely per-frame cosmetics off a phase-quantized hash — no state, no rng.
+    {
+      const ph = g.tick >> 2;
+      for (let cy = c0y; cy <= c1y; cy++) {
+        for (let cx = c0x; cx <= c1x; cx++) {
+          const i = cellIdx(cx, cy);
+          const water = g.terrain[i] === 3;
+          if (!water && g.tib[i] <= 0) continue;
+          const r = _gl(cx, cy, ph);
+          if (water) {
+            if (r > 0.09) continue;
+            const p = _gl(cx + 97, cy + 31, ph);
+            const px = X(cx * C.CELL + 3 + p * 15), py = Y(cy * C.CELL + 4 + (r * 160) % 15);
+            ctx.globalAlpha = 0.35;
+            ctx.fillStyle = '#d4ecff';
+            ctx.fillRect(px, py, 6, 2);
+            ctx.globalAlpha = 1;
+          } else {
+            if (r > 0.06) continue;
+            const p = _gl(cx + 53, cy + 71, ph);
+            const px = X(cx * C.CELL + 4 + p * 14), py = Y(cy * C.CELL + 4 + (r * 220) % 14);
+            ctx.globalAlpha = 0.6;
+            ctx.fillStyle = '#eaffea';
+            ctx.fillRect(px - 1, py, 5, 2);
+            ctx.fillRect(px + 1, py - 2, 2, 6);
+            ctx.globalAlpha = 1;
+          }
+        }
       }
     }
 
