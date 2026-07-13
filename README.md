@@ -82,6 +82,7 @@ so bandwidth is tiny. Notes:
 | Double-click | Select all visible units of that type |
 | Click selected MCV (or `D`) | Deploy into Construction Yard |
 | Select infantry, click a friendly APC | Board it (up to 5 passengers) |
+| Select vehicles, click your Repair Facility | Drive to the pad and repair (costs credits) |
 | Click the selected loaded APC (or `U`) | Unload its passengers |
 | Alt+1..9 (or Ctrl+1..9) | Assign control group — Alt is the reliable one; browsers steal Ctrl+1..8 for tab switching |
 | 1..9 | Recall group (double-tap to center camera, Shift adds the group to the selection) |
@@ -164,13 +165,19 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 
 ## What's simulated
 
-- **A painted world** — the ground is rendered per-pixel with world-space
-  noise, so grass, dirt, water and rock blend into each other with ragged
-  organic edges instead of tile seams; maps get a meandering river with
-  fordable crossings and a timber bridge, an animated waterfall at the
-  rocky rim, eroded mesa cliffs with wavy sun-caught lips, earthy strata,
-  gullies and talus fans, forests with closed canopies and clearings, and
-  scattered doodads (grass tufts, flowers, pebbles, cracks, bushes)
+- **A painted world with real geography** — every map grows from a hidden
+  elevation field, so the landscape makes sense: the river traces the
+  valley floor and bends around the highland the enemy base sits on, rock
+  crowns the ridgelines with talus skirts weathering to dirt below, dense
+  gallery woods hug the riverbanks while groves and meadows share the
+  lowlands, ponds pool in genuine depressions, chrysalite collects in the
+  valley bottoms, and worn roads run from the village to the ford. The
+  ground itself is rendered per-pixel with world-space noise — grass,
+  dirt, water and rock blend with ragged organic edges instead of tile
+  seams — plus fordable crossings, a timber bridge, an animated waterfall
+  at the rocky rim, eroded mesa cliffs, and scattered doodads. Buildings
+  and vehicles draw in true depth order, so a tank rolling behind a guard
+  tower disappears behind it instead of driving over its roof
 - **P2P multiplayer** — 1v1 deterministic-lockstep netcode over a WebRTC data
   channel with copy-paste matchmaking codes: serverless, accountless, and
   checksummed against desyncs (see the Multiplayer section above)
@@ -181,9 +188,14 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   hunt down the enemy economy, and crack a fortress; each tunes the AI's
   aggression and war chest, wins unlock the next, and an objective chip on
   the HUD tracks live progress
-- **A civilian hamlet** — farmhouse, cottages and a barn with villagers who
-  wander about and flee gunfire; nobody auto-targets them (except the
-  fleshlings), but Ctrl+click will
+- **A civilian hamlet** — farmhouse, cottages, a barn and a little chapel,
+  with villagers who wander about and flee gunfire; nobody auto-targets
+  them (except the fleshlings), but Ctrl+click will. Rumor says the
+  chapel's collection box survives its demolition — a guaranteed cash
+  crate in the rubble, if your conscience allows
+- **Vehicle repairs** — click your Repair Facility with vehicles selected
+  and they roll over and park; a wrench blinks while the pad patches them
+  up at the same credits-per-point rate building repairs cost
 - **Original soundtrack** — eight synthesized tracks in the dark mid-90s RTS
   style, sequenced live with WebAudio (each mission opens on a different
   one); toggle with Music: ON/OFF in the options menu
@@ -195,6 +207,8 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   as loads start evaporating), spreading chrysalite fields seeded by blossom
   trees, infantry take damage crossing fields. Harvesters work the fields
   near home first and trek farther only when the neighborhood runs dry,
+  aim for the richest pocket instead of the nearest crumb, spread across
+  the field instead of queueing on one cell,
   shoulder idle friendlies off the dock, reroute to a sister refinery if
   theirs is walled off, and cry for help when attacked or stranded —
   and you can't accidentally wall off your own dock: placement refuses it

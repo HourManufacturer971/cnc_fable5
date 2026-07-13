@@ -673,6 +673,26 @@ const Input = (function () {
         AUDIO.play(unloadCargo(ent) ? 'click' : 'buzz');
         return;
       }
+      // repair facility: send the selected vehicles to the pad — the sim
+      // heals whoever parks on/beside it
+      if (ent.kind === 'building' && DATA.buildings[ent.type].repairPad &&
+          ent.buildProgress >= 1) {
+        const vehs = ownSel.filter(u => {
+          const d = DATA.units[u.type];
+          return u.kind === 'unit' && !d.infantry && !d.air;
+        });
+        if (vehs.length) {
+          const spots = _formationCells(ent.cx + ((ent.w / 2) | 0), ent.cy + ent.h, vehs.length);
+          vehs.forEach((u, i) => {
+            const s = spots[Math.min(i, spots.length - 1)];
+            orderMove(u, s.cx, s.cy);
+          });
+          AUDIO.ack('move', _selClass());
+          AUDIO.eva('repairing');
+          spawnEffect('moveMark', (ent.cx + ent.w / 2) * C.CELL, (ent.cy + ent.h) * C.CELL, { ttl: 14 });
+          return;
+        }
+      }
       // engineer heal own damaged building
       if (ent.kind === 'building' && ownSel.some(u => DATA.units[u.type].engineer) && ent.hp < ent.maxHp) {
         for (const u of ownSel) if (DATA.units[u.type].engineer) orderEnter(u, ent);
@@ -1020,6 +1040,10 @@ const Input = (function () {
         return 'deploy';
       }
       if (ent.kind === 'building' && sel.some(u => DATA.units[u.type].engineer) && ent.hp < ent.maxHp) return 'enter';
+      if (ent.kind === 'building' && DATA.buildings[ent.type].repairPad && ent.buildProgress >= 1 &&
+          sel.some(u => { const d = DATA.units[u.type]; return u.kind === 'unit' && !d.infantry && !d.air; })) {
+        return 'repair';
+      }
       if (ent.kind === 'unit' && DATA.units[ent.type].transport && sel.length &&
           sel.every(u => DATA.units[u.type].infantry) && !sel.some(u => u.id === ent.id)) return 'enter';
       return 'select';

@@ -1896,6 +1896,27 @@
       VP(q, 26, 11, 4, 9, '#6e6a60'); VP(q, 26, 11, 4, 1, '#8a867c');
       VP(q, 15, 31, 5, 8, '#3c5232'); VP(q, 16, 32, 3, 6, '#4c6840'); // door
       VP(q, 24, 31, 5, 4, '#31414f'); VP(q, 24, 31, 2, 2, '#88a8c0'); // window
+    } else if (kind === 'chur') {
+      // chapel: whitewashed nave, slate roof, bell tower with a gold cross
+      VP(q, 16, 25, 26, 15, '#101008');                       // nave outline
+      VP(q, 17, 26, 24, 13, '#e2dccc');                       // whitewash
+      VP(q, 17, 36, 24, 3, '#b9b3a3');                        // footing
+      _roof(q, 17, 40, 23, 8, '#98a0b0', '#7a8292', '#565c68', '#aab2c0');
+      for (const wx of [21, 29]) {                            // arched windows
+        VP(q, wx, 29, 4, 7, '#31414f');
+        VP(q, wx + 1, 28, 2, 1, '#31414f');
+        VP(q, wx, 29, 1, 2, '#88a8c0');
+      }
+      VP(q, 7, 10, 11, 30, '#101008');                        // tower outline
+      VP(q, 8, 11, 9, 28, '#d8d2c2');                         // tower body
+      VP(q, 8, 11, 9, 2, '#eae4d4');
+      VP(q, 10, 15, 5, 6, '#31414f');                         // belfry louvre
+      VP(q, 10, 15, 5, 1, '#20303c');
+      VP(q, 10, 31, 5, 8, '#5a4530');                         // door
+      VP(q, 11, 32, 3, 7, '#6e563c');
+      for (let i = 0; i < 5; i++) VP(q, 8 + i, 10 - i, 9 - i * 2, 1, i < 2 ? '#6f7787' : '#565c68'); // spire
+      VP(q, 12, 1, 1, 5, '#e8c84c');                          // cross
+      VP(q, 11, 2, 3, 1, '#e8c84c');
     } else {
       // barn: oxblood timber, grey roof, big X-braced door
       VP(q, 4, 22, 38, 18, '#101008');
@@ -1921,7 +1942,7 @@
     return c;
   }
 
-  for (const key of ['vil1', 'vil2', 'vil3']) {
+  for (const key of ['vil1', 'vil2', 'vil3', 'chur']) {
     const entry = { normal: [_houseFrame(key, false)], damaged: [_houseFrame(key, true)] };
     SPRITES.buildings[key] = { civ: entry, gdi: entry, nod: entry };
   }

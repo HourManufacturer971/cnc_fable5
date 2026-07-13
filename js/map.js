@@ -54,27 +54,127 @@ const MAPGEN = (function () {
     return v / tot;
   }
 
-  // ---- feature painters ------------------------------------------------------
+  // ---- geography -------------------------------------------------------------
+  // A low-frequency ELEVATION field is the spine of the whole layout: the
+  // river follows its valley, rock crowns its ridges, dirt bakes on its dry
+  // flats, forests hug its water and lowlands. Features agree with each
+  // other because they all read the same landform.
 
-  // Short blobby dirt trail via a random walk with a 3x3 brush.
-  function dirtWalk(g, rng) {
+  function buildElevation(hseed) {
     const W = C.MAP_W, H = C.MAP_H;
-    let x = 2 + ((rng() * (W - 4)) | 0);
-    let y = 2 + ((rng() * (H - 4)) | 0);
-    const len = 18 + ((rng() * 26) | 0);
-    for (let i = 0; i < len; i++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const px = x + dx, py = y + dy;
-          if (!inMap(px, py)) continue;
-          const idx = cellIdx(px, py);
+    const elev = new Float32Array(W * H);
+    for (let cy = 0; cy < H; cy++) {
+      for (let cx = 0; cx < W; cx++) {
+        let e = fbm(cx, cy, 26, 4, hseed ^ 0x9e3779b9);
+        const de = Math.min(cx, cy, W - 1 - cx, H - 1 - cy);
+        if (de < 9) e += (9 - de) * 0.024;   // land climbs toward the rocky rim
+        elev[cellIdx(cx, cy)] = e;
+      }
+    }
+    return elev;
+  }
+
+  // 4-connected distance-to-water, capped at 7 (the "moisture" everything
+  // vegetal reads). 255 = bone dry.
+  function waterDist(g) {
+    const W = C.MAP_W, H = C.MAP_H, n = W * H;
+    const d = new Uint8Array(n).fill(255);
+    const q = new Int32Array(n);
+    let head = 0, tail = 0;
+    for (let i = 0; i < n; i++) if (g.terrain[i] === T_WATER) { d[i] = 0; q[tail++] = i; }
+    while (head < tail) {
+      const cur = q[head++];
+      const dist = d[cur];
+      if (dist >= 7) continue;
+      const cx = cur % W, cy = (cur / W) | 0;
+      if (cx > 0 && d[cur - 1] > dist + 1) { d[cur - 1] = dist + 1; q[tail++] = cur - 1; }
+      if (cx < W - 1 && d[cur + 1] > dist + 1) { d[cur + 1] = dist + 1; q[tail++] = cur + 1; }
+      if (cy > 0 && d[cur - W] > dist + 1) { d[cur - W] = dist + 1; q[tail++] = cur - W; }
+      if (cy < H - 1 && d[cur + W] > dist + 1) { d[cur + W] = dist + 1; q[tail++] = cur + W; }
+    }
+    return d;
+  }
+
+  // Rock crowns the high ground: everything above the ~93rd elevation
+  // percentile, broken up by detail noise so ridges read as ranges with
+  // saddles instead of solid slabs.
+  function ridges(g, elev, hseed) {
+    const W = C.MAP_W, H = C.MAP_H;
+    const vals = Array.from(elev).sort((a, b) => a - b);
+    const cut = vals[(vals.length * 0.93) | 0];
+    for (let cy = 1; cy < H - 1; cy++) {
+      for (let cx = 1; cx < W - 1; cx++) {
+        const i = cellIdx(cx, cy);
+        if (g.terrain[i] !== T_GRASS && g.terrain[i] !== T_DIRT) continue;
+        if (elev[i] > cut && fbm(cx, cy, 6, 2, hseed ^ 0x51ab) > 0.34) g.terrain[i] = T_ROCK;
+      }
+    }
+    return { cut, dry: vals[(vals.length * 0.72) | 0] };
+  }
+
+  // Dirt where the land is high and far from water (sun-baked flats), plus
+  // weathered talus skirts directly beneath rock faces.
+  function dryGround(g, elev, wd, dryCut, hseed) {
+    const W = C.MAP_W, H = C.MAP_H;
+    for (let cy = 1; cy < H - 1; cy++) {
+      for (let cx = 1; cx < W - 1; cx++) {
+        const i = cellIdx(cx, cy);
+        if (g.terrain[i] !== T_GRASS) continue;
+        if (elev[i] > dryCut && wd[i] > 5 && fbm(cx, cy, 11, 2, hseed ^ 0x2c9f) > 0.47) {
+          g.terrain[i] = T_DIRT;
+          continue;
+        }
+        // talus: ground at the foot of rock weathers to dirt
+        let rock = false;
+        for (let dy = -1; dy <= 1 && !rock; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (g.terrain[cellIdx(cx + dx, cy + dy)] === T_ROCK) { rock = true; break; }
+          }
+        }
+        if (rock && hash2(cx, cy, hseed ^ 0x7e1d) < 0.6) g.terrain[i] = T_DIRT;
+      }
+    }
+  }
+
+  // Forests where trees actually grow: dense gallery woods along the water,
+  // groves in the moist lowlands, scattered stands on the dry heights.
+  function woods(g, elev, wd, medE, hseed) {
+    const W = C.MAP_W, H = C.MAP_H;
+    for (let cy = 1; cy < H - 1; cy++) {
+      for (let cx = 1; cx < W - 1; cx++) {
+        const i = cellIdx(cx, cy);
+        if (g.terrain[i] !== T_GRASS && g.terrain[i] !== T_DIRT) continue;
+        const f = fbm(cx, cy, 10, 3, hseed ^ 0x77aa);
+        const near = wd[i] >= 1 && wd[i] <= 4;        // banks, not the waterline cell itself
+        // broad meadow mask keeps the lowlands from becoming one mega-forest:
+        // groves live only where the range-scale noise allows them
+        const meadow = fbm(cx, cy, 23, 2, hseed ^ 0x3d2c) < 0.40;
+        const cut = near ? 0.58 : (elev[i] < medE && !meadow ? 0.66 : 0.74);
+        if (f > cut) g.terrain[i] = T_TREE;
+      }
+    }
+  }
+
+  // A worn dirt road: straight-ish 2-wide track that only marks open grass —
+  // it visually stops at water (the ford/bridge carries it) and at obstacles.
+  function road(g, ax, ay, bx, by) {
+    const steps = Math.max(1, Math.ceil(distC(ax, ay, bx, by)) * 2);
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const px = Math.round(ax + (bx - ax) * t);
+      const py = Math.round(ay + (by - ay) * t);
+      for (let dy = 0; dy <= 1; dy++) {
+        for (let dx = 0; dx <= 1; dx++) {
+          const x = px + dx, y = py + dy;
+          if (x < 1 || y < 1 || x >= C.MAP_W - 1 || y >= C.MAP_H - 1) continue;
+          const idx = cellIdx(x, y);
           if (g.terrain[idx] === T_GRASS) g.terrain[idx] = T_DIRT;
         }
       }
-      x = clamp(x + (((rng() * 3) | 0) - 1), 1, W - 2);
-      y = clamp(y + (((rng() * 3) | 0) - 1), 1, H - 2);
     }
   }
+
+  // ---- feature painters ------------------------------------------------------
 
   // Roundish blob of terrain id `tid` centered on (cx,cy) with radius ~r.
   // Only converts open ground (grass/dirt), so features never eat each other.
@@ -88,23 +188,6 @@ const MAPGEN = (function () {
         if (d > r) continue;
         const idx = cellIdx(px, py);
         if (g.terrain[idx] === T_GRASS || g.terrain[idx] === T_DIRT) g.terrain[idx] = tid;
-      }
-    }
-  }
-
-  // Forest: ragged tree blob with interior clearings.
-  function forest(g, rng, cx, cy, r) {
-    const R = Math.ceil(r);
-    for (let dy = -R; dy <= R; dy++) {
-      for (let dx = -R; dx <= R; dx++) {
-        const px = cx + dx, py = cy + dy;
-        if (px < 1 || py < 1 || px >= C.MAP_W - 1 || py >= C.MAP_H - 1) continue;
-        const d = Math.sqrt(dx * dx + dy * dy) + rng() * 1.4;
-        if (d > r) continue;
-        const idx = cellIdx(px, py);
-        if ((g.terrain[idx] === T_GRASS || g.terrain[idx] === T_DIRT) && rng() < 0.8) {
-          g.terrain[idx] = T_TREE;
-        }
       }
     }
   }
@@ -127,28 +210,51 @@ const MAPGEN = (function () {
     }
   }
 
-  // Meandering west->east river across mid-map with two fords. One ford is
-  // pinned where the river crosses the straight line between the two starts,
-  // so the classic centre route always survives (and carveCorridor never has
-  // to slice an ugly straight canal through the water).
-  function river(g, rng, hs, as) {
+  // West->east river that FOLLOWS THE VALLEY: each column steps to the
+  // lowest-elevation cell ahead (with a straightness preference), so bends
+  // are long and geologically motivated instead of sine-wave wiggle. It
+  // widens downstream. Two fords; one is pinned where the river crosses the
+  // start<->start line so the classic centre route always survives.
+  function river(g, rng, hs, as, elev) {
     const W = C.MAP_W, H = C.MAP_H;
-    const y0 = 22 + rng() * 8;   // west entry 22..30
-    const y1 = 30 + rng() * 8;   // east exit 30..38
-    const ph = rng() * Math.PI * 2;
-    const amp = 2.5 + rng() * 2.5;
-
+    const yMin = 18, yMax = 44;          // the middle band, off both base plateaus
+    // base plateaus repel the channel: without this the path can hug a start
+    // and the safety guard below then censors those columns, visibly
+    // snapping the river in half
+    const startPen = (x, y2) => {
+      let p = 0;
+      for (const st of [hs, as]) {
+        const d = distC(x, y2, st.cx, st.cy);
+        if (d < 22) p += (22 - d) * 0.04;   // start turning away 8+ columns early
+        if (d < 14) p += 3;                 // hard wall: the safety guard censors these cells
+      }
+      return p;
+    };
+    // enter at the lowest point of the western edge of that band
+    let y = yMin, bestE = Infinity;
+    for (let yy = yMin; yy <= yMax; yy++) {
+      const e = elev[cellIdx(2, yy)] + startPen(2, yy);
+      if (e < bestE) { bestE = e; y = yy; }
+    }
     const yc = new Float32Array(W);
     const segX0 = Math.min(hs.cx, as.cx), segX1 = Math.max(hs.cx, as.cx);
     let fordX1 = (W / 2) | 0, best = 1e9;
     for (let x = 0; x < W; x++) {
-      yc[x] = y0 + (y1 - y0) * (x / (W - 1)) +
-              Math.sin(x * 0.15 + ph) * amp + Math.sin(x * 0.33 + ph * 1.9) * 1.4;
+      yc[x] = y;
       if (x >= segX0 && x <= segX1) {
         const t = (x - hs.cx) / ((as.cx - hs.cx) || 1);
         const sy = hs.cy + (as.cy - hs.cy) * t;
-        const d = Math.abs(yc[x] - sy);
+        const d = Math.abs(y - sy);
         if (d < best) { best = d; fordX1 = x; }
+      }
+      if (x < W - 1) {
+        let ny = y, be = Infinity;
+        for (const cand of [y - 1, y, y + 1]) {
+          if (cand < yMin || cand > yMax) continue;
+          const e = elev[cellIdx(x + 1, cand)] + Math.abs(cand - y) * 0.012 + startPen(x + 1, cand);
+          if (e < be) { be = e; ny = cand; }
+        }
+        y = ny;
       }
     }
     let fordX2 = fordX1 + (rng() < 0.5 ? -1 : 1) * (10 + ((rng() * 8) | 0));
@@ -156,13 +262,14 @@ const MAPGEN = (function () {
 
     for (let x = 1; x < W - 1; x++) {
       if (Math.abs(x - fordX1) <= 2 || Math.abs(x - fordX2) <= 2) continue; // fords
-      const hw = 1.2 + Math.sin(x * 0.23 + ph * 2.3) * 0.5 + rng() * 0.3;  // width wobble
+      // rivers gather water as they run: ~1 cell wide in the west, ~2.5 east
+      const hw = 1.0 + (x / W) * 1.1 + rng() * 0.3;
       for (let dy = -3; dy <= 3; dy++) {
-        const y = Math.round(yc[x]) + dy;
-        if (y < 1 || y >= H - 1) continue;
-        if (Math.abs(y - yc[x]) > hw) continue;
-        if (distC(x, y, hs.cx, hs.cy) < 13 || distC(x, y, as.cx, as.cy) < 13) continue;
-        const idx = cellIdx(x, y);
+        const yy = Math.round(yc[x]) + dy;
+        if (yy < 1 || yy >= H - 1) continue;
+        if (Math.abs(yy - yc[x]) > hw) continue;
+        if (distC(x, yy, hs.cx, hs.cy) < 13 || distC(x, yy, as.cx, as.cy) < 13) continue;
+        const idx = cellIdx(x, yy);
         if (g.terrain[idx] === T_GRASS || g.terrain[idx] === T_DIRT) g.terrain[idx] = T_WATER;
       }
     }
@@ -268,6 +375,20 @@ const MAPGEN = (function () {
   }
 
   // ---- constraint passes -----------------------------------------------------
+
+  // Fell only the TREES within `rad` of (cx,cy) — water and rock survive.
+  function clearTrees(g, cx, cy, rad) {
+    const R = Math.ceil(rad);
+    for (let dy = -R; dy <= R; dy++) {
+      for (let dx = -R; dx <= R; dx++) {
+        if (dx * dx + dy * dy > rad * rad) continue;
+        const px = cx + dx, py = cy + dy;
+        if (px < 1 || py < 1 || px >= C.MAP_W - 1 || py >= C.MAP_H - 1) continue;
+        const idx = cellIdx(px, py);
+        if (g.terrain[idx] === T_TREE) g.terrain[idx] = T_GRASS;
+      }
+    }
+  }
 
   // Reset any impassable terrain within `rad` (euclidean) of (cx,cy) to grass.
   // Never touches the 1-cell border ring.
@@ -443,54 +564,78 @@ const MAPGEN = (function () {
     g.startPos = { human: hs, ai: as };
     const starts = [hs, as];
 
-    // --- dirt: broad noise regions + a few short worn trails ------------------
-    for (let cy = 1; cy < H - 1; cy++) {
-      for (let cx = 1; cx < W - 1; cx++) {
-        if (fbm(cx, cy, 15, 3, hseed) > 0.565) g.terrain[cellIdx(cx, cy)] = T_DIRT;
-      }
-    }
-    const walks = 2 + ((rng() * 2) | 0); // 2..3
-    for (let i = 0; i < walks; i++) dirtWalk(g, rng);
+    // --- the landform everything else reads ------------------------------------
+    const elev = buildElevation(hseed);
 
-    // --- river (most seeds) or extra ponds -------------------------------------
+    // --- river in the valley (most seeds) ---------------------------------------
     g.decor = { bridge: null, waterfall: null, village: null };
     const hasRiver = rng() < 0.62;
     let riv = null;
     if (hasRiver) {
-      riv = river(g, rng, hs, as);
+      riv = river(g, rng, hs, as, elev);
       g.decor.bridge = placeBridge(g, rng, riv);
     }
 
-    // --- water ponds ------------------------------------------------------------
-    const ponds = (hasRiver ? 1 : 3) + ((rng() * 2) | 0);
-    for (let i = 0; i < ponds; i++) {
-      const p = pickCenter(rng, starts, 15);
-      blob(g, rng, p.x, p.y, 1.8 + rng() * 1.8, T_WATER);
+    // --- ponds pool in genuine depressions ---------------------------------------
+    {
+      const want = (hasRiver ? 1 : 3) + ((rng() * 2) | 0);
+      const cands = [];
+      for (let cy = 4; cy < H - 4; cy++) {
+        for (let cx = 4; cx < W - 4; cx++) {
+          const i = cellIdx(cx, cy);
+          if (g.terrain[i] !== T_GRASS && g.terrain[i] !== T_DIRT) continue;
+          if (distC(cx, cy, hs.cx, hs.cy) < 15 || distC(cx, cy, as.cx, as.cy) < 15) continue;
+          const e = elev[i];
+          let minima = true;
+          for (let dy = -2; dy <= 2 && minima; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+              if (!dx && !dy) continue;
+              if (elev[cellIdx(cx + dx, cy + dy)] < e) { minima = false; break; }
+            }
+          }
+          if (minima) cands.push({ cx, cy, e });
+        }
+      }
+      cands.sort((a, b) => a.e - b.e);
+      for (let i = 0; i < Math.min(want, cands.length); i++) {
+        blob(g, rng, cands[i].cx, cands[i].cy, 1.6 + rng() * 1.6, T_WATER);
+      }
     }
 
-    // --- rock outcrops: 4-6 roundish blobs --------------------------------------
-    const rocks = 4 + ((rng() * 3) | 0); // 4..6
-    for (let i = 0; i < rocks; i++) {
-      const p = pickCenter(rng, starts, 14);
-      blob(g, rng, p.x, p.y, 2 + rng() * 2.5, T_ROCK);
-    }
+    // --- rock ridges on the high ground, dirt on the dry flats and talus ---------
+    const cuts = ridges(g, elev, hseed);
+    const wd = waterDist(g);
+    dryGround(g, elev, wd, cuts.dry, hseed);
 
-    // --- woods: big forests with clearings, small clumps, lone trees ------------
-    const forests = 3 + ((rng() * 2) | 0); // 3..4
-    for (let i = 0; i < forests; i++) {
-      const p = pickCenter(rng, starts, 15);
-      forest(g, rng, p.x, p.y, 3 + rng() * 2);
+    // --- woods follow the moisture -----------------------------------------------
+    {
+      const vals = Array.from(elev).sort((a, b) => a - b);
+      woods(g, elev, wd, vals[(vals.length / 2) | 0], hseed);
     }
-    const clumps = 5 + ((rng() * 4) | 0); // 5..8
+    // a few free-standing clumps and lone trees for texture
+    const clumps = 3 + ((rng() * 3) | 0); // 3..5
     for (let i = 0; i < clumps; i++) {
       const p = pickCenter(rng, starts, 14);
       treeClump(g, rng, p.x, p.y);
     }
-    const singles = 8 + ((rng() * 7) | 0); // 8..14
+    const singles = 6 + ((rng() * 5) | 0); // 6..10
     for (let i = 0; i < singles; i++) {
       const p = pickCenter(rng, starts, 12);
       const idx = cellIdx(p.x, p.y);
       if (g.terrain[idx] === T_GRASS || g.terrain[idx] === T_DIRT) g.terrain[idx] = T_TREE;
+    }
+
+    // gallery woods must never seal the crossings: fell the trees at the
+    // ford mouths and bridge ends (only trees — the banks stay banks)
+    if (riv) {
+      for (const fx of [riv.fordX1, riv.fordX2]) {
+        clearTrees(g, fx, Math.round(riv.yc[fx]), 3.2);
+      }
+      if (g.decor.bridge && g.decor.bridge.length) {
+        const bTop = g.decor.bridge[0], bBot = g.decor.bridge[g.decor.bridge.length - 1];
+        clearTrees(g, bTop.cx, bTop.cy - 1, 2.2);
+        clearTrees(g, bBot.cx, bBot.cy + 1, 2.2);
+      }
     }
 
     // --- ragged rocky rim ---------------------------------------------------------
@@ -560,23 +705,28 @@ const MAPGEN = (function () {
         placeField(g, rng, fx, fy, count, starts, reach);
       }
     }
-    // 2-3 medium fields around mid-map, spread apart.
+    // 2-3 medium fields around mid-map, spread apart — chrysalite pools in
+    // the valley floors, so of the valid spots we take the lowest-lying one
     const fieldCenters = [];
     const mids = 2 + ((rng() * 2) | 0); // 2..3
     for (let i = 0; i < mids; i++) {
-      let mx = 32, my = 32, ok = false;
-      for (let a = 0; a < 40 && !ok; a++) {
-        mx = 32 + ((rng() * 25) | 0) - 12;
-        my = 32 + ((rng() * 25) | 0) - 12;
-        ok = distC(mx, my, hs.cx, hs.cy) >= 15 &&
-             distC(mx, my, as.cx, as.cy) >= 15;
+      let bestC = null;
+      for (let a = 0; a < 40; a++) {
+        const mx = 32 + ((rng() * 25) | 0) - 12;
+        const my = 32 + ((rng() * 25) | 0) - 12;
+        let ok = distC(mx, my, hs.cx, hs.cy) >= 15 &&
+                 distC(mx, my, as.cx, as.cy) >= 15;
         for (const fc of fieldCenters) {
           if (distC(mx, my, fc.x, fc.y) < 10) { ok = false; break; }
         }
+        if (!ok) continue;
+        const e = elev[cellIdx(mx, my)];
+        if (!bestC || e < bestC.e) bestC = { x: mx, y: my, e };
       }
-      fieldCenters.push({ x: mx, y: my });
+      if (!bestC) bestC = { x: 32, y: 32, e: 0 };
+      fieldCenters.push(bestC);
       const count = 50 + ((rng() * 31) | 0); // 50..80
-      placeField(g, rng, mx, my, count, starts, reach);
+      placeField(g, rng, bestC.x, bestC.y, count, starts, reach);
     }
 
     // guaranteed tiberium-free route between the bases (mirrors the always-
@@ -648,6 +798,7 @@ const MAPGEN = (function () {
         g.decor.village = {
           houses: [
             { type: 'vil1', cx: vx, cy: vy },
+            { type: 'chur', cx: vx + 3, cy: vy },     // chapel — rumor says the collection box is full
             { type: 'vil2', cx: vx + 5, cy: vy + 1 },
             { type: 'vil3', cx: vx + 1, cy: vy + 4 },
             { type: 'vil2', cx: vx + 5, cy: vy + 4 },
@@ -658,6 +809,20 @@ const MAPGEN = (function () {
             { type: 'c1', cx: vx + 2, cy: vy + 3 },
           ],
         };
+        // villages exist for a reason: a worn road to the river crossing,
+        // and a lane out toward the nearest base
+        const vcx = vx + 4, vcy = vy + 3;
+        let crossing = null;
+        if (g.decor.bridge && g.decor.bridge.length) {
+          const mid = g.decor.bridge[(g.decor.bridge.length / 2) | 0];
+          crossing = { cx: mid.cx, cy: mid.cy };
+        } else if (riv) {
+          const fx = Math.abs(riv.fordX1 - vcx) <= Math.abs(riv.fordX2 - vcx) ? riv.fordX1 : riv.fordX2;
+          crossing = { cx: fx, cy: Math.round(riv.yc[fx]) };
+        }
+        if (crossing) road(g, vcx, vcy, crossing.cx, crossing.cy);
+        const nb = distC(vcx, vcy, hs.cx, hs.cy) <= distC(vcx, vcy, as.cx, as.cy) ? hs : as;
+        road(g, vcx, vcy, (vcx + nb.cx) >> 1, (vcy + nb.cy) >> 1);
       }
     }
 

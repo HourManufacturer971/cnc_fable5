@@ -103,6 +103,7 @@ DATA.buildings = {
   vil1: { name: 'Farmhouse', cost: 0, hp: 250, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true },
   vil2: { name: 'Cottage', cost: 0, hp: 200, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true },
   vil3: { name: 'Barn', cost: 0, hp: 300, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true },
+  chur: { name: 'Chapel', cost: 0, hp: 400, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true },
 };
 
 // sidebar ordering (filtered by prereqOk at runtime)

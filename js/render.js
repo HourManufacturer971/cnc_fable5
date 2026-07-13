@@ -267,6 +267,18 @@ const Render = (function () {
     ctx.fillRect(x + 2, y + 2, Math.max(2, Math.round((w - 4) * frac)), 4);
   }
 
+  // wrench blink over a vehicle the repair pad is healing
+  function _drawWrench(g, u, X, Y) {
+    if (u._fixT === undefined || g.tick - u._fixT >= 4 || ((g.tick >> 2) & 1)) return;
+    const x = Math.round(X(u.x)) - 14, y = Math.round(Y(u.y)) - 18;
+    ctx.strokeStyle = '#f8d848';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(x - 3, y + 3); ctx.lineTo(x + 4, y - 4); ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(x - 4, y + 4, 3, -0.6, 2.2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x + 5, y - 5, 3, 2.5, 5.3); ctx.stroke();
+  }
+
   // veterancy chevrons beside the unit (gold at elite)
   function _drawRank(u, X, Y) {
     const lvl = typeof vetLevel !== 'undefined' ? vetLevel(u) : 0;
@@ -390,6 +402,7 @@ const Render = (function () {
       drawSpr(img, ix, iy);
       if (u._hitT !== undefined && g.tick - u._hitT < 2) _hitFlash(() => drawSpr(img, ix, iy));
       _drawRank(u, X, Y);
+      _drawWrench(g, u, X, Y);
       return;
     }
 
@@ -427,6 +440,7 @@ const Render = (function () {
       });
     }
     _drawRank(u, X, Y);
+    _drawWrench(g, u, X, Y);
   }
 
   // ---- effects ---------------------------------------------------------------------------
@@ -613,9 +627,22 @@ const Render = (function () {
       }
     }
 
-    // buildings sorted by cy
-    const blds = Array.from(g.buildings.values()).sort((a, b) => a.cy - b.cy);
-    for (const b of blds) _drawBuilding(g, b, X, Y);
+    // buildings and ground units in ONE painter's pass, sorted by baseline —
+    // a unit passing behind a tall tower must be occluded by it, a unit in
+    // front must cover its foot (interleaving is what makes the world read
+    // as having depth instead of "units always on top")
+    const units = Array.from(g.units.values()).sort((a, b) => a.y - b.y);
+    const ground = [];
+    for (const b of g.buildings.values()) ground.push(b);
+    for (const u of units) if (!DATA.units[u.type].air) ground.push(u);
+    const baseY = e => e.kind === 'building'
+      ? (e.cy + e.h) * C.CELL           // footprint bottom edge
+      : e.y + C.CELL * 0.5;             // feet, half a cell below center
+    ground.sort((a, b) => baseY(a) - baseY(b));
+    for (const e of ground) {
+      if (e.kind === 'building') _drawBuilding(g, e, X, Y);
+      else _drawUnit(g, e, X, Y);
+    }
 
     // rally flag for selected factory
     for (const id of g.selection) {
@@ -627,10 +654,6 @@ const Render = (function () {
         ctx.fillRect(rx, ry - 16, 10, 6);
       }
     }
-
-    // ground units then air units
-    const units = Array.from(g.units.values()).sort((a, b) => a.y - b.y);
-    for (const u of units) if (!DATA.units[u.type].air) _drawUnit(g, u, X, Y);
 
     // bullets
     for (const b of g.bullets) {

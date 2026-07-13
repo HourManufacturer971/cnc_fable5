@@ -125,7 +125,9 @@ drawn over water)`. `game.tvar` picks sprite variants.
 Chrysalite lives in `game.tib` (0..C.TIB_MAX per cell) independent of terrain (only on 0/1).
 MAPGEN also fills `game.decor = { bridge, waterfall, village }`: bridge cells, the
 waterfall cell, and the neutral hamlet layout that main.js spawns as 'civ'-owned
-buildings/units (players include a `civ` stub owner nobody auto-targets).
+buildings/units (players include a `civ` stub owner nobody auto-targets). The hamlet is
+farmhouse + chapel (`chur`) + two cottages + barn; the chapel drops a guaranteed cash
+crate when destroyed (see Crates).
 
 ## Core game rules (be faithful to the 1995 original)
 
@@ -142,7 +144,10 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   whatever is left on the map (never idles the economy to death), and a PARTIALLY loaded
   one tops off within ~10 cells of itself — so a far field is eaten until the hopper is
   full, never one cell per round trip. Known-unreachable cells are blacklisted
-  (`u._noReach`) for ~60s.
+  (`u._noReach`) for ~60s. Cell choice is SCORED, not nearest-wins:
+  `dist² − (3x3 richness)/100 + 60·crowd`, where crowd counts other own harvesters whose
+  current target sits within 3 cells — the fleet aims at fat pockets and spreads out
+  instead of stacking on the same dying crumb (all sim-state reads, deterministic).
 - Dock etiquette (`_shoveIdle`): a returning harvester within 4 cells of its dock nudges
   FRIENDLY idle ground units off the dock cell and off its next path cell (orderMove to a
   free neighbor, never onto another dock). Enemy units are a legitimate blockade and stay.
@@ -174,7 +179,9 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   else map-wide recon (explored for that side; shroud too if it's the local human's).
   Feedback (EVA `crateSalvage/crateRepairs/crateUnit/crateRecon`, effects) is humanSide-
   gated and cosmetic. Drawn as a small blinking supply box; blinking white radar dot
-  (explored cells only).
+  (explored cells only). A crate may carry `kind: 'cash'` — it then skips the lottery
+  (`roll = 0.2`, same rng pattern on both clients since kind is shared sim state).
+  Destroying the village chapel (`chur`) drops one such crate in the rubble.
 
 ### Power
 - `Production.computePower(player)` recomputes `player.power` (sum of DATA `power` /
@@ -213,6 +220,14 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
 - Repair mode: click own damaged building → toggles `repairing`; heals `C.REPAIR_HP=1` hp
   per tick at cost `cost/maxHp * C.REPAIR_COST=0.3` credits per hp (stops when broke/full).
   Wrench overlay blinks while repairing. EVA `repairing` on start.
+- **Vehicle repair at the Repair Facility** (`fix`, DATA `repairPad`): `_tickRepairPads`
+  (sim.js, every 2 ticks, sides in fixed gdi→nod order) heals ONE own ground vehicle per
+  pad per pass — the first `state === 'idle'`, damaged, non-infantry non-air unit found in
+  a row-major scan of the footprint+1 ring — 2 hp at the building repair rate, skipped
+  when broke. Clicking an own finished `fix` with vehicles selected orders them to
+  formation cells at the pad's south edge ('repair' cursor, EVA `repairing`); the order is
+  plain orderMove so it needs no new net command. `u._fixT` stamps healing for the render
+  wrench blink.
 - Sell mode: click own building → removed after quick deconstruct effect, refund
   `0.5 * cost * (hp/maxHp)`, play sell sound. Selling the last construction-capable building
   is allowed (the original let you doom yourself).
@@ -358,6 +373,10 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   (detected, not prevented).
 
 ### Gameplay feedback (juice)
+- Depth: buildings and ground units draw in ONE painter's pass sorted by baseline
+  (building = footprint bottom edge, unit = feet at y + CELL/2), so units pass BEHIND
+  tall structures and in front of their feet. Air units, bullets, effects stay on top.
+- Pad repairs blink a small gold wrench over the vehicle (`u._fixT`, `_drawWrench`).
 - `applyDamage` stamps `target._hitT = game.tick`; render re-draws the sprite twice with
   `globalCompositeOperation='lighter'` for 2 ticks — a white hit-flash (units, buildings).
 - Successful move/harvest/rally orders spawn a `moveMark` effect (green collapsing ring,
@@ -588,12 +607,26 @@ buildings/units (players include a `civ` stub owner nobody auto-targets).
   alpha.
 
 ### Map generation (`map.js`)
-- 64×64. Deterministic from seed via `mulberry`. Base terrain grass with broad value-noise
-  dirt regions plus short worn trails, a meandering west→east river on most seeds (with two
-  fords — one pinned where the river crosses the start↔start segment), ponds, rock outcrops,
-  forests with clearings + small clumps + lone trees, and a ragged 1-3 cell rocky rim (never
-  blocking the two base areas or the corridor between them; BFS connectivity check widens the
-  corridor as a last resort).
+- 64×64. Deterministic from seed via `mulberry` (features additionally use seeded hash
+  noise — NEVER `Math.random`/`game.rng`). Geography grows from a hidden ELEVATION field
+  (`buildElevation`: 4-octave fbm + a gentle climb toward the rim) that every feature
+  reads, so the landscape is internally consistent:
+  - the west→east river FOLLOWS THE VALLEY (per column, step ±1 to the lowest-elevation
+    cell ahead; base plateaus repel the channel so the start-safety guard never censors
+    it into visible gaps), widens downstream, keeps two fords — one pinned where it
+    crosses the start↔start segment — and most seeds get a timber bridge;
+  - rock crowns the ~93rd elevation percentile, broken by detail noise into ridge lines
+    with saddles; grass at the foot of rock weathers to talus dirt; high, dry (far from
+    water) flats bake to dirt regions;
+  - woods follow moisture (BFS distance-to-water): dense gallery forest on the banks,
+    groves in the lowlands gated by a broad meadow mask (no mega-forests), sparse stands
+    up high; tree clumps + lone trees for texture; ford mouths and bridge ends are
+    deliberately felled clear (`clearTrees`);
+  - ponds pool at genuine local elevation minima; mid-map chrysalite fields pick the
+    lowest-lying valid spot (crystal collects in valleys); worn dirt roads run from the
+    village to the river crossing and toward the nearest base (`road`, grass-only brush).
+  A ragged 1-3 cell rocky rim rings the map (never blocking the two base areas or the
+  corridor between them; BFS connectivity check widens the corridor as a last resort).
 - Two start zones: player SW-ish (around 12,50), AI NE-ish (around 52,12) — keep a 12-cell
   radius buildable (grass/dirt only). 4-5 chrysalite fields: one near each base (~120 cells
   rich), 2-3 mid-map, each with a blossom tree at heart. Fill `game.tib` values 75..300

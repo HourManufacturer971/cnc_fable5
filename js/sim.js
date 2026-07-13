@@ -628,7 +628,17 @@ function _findTibCell(u, radius, anchor) {
   const g = game;
   const cx = worldToCell(u.x), cy = worldToCell(u.y);
   const expl = _exploredFor(g, u.owner);
-  let best = null, bestD = Infinity;
+  // where the REST of the fleet is already headed — spreading out beats the
+  // whole team stacking on the same dying crumb (deterministic unitIds order)
+  const rivals = [];
+  for (const id of g.players[u.owner].unitIds) {
+    if (id === u.id) continue;
+    const o = g.units.get(id);
+    if (!o || o._dead || !DATA.units[o.type].harvester) continue;
+    if (o.state === 'harvest' && o.path.length) rivals.push(o.path[o.path.length - 1]);
+    else if (o.fieldCell) rivals.push(o.fieldCell);
+  }
+  let best = null, bestScore = Infinity;
   const r0 = Math.max(0, cx - radius), r1 = Math.min(C.MAP_W - 1, cx + radius);
   const s0 = Math.max(0, cy - radius), s1 = Math.min(C.MAP_H - 1, cy + radius);
   // leash: don't wander further than ~20 cells from home (the refinery) —
@@ -644,7 +654,21 @@ function _findTibCell(u, radius, anchor) {
       const o = g.occ[i];
       if (o && o !== u.id) continue;
       const dd = (x - cx) * (x - cx) + (y - cy) * (y - cy);
-      if (dd < bestD) { bestD = dd; best = { cx: x, cy: y }; }
+      // a fat 3x3 pocket a few cells farther beats crumbs underfoot...
+      let rich = 0;
+      for (let ry = Math.max(0, y - 1); ry <= Math.min(C.MAP_H - 1, y + 1); ry++) {
+        for (let rx = Math.max(0, x - 1); rx <= Math.min(C.MAP_W - 1, x + 1); rx++) {
+          rich += g.tib[cellIdx(rx, ry)];
+        }
+      }
+      // ...and cells the fleet already converges on get a stiff penalty
+      let crowd = 0;
+      for (const rv of rivals) {
+        const ax = x - rv.cx, ay = y - rv.cy;
+        if (ax * ax + ay * ay <= 9) crowd++;
+      }
+      const score = dd - rich / 100 + crowd * 60;
+      if (score < bestScore) { bestScore = score; best = { cx: x, cy: y }; }
     }
   }
   return best;
@@ -1272,7 +1296,9 @@ function _tickBuildingWeapon(b) {
 function _crateEffect(g, c, u) {
   const p = g.players[u.owner];
   const mine = u.owner === g.humanSide;
-  const roll = g.rng();
+  // a typed crate (the chapel's collection box) skips the lottery; both
+  // clients see the same kind, so the rng draw pattern stays in lockstep
+  const roll = c.kind === 'cash' ? 0.2 : g.rng();
   if (roll < 0.5) {
     // salvage: credits (ignores silo caps — found money, not refined)
     const amt = 1200 + ((g.rng() * 9) | 0) * 100;
@@ -1317,6 +1343,39 @@ function _crateEffect(g, c, u) {
     } else if (!mine) {
       // AI already sees everything in SP — give it scrap instead
       if (!g.mpExplored) p.credits += 800;
+    }
+  }
+}
+
+// Repair Facility: own ground vehicles parked (idle) on or beside the pad
+// heal 2 hp/tick at the same credits-per-hp rate buildings pay. One patient
+// per pad per tick, scanned in deterministic row-major order.
+function _tickRepairPads(g) {
+  if (g.tick % 2 !== 0) return;
+  for (const side of ['gdi', 'nod']) {
+    const p = g.players[side];
+    for (const id of p.buildingIds) {
+      const b = g.buildings.get(id);
+      if (!b || !DATA.buildings[b.type].repairPad || b.buildProgress < 1) continue;
+      patient:
+      for (let cy = b.cy - 1; cy <= b.cy + b.h; cy++) {
+        for (let cx = b.cx - 1; cx <= b.cx + b.w; cx++) {
+          if (!inMap(cx, cy)) continue;
+          const o = g.occ[cellIdx(cx, cy)];
+          if (!o) continue;
+          const u = g.units.get(o);
+          if (!u || u._dead || u.owner !== side || u.state !== 'idle') continue;
+          const d = DATA.units[u.type];
+          if (d.infantry || d.air || u.hp >= u.maxHp) continue;
+          const heal = Math.min(2, u.maxHp - u.hp);
+          const cost = d.cost / u.maxHp * C.REPAIR_COST * heal;
+          if (p.credits < cost) continue;
+          p.credits -= cost;
+          u.hp += heal;
+          u._fixT = g.tick;   // wrench blink (cosmetic, deterministic)
+          break patient;      // one vehicle per pad per tick, like the original
+        }
+      }
     }
   }
 }
@@ -1482,6 +1541,11 @@ function killEntity(ent, attacker) {
     spawnEffect('expL', _entX(ent), _entY(ent));
     spawnEffect('scorch', _entX(ent), _entY(ent));
     _maybePlay('expL', _entX(ent), _entY(ent));
+    // the chapel keeps its collection box in the rubble — a guaranteed cash
+    // crate (sim state, deterministic on both clients)
+    if (ent.type === 'chur') {
+      (g.crates || (g.crates = [])).push({ cx: ent.cx, cy: ent.cy + 1, born: g.tick, kind: 'cash' });
+    }
     const p = g.players[ent.owner];
     if (typeof Production !== 'undefined') Production.computePower(p);
     if (d.superweapon && p.super.key === d.superweapon) {
@@ -1686,6 +1750,7 @@ const Sim = {
     _tickEffects(g);
     _tickTiberium(g);
     _tickCrates(g);
+    _tickRepairPads(g);
     _tickCloak(g);
   },
 };
