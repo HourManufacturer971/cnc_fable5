@@ -221,13 +221,15 @@ crate when destroyed (see Crates).
   per tick at cost `cost/maxHp * C.REPAIR_COST=0.3` credits per hp (stops when broke/full).
   Wrench overlay blinks while repairing. EVA `repairing` on start.
 - **Vehicle repair at the Repair Facility** (`fix`, DATA `repairPad`): `_tickRepairPads`
-  (sim.js, every 2 ticks, sides in fixed gdi→nod order) heals ONE own ground vehicle per
+  (sim.js, every tick, sides in fixed gdi→nod order) heals ONE own ground vehicle per
   pad per pass — the first `state === 'idle'`, damaged, non-infantry non-air unit found in
-  a row-major scan of the footprint+1 ring — 2 hp at the building repair rate, skipped
-  when broke. Clicking an own finished `fix` with vehicles selected orders them to
+  a row-major scan of the footprint+2 apron — 2 hp/tick at the building repair rate,
+  skipped when broke. Clicking an own finished `fix` with vehicles selected orders them to
   formation cells at the pad's south edge ('repair' cursor, EVA `repairing`); the order is
   plain orderMove so it needs no new net command. `u._fixT` stamps healing for the render
-  wrench blink.
+  wrench blink. A damaged harvester parked at the pad is EXEMPT from idle auto-seek until
+  healed (`_onRepairPad`) — the wrench finishes before the field calls. Engineer-heal of a
+  damaged own building outranks the pad branch on click, matching the cursor.
 - Sell mode: click own building → removed after quick deconstruct effect, refund
   `0.5 * cost * (hp/maxHp)`, play sell sound. Selling the last construction-capable building
   is allowed (the original let you doom yourself).
@@ -622,7 +624,9 @@ crate when destroyed (see Crates).
     groves in the lowlands gated by a broad meadow mask (no mega-forests), sparse stands
     up high; tree clumps + lone trees for texture; ford mouths and bridge ends are
     deliberately felled clear (`clearTrees`);
-  - ponds pool at genuine local elevation minima; mid-map chrysalite fields pick the
+  - ponds pool at genuine local elevation minima but never within 7 cells of a ford or
+    the bridge (depressions cluster on the valley floor — an unguarded pond would fuse
+    onto the river and seal the crossing); mid-map chrysalite fields pick the
     lowest-lying valid spot (crystal collects in valleys); worn dirt roads run from the
     village to the river crossing and toward the nearest base (`road`, grass-only brush).
   A ragged 1-3 cell rocky rim rings the map (never blocking the two base areas or the

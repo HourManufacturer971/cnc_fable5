@@ -578,6 +578,18 @@ const MAPGEN = (function () {
 
     // --- ponds pool in genuine depressions ---------------------------------------
     {
+      // depressions cluster on the river's own valley floor, so keep ponds
+      // clear of the crossings — a pond fused onto a ford or bridge approach
+      // would seal the very gap the river carver left open
+      const crossings = [];
+      if (riv) {
+        crossings.push({ cx: riv.fordX1, cy: Math.round(riv.yc[riv.fordX1]) });
+        crossings.push({ cx: riv.fordX2, cy: Math.round(riv.yc[riv.fordX2]) });
+        if (g.decor.bridge && g.decor.bridge.length) {
+          const mid = g.decor.bridge[(g.decor.bridge.length / 2) | 0];
+          crossings.push({ cx: mid.cx, cy: mid.cy });
+        }
+      }
       const want = (hasRiver ? 1 : 3) + ((rng() * 2) | 0);
       const cands = [];
       for (let cy = 4; cy < H - 4; cy++) {
@@ -585,6 +597,11 @@ const MAPGEN = (function () {
           const i = cellIdx(cx, cy);
           if (g.terrain[i] !== T_GRASS && g.terrain[i] !== T_DIRT) continue;
           if (distC(cx, cy, hs.cx, hs.cy) < 15 || distC(cx, cy, as.cx, as.cy) < 15) continue;
+          let nearCrossing = false;
+          for (const cr of crossings) {
+            if (distC(cx, cy, cr.cx, cr.cy) < 7) { nearCrossing = true; break; }
+          }
+          if (nearCrossing) continue;
           const e = elev[i];
           let minima = true;
           for (let dy = -2; dy <= 2 && minima; dy++) {

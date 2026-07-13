@@ -673,6 +673,13 @@ const Input = (function () {
         AUDIO.play(unloadCargo(ent) ? 'click' : 'buzz');
         return;
       }
+      // engineer heal own damaged building — checked BEFORE the repair pad
+      // so the click does what the 'enter' cursor promised
+      if (ent.kind === 'building' && ownSel.some(u => DATA.units[u.type].engineer) && ent.hp < ent.maxHp) {
+        for (const u of ownSel) if (DATA.units[u.type].engineer) orderEnter(u, ent);
+        AUDIO.ack('move', _selClass());
+        return;
+      }
       // repair facility: send the selected vehicles to the pad — the sim
       // heals whoever parks on/beside it
       if (ent.kind === 'building' && DATA.buildings[ent.type].repairPad &&
@@ -692,12 +699,6 @@ const Input = (function () {
           spawnEffect('moveMark', (ent.cx + ent.w / 2) * C.CELL, (ent.cy + ent.h) * C.CELL, { ttl: 14 });
           return;
         }
-      }
-      // engineer heal own damaged building
-      if (ent.kind === 'building' && ownSel.some(u => DATA.units[u.type].engineer) && ent.hp < ent.maxHp) {
-        for (const u of ownSel) if (DATA.units[u.type].engineer) orderEnter(u, ent);
-        AUDIO.ack('move', _selClass());
-        return;
       }
       // load infantry into a friendly transport
       if (ent.kind === 'unit' && DATA.units[ent.type].transport &&

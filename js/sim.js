@@ -885,6 +885,9 @@ function _harvester(u, d) {
   // idle: auto-seek (leashed to the refinery while local crystal lasts,
   // unleashed once the neighborhood is dry — same policy as the sweep above)
   if ((g.tick + u.id) % 30 === 0) {
+    // a damaged harvester parked at the repair pad stays for its wrench —
+    // auto-seek would drag the patient off the table half-repaired
+    if (u.hp < u.maxHp && _onRepairPad(g, u)) return;
     const home = _nearestProc(u);
     const c = _findTibCell(u, 40, home ? _procDock(home) : null) ||
               _findTibCell(u, 64, null);
@@ -1347,19 +1350,31 @@ function _crateEffect(g, c, u) {
   }
 }
 
+// True when the unit stands on or beside an own finished Repair Facility.
+// The service apron is footprint+2: wide enough that every spot a pad-click
+// formation actually parks in is a healing spot (no silent dead corners).
+function _onRepairPad(g, u) {
+  const cx = worldToCell(u.x), cy = worldToCell(u.y);
+  for (const id of g.players[u.owner].buildingIds) {
+    const b = g.buildings.get(id);
+    if (!b || !DATA.buildings[b.type].repairPad || b.buildProgress < 1) continue;
+    if (cx >= b.cx - 2 && cx <= b.cx + b.w + 1 && cy >= b.cy - 2 && cy <= b.cy + b.h + 1) return true;
+  }
+  return false;
+}
+
 // Repair Facility: own ground vehicles parked (idle) on or beside the pad
 // heal 2 hp/tick at the same credits-per-hp rate buildings pay. One patient
 // per pad per tick, scanned in deterministic row-major order.
 function _tickRepairPads(g) {
-  if (g.tick % 2 !== 0) return;
   for (const side of ['gdi', 'nod']) {
     const p = g.players[side];
     for (const id of p.buildingIds) {
       const b = g.buildings.get(id);
       if (!b || !DATA.buildings[b.type].repairPad || b.buildProgress < 1) continue;
       patient:
-      for (let cy = b.cy - 1; cy <= b.cy + b.h; cy++) {
-        for (let cx = b.cx - 1; cx <= b.cx + b.w; cx++) {
+      for (let cy = b.cy - 2; cy <= b.cy + b.h + 1; cy++) {
+        for (let cx = b.cx - 2; cx <= b.cx + b.w + 1; cx++) {
           if (!inMap(cx, cy)) continue;
           const o = g.occ[cellIdx(cx, cy)];
           if (!o) continue;
