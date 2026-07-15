@@ -21,7 +21,7 @@ or publisher.
 No build step, no dependencies. Serve the folder and open it:
 
 ```sh
-cd cnc_fable5
+cd harvestwar
 python3 -m http.server 8000
 # then open http://localhost:8000
 ```
