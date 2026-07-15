@@ -1,3 +1,12 @@
+:root {
+  --hw-gold: #e0b840; --hw-red: #e05038;
+  --hw-panel-top: #43433a; --hw-panel-bot: #2a2a24;
+  --hw-edge-lo: #1c1c17; --hw-edge-hi: #7a7a6e;
+  --accent: var(--hw-gold);          /* faction accent, retinted on pick */
+  --scan: rgba(0, 0, 0, 0.16);
+}
+body[data-side="nod"] { --accent: var(--hw-red); }
+
 html, body {
   margin: 0; padding: 0;
   background: #000;
@@ -111,7 +120,9 @@ html, body {
 .overlay {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(0, 0, 0, 0.82);
+  /* radial veil: darkest at the panel, lifting at the edges so the living
+     backdrop drifts through around the frame */
+  background: radial-gradient(ellipse 62% 62% at center, rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.66));
   z-index: 10;
   /* panels may scroll on short (landscape phone) screens; the ancestor
      #wrap sets touch-action:none, so re-allow vertical pans here */
@@ -121,17 +132,32 @@ html, body {
 .overlay.hidden { display: none; }
 
 .panel {
-  background: #3a3a32;
-  border: 3px solid #6a6a60;
-  border-radius: 4px;
-  box-shadow: 0 0 40px #000, inset 0 0 0 1px #23231e;
-  padding: 28px 44px;
+  position: relative;
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 3px, var(--scan) 3px 4px),
+    linear-gradient(180deg, var(--hw-panel-top), var(--hw-panel-bot));
+  border: 2px solid var(--hw-edge-lo);
+  border-radius: 5px;
+  box-shadow:
+    0 0 46px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 var(--hw-edge-hi),
+    inset 0 -2px 5px var(--hw-edge-lo),
+    inset 0 0 34px rgba(0, 0, 0, 0.4),
+    0 0 30px -6px var(--accent);          /* faction glow bleed */
+  padding: 30px 46px;
   text-align: center;
   color: #d8d0a8;
   max-width: 560px;
   max-height: 94vh;
   overflow-y: auto;
 }
+/* targeting-frame corner brackets */
+.panel::before, .panel::after {
+  content: ""; position: absolute; width: 20px; height: 20px;
+  pointer-events: none; border: 2px solid var(--accent); opacity: 0.85;
+}
+.panel::before { top: 7px; left: 7px; border-right: 0; border-bottom: 0; }
+.panel::after { bottom: 7px; right: 7px; border-left: 0; border-top: 0; }
 @supports (height: 100dvh) {
   .panel { max-height: 94dvh; }
 }
@@ -142,38 +168,81 @@ h1 {
   font-size: 34px;
   letter-spacing: 6px;
   color: #e0b840;
-  text-shadow: 2px 2px 0 #000;
+  text-shadow: 0 2px 0 #000, 0 0 14px rgba(224, 184, 64, 0.55), 0 0 34px rgba(224, 184, 64, 0.22);
 }
-h2 { margin: 0 0 14px; letter-spacing: 4px; color: #e0b840; text-shadow: 2px 2px 0 #000; }
+/* faint scanning shimmer bar under the title */
+#menu h1 { position: relative; }
+#menu h1::after {
+  content: ""; position: absolute; left: 12%; right: 12%; bottom: -8px; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--hw-gold), transparent);
+  background-size: 220% 100%;
+  animation: titleScan 3.6s linear infinite;
+  opacity: 0.7;
+}
+@keyframes titleScan { 0% { background-position: 180% 0; } 100% { background-position: -80% 0; } }
+h2 { margin: 0 0 14px; letter-spacing: 4px; color: #e0b840; text-shadow: 0 2px 0 #000, 0 0 11px rgba(224, 184, 64, 0.42); }
 .sub { margin: 0 0 22px; font-size: 11px; color: #9a9280; }
 .hint { margin: 18px 0 0; font-size: 10px; color: #9a9280; }
 
-#factionRow { display: flex; gap: 28px; justify-content: center; }
-.faction { display: flex; flex-direction: column; align-items: center; gap: 10px; }
-.logoSlot { width: 120px; height: 90px; image-rendering: pixelated; }
+#factionRow { display: flex; gap: 24px; justify-content: center; margin: 6px 0 4px; }
+.faction {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 14px 14px 12px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--hw-edge-lo);
+  border-radius: 5px;
+  transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s;
+}
+#pickGdi { --accent: var(--hw-gold); }
+#pickNod { --accent: var(--hw-red); }
+.faction:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+  box-shadow: 0 6px 20px -6px var(--accent), inset 0 0 22px rgba(0, 0, 0, 0.4);
+}
+.logoSlot {
+  width: 120px; height: 90px; image-rendering: pixelated;
+  display: flex; align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.35));
+  box-shadow: inset 0 0 14px #000;
+  border-radius: 3px;
+}
 .logoSlot canvas { width: 120px; height: 90px; image-rendering: pixelated; }
+.fmotto {
+  font-size: 8px; letter-spacing: 2px; color: #8a836e; text-transform: uppercase;
+  margin-top: -2px;
+}
 
 button {
   font-family: inherit;
   font-size: 13px;
   padding: 9px 18px;
   margin: 5px 0;
-  background: #4a4a42;
+  background: linear-gradient(180deg, #52524a, #3c3c34);
   color: #d8d0a8;
-  border: 2px solid #6a6a60;
-  border-bottom-color: #2e2e28;
-  border-right-color: #2e2e28;
+  border: 2px solid var(--hw-edge-lo);
+  border-radius: 3px;
+  box-shadow: inset 0 1px 0 var(--hw-edge-hi);
   cursor: pointer;
   display: block;
   width: 100%;
   letter-spacing: 1px;
+  transition: box-shadow 0.09s, background 0.09s, color 0.09s, border-color 0.09s;
   touch-action: manipulation; /* no double-tap zoom or tap delay on menus */
 }
-button:hover { background: #5a5a50; color: #fff; }
-button:active { border-color: #2e2e28; border-top-color: #6a6a60; border-left-color: #6a6a60; }
+button:hover {
+  background: linear-gradient(180deg, #64645a, #46463c);
+  border-color: var(--accent);
+  box-shadow: 0 0 13px -2px var(--accent), inset 0 1px 0 var(--hw-edge-hi);
+  color: #fff;
+}
+button:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 2px 5px var(--hw-edge-lo);
+}
 
-#pickGdi button:hover { color: #e0b840; }
-#pickNod button:hover { color: #e05038; }
+#pickGdi button:hover { color: #e0b840; box-shadow: 0 0 14px -2px var(--hw-gold), inset 0 1px 0 var(--hw-edge-hi); border-color: var(--hw-gold); }
+#pickNod button:hover { color: #e05038; box-shadow: 0 0 14px -2px var(--hw-red), inset 0 1px 0 var(--hw-edge-hi); border-color: var(--hw-red); }
 
 #speedRow {
   display: block; font-size: 11px; margin: 8px 0; color: #b8b09a;
@@ -188,14 +257,17 @@ button:active { border-color: #2e2e28; border-top-color: #6a6a60; border-left-co
   width: 100%;
   height: 64px;
   box-sizing: border-box;
-  background: #23231e;
-  color: #b8d0a0;
-  border: 2px solid #6a6a60;
+  background: #0b1108;                 /* phosphor terminal */
+  color: #7fe07f;
+  border: 2px solid var(--hw-edge-lo);
+  border-radius: 3px;
+  box-shadow: inset 0 0 12px #000, inset 0 1px 0 rgba(255,255,255,0.04);
   font-family: inherit;
   font-size: 10px;
   resize: none;
   margin: 4px 0;
 }
+#mpSideRow button.sel { box-shadow: 0 0 12px -2px var(--accent), inset 0 1px 0 var(--hw-edge-hi); }
 .mpStep {
   text-align: left;
   font-size: 11px;
@@ -212,10 +284,13 @@ button:active { border-color: #2e2e28; border-top-color: #6a6a60; border-left-co
 }
 #missionList button .tag { color: #9a9280; }
 #missionList button:disabled {
-  color: #6a6458; background: #3e3e36; cursor: default;
-  border-color: #4a4a42;
+  color: #6a6458; cursor: default;
+  border-color: #33332c; box-shadow: none;
+  background-image: repeating-linear-gradient(45deg, transparent 0 6px, rgba(0,0,0,0.22) 6px 12px),
+                    linear-gradient(180deg, #3e3e36, #33332e);
 }
-#missionList button:disabled:hover { background: #3e3e36; color: #6a6458; }
+#missionList button:disabled:hover { color: #6a6458; border-color: #33332c; box-shadow: none; transform: none; }
+#missionList button.done { border-left: 3px solid #40c040; }
 #missionList button.done .tag { color: #40c040; }
 .backBtn { width: auto; margin: 10px auto 0; padding: 7px 26px; }
 .brief {
@@ -234,6 +309,10 @@ button:active { border-color: #2e2e28; border-top-color: #6a6a60; border-left-co
   color: #e0b840;
   margin: 0 0 16px;
   letter-spacing: 1px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--hw-gold);
+  background: rgba(224, 184, 64, 0.08);
+  border-radius: 0 3px 3px 0;
 }
 
 #scoreLines {
@@ -243,5 +322,9 @@ button:active { border-color: #2e2e28; border-top-color: #6a6a60; border-left-co
   line-height: 1.9;
   min-width: 320px;
 }
-#scoreLines .row { display: flex; justify-content: space-between; gap: 40px; }
+#scoreLines .row {
+  display: flex; justify-content: space-between; gap: 40px;
+  border-bottom: 1px dotted #4a463c; padding: 2px 0;
+}
 #scoreLines .val { color: #e0b840; }
+#scoreTitle { text-shadow: 0 2px 0 #000, 0 0 16px currentColor; }

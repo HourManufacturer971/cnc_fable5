@@ -410,6 +410,35 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - Living ground: phase-quantized hash glitter (`_gl`, render-only) puts brief sun glints
   on open water and sparkles on chrysalite cells in view. No sim reads beyond
   terrain/tib; shroud draws over it as usual.
+- **Atmosphere layer** (render-only, inside the viewport clip, after shroud, before the
+  crisp selection/placement UI): `_drawGrade` runs a cinematic colour grade — a `multiply`
+  dusty-warm shadow tint, a `screen` warm highlight, a `soft-light` cool-in-the-darks, and
+  a cached 128px `overlay` film-grain pattern (≤0.05 α) that kills gradient banding — then
+  `_drawGlow` (additive bloom), then `_drawVignette` (a cached elliptical radial darkening,
+  rebuilt only on `C.VIEW_PW`/`VIEW_PH` resize). Every pass resets
+  `globalCompositeOperation` to `source-over` and `globalAlpha` to 1; the main context stays
+  `imageSmoothingEnabled=false` (only offscreen buffers smooth). A few full-viewport fills —
+  no per-frame `getImageData`.
+- **Emissive bloom** (`_drawGlow`, `globalCompositeOperation='lighter'`): cached soft
+  radial-gradient stamps (`_glow(r,g,b)`) additively haze the bright things — tiberium
+  cells (green, low per-cell α so overlap builds the field glow), fire/muzzle/explosion
+  effects, laser/ion beams (drawn thicker), and charging obelisks (pulsing red). All gated
+  by `g.shroud[...]===1` so nothing glows through unexplored fog. Piggybacks the existing
+  visible-cell window and effect list — no new full-map iteration.
+- **Water depth + shoreline foam** (render-only, per visible water cell gated by shroud):
+  deep cells darken by their 8-neighbour water count (grades shore→channel), shore cells
+  brighten turquoise with a shimmering foam rim on every land-facing edge.
+- **HUD chrome**: `_bevel` builds a per-call vertical brushed-metal gradient; the tab bar
+  gets a gradient + a warm-gold baseline seam; the sidebar gets a lit gold seam framing the
+  viewport; the radar sits in a beveled bezel with a gold inner hairline.
+- **Living menu backdrop** (`_menuBackdrop`, drawn by `frame(null)` when no game exists):
+  a cached dawn gradient, a warm horizon glow, a slowly drifting tactical grid, ~46 additive
+  embers (seeded once with `Math.random`, advanced by a `performance.now` dt), a cached
+  scanline tile and vignette. Replaces the old black fill; the `.overlay` veil is a soft
+  radial so the drift shows around the panels. Menu chrome (`css/style.css`) is layered
+  console panels — vertical gradient + scanlines + targeting corner-brackets + faction-tinted
+  glow (`--accent`, retinted by `body[data-side]` set on faction pick), glowing title,
+  hover-lit buttons, recessed faction cards with mottos. All cosmetic; determinism-safe.
 - Pad repairs blink a small gold wrench over the vehicle (`u._fixT`, `_drawWrench`).
 - `applyDamage` stamps `target._hitT = game.tick`; render re-draws the sprite twice with
   `globalCompositeOperation='lighter'` for 2 ticks — a white hit-flash (units, buildings).

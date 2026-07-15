@@ -216,6 +216,16 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 - **Original soundtrack** — eight synthesized tracks in the dark mid-90s RTS
   style, sequenced live with WebAudio (each mission opens on a different
   one); toggle with Music: ON/OFF in the options menu
+- **A graded, luminous look** — the whole battlefield sits under a cinematic
+  colour grade and vignette that fuse the procedural sprites into one lit
+  scene, with a whisper of film grain to kill banding. Bright things
+  genuinely glow: energy beams bloom hot cores onto the ground, explosions
+  flash-bloom white then ember-orange, muzzle flashes halo, and chrysalite
+  fields give off a radioactive haze. Rivers have depth — dark channels,
+  bright turquoise shallows, and a shimmering foam line where water meets
+  land. The HUD is lit brushed metal framed by a gold seam, and the menu
+  sits over a slow dawn war-room — drifting tactical grid, embers, corner
+  brackets, faction-tinted glow — instead of a black void
 - **Feedback that feels good** — orders answer with collapsing green/red
   destination rings, hits flash white, harvest deliveries pop floating
   credit counters, and wounded buildings and vehicles trail smoke. Units

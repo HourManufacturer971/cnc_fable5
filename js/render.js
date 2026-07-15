@@ -18,6 +18,8 @@ const Render = (function () {
   let shownTick = -1, shakeX = 0, shakeY = 0;
   let evaMsg = null;            // {text, born} — HUD announcement banner
   let evaWired = false;
+  let vignette = null, vigW = 0, vigH = 0;   // cached radial vignette gradient
+  let grainPat = null;                        // cached film-grain pattern
 
   function _nowMs() {
     return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
@@ -642,6 +644,171 @@ const Render = (function () {
     ctx.globalAlpha = 1;
   }
 
+  // ---- atmosphere: a cinematic grade + vignette over the battlefield --------------------------
+  // Render-only, per-frame, no sim reads: a couple of GPU-blended full-viewport
+  // fills (cheap — no getImageData). Called INSIDE the viewport clip so the HUD
+  // and selection UI stay crisp and untinted.
+
+  function _buildVignette(w, h) {
+    const c = mkCanvas(w, h);
+    const q = c.getContext('2d');
+    // elliptical falloff from a bright-ish center to cool-dark corners
+    const cx = w / 2, cy = h / 2, r = Math.sqrt(cx * cx + cy * cy);
+    const g = q.createRadialGradient(cx, cy, r * 0.34, cx, cy, r);
+    g.addColorStop(0, 'rgba(0,0,0,0)');
+    g.addColorStop(0.66, 'rgba(6,10,18,0.16)');
+    g.addColorStop(1, 'rgba(3,6,13,0.60)');
+    q.fillStyle = g;
+    q.fillRect(0, 0, w, h);
+    // bake faint film grain INTO the vignette so the whole atmosphere is one
+    // cheap source-over blit (no per-frame blend-mode pattern fill)
+    if (!grainPat) grainPat = _buildGrain();
+    q.globalAlpha = 0.05;
+    q.fillStyle = grainPat;
+    q.fillRect(0, 0, w, h);
+    q.globalAlpha = 1;
+    vignette = c; vigW = w; vigH = h;
+  }
+
+  function _drawGrade() {
+    const w = C.VIEW_PW, h = C.VIEW_PH, y0 = C.TAB_H;
+    // two full-viewport blends fuse the procedural sprites into one lit scene:
+    // deepen+warm the shadows (multiply), then warm the highlights (screen).
+    // Kept to TWO passes — full-screen blend fills are the frame's dominant
+    // cost, so the cool-shadow whisper and grain are baked into the vignette
+    // blit instead of adding more passes here.
+    ctx.globalCompositeOperation = 'multiply';
+    ctx.fillStyle = 'rgba(154,128,92,0.16)';     // dusty warm shadow tint
+    ctx.fillRect(0, y0, w, h);
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = 'rgba(118,94,42,0.11)';      // warm glow in the brights
+    ctx.fillRect(0, y0, w, h);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  function _buildGrain() {
+    const s = 128, c = mkCanvas(s, s), q = c.getContext('2d');
+    const img = q.createImageData(s, s);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const v = (Math.random() * 255) | 0;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+      img.data[i + 3] = 255;
+    }
+    q.putImageData(img, 0, 0);
+    return ctx.createPattern(c, 'repeat');
+  }
+
+  function _drawVignette() {
+    const w = C.VIEW_PW, h = C.VIEW_PH;
+    if (!vignette || vigW !== w || vigH !== h) _buildVignette(w, h);
+    ctx.drawImage(vignette, 0, C.TAB_H);
+  }
+
+  // ---- additive emissive bloom -----------------------------------------------------------------
+  // A soft luminous haze over bright things (tiberium, fire, beams, blasts).
+  // Cached radial stamps composited with 'lighter' — no getImageData, no sim
+  // reads. Gated by shroud so nothing glows through the fog.
+
+  const _glowCache = {};
+  function _glow(r, gg, b) {
+    const key = r + ',' + gg + ',' + b;
+    if (_glowCache[key]) return _glowCache[key];
+    const s = 64, c = mkCanvas(s, s), q = c.getContext('2d');
+    const grd = q.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
+    grd.addColorStop(0, `rgba(${r},${gg},${b},0.85)`);
+    grd.addColorStop(0.4, `rgba(${r},${gg},${b},0.32)`);
+    grd.addColorStop(1, `rgba(${r},${gg},${b},0)`);
+    q.fillStyle = grd;
+    q.fillRect(0, 0, s, s);
+    return (_glowCache[key] = c);
+  }
+
+  // effect name -> {glow stamp, base radius px, alpha} for the bloom pass
+  function _effectGlow(name) {
+    switch (name) {
+      case 'flame': return [_glow(255, 140, 50), 34, 0.5];
+      case 'laserBeam': return null;                 // handled as a line below
+      case 'ionBeam': return null;                   // handled as a column below
+      case 'expS': return [_glow(255, 150, 60), 40, 0.55];
+      case 'expL': return [_glow(255, 150, 60), 78, 0.6];
+      case 'nukeCloud': return [_glow(255, 170, 90), 120, 0.5];
+      case 'muzzle': return [_glow(255, 220, 150), 22, 0.5];
+      case 'ionBlast': return [_glow(170, 215, 255), 70, 0.7];
+      default: return null;
+    }
+  }
+
+  function _drawGlow(g, X, Y, c0x, c1x, c0y, c1y, cs) {
+    ctx.globalCompositeOperation = 'lighter';
+
+    // tiberium field haze — low per-cell alpha, additive overlap builds the
+    // soft luminous mass. Only medium+ cells stamp (the sparse fringe barely
+    // glowed and dominated the stamp count), and the stamp is generously
+    // sized so it still reads as a continuous field.
+    const green = _glow(96, 240, 128);
+    for (let cy = c0y; cy <= c1y; cy++) {
+      for (let cx = c0x; cx <= c1x; cx++) {
+        const i = cellIdx(cx, cy);
+        const v = g.tib[i];
+        if (v <= 90 || g.shroud[i] !== 1) continue;
+        const sz = cs * (v > 200 ? 1.9 : 1.5);
+        ctx.globalAlpha = v > 200 ? 0.17 : 0.12;
+        ctx.drawImage(green, X(cellCenterX(cx)) - sz / 2, Y(cellCenterY(cy)) - sz / 2, sz, sz);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    // emissive effects
+    for (const e of g.effects) {
+      if (e.name === 'laserBeam') {
+        // gate on the beam SOURCE (the firing obelisk): a beam from a fogged
+        // shooter must not re-light itself over the shroud and leak position
+        const scx = worldToCell(e.x1), scy = worldToCell(e.y1);
+        if (inMap(scx, scy) && g.shroud[cellIdx(scx, scy)] !== 1) continue;
+        ctx.strokeStyle = 'rgba(240,60,50,0.5)';
+        ctx.lineWidth = 16;
+        ctx.beginPath();
+        ctx.moveTo(X(e.x1), Y(e.y1)); ctx.lineTo(X(e.x2), Y(e.y2));
+        ctx.stroke();
+        continue;
+      }
+      if (e.name === 'ionBeam') {
+        const icx = worldToCell(e.x), icy = worldToCell(e.y);
+        if (inMap(icx, icy) && g.shroud[cellIdx(icx, icy)] !== 1) continue;
+        // trace the beam column from the top of the viewport down to the
+        // impact (a wide soft additive stroke matching _drawEffect's column)
+        ctx.strokeStyle = 'rgba(170,215,255,0.4)';
+        ctx.lineWidth = 26;
+        ctx.beginPath();
+        ctx.moveTo(X(e.x), C.TAB_H); ctx.lineTo(X(e.x), Y(e.y));
+        ctx.stroke();
+        continue;
+      }
+      const gd = _effectGlow(e.name);
+      if (!gd) continue;
+      const cx = worldToCell(e.x), cy = worldToCell(e.y);
+      if (inMap(cx, cy) && g.shroud[cellIdx(cx, cy)] !== 1) continue;
+      // fade explosion/flame glow over the effect's life
+      let a = gd[2];
+      if (e.ttl) a *= Math.max(0.15, 1 - e.tick / e.ttl);
+      ctx.globalAlpha = a;
+      const s = gd[1] * 2;
+      ctx.drawImage(gd[0], X(e.x) - s / 2, Y(e.y) - s / 2, s, s);
+    }
+    ctx.globalAlpha = 1;
+
+    // charging obelisks / beam spires pulse a red glow before firing
+    for (const b of g.buildings.values()) {
+      if (!b.charging || b._dead) continue;
+      if (g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
+      ctx.globalAlpha = 0.4 + 0.3 * Math.sin(g.tick * 0.5);
+      const s = 70;
+      ctx.drawImage(_glow(240, 60, 50), X(_entX(b)) - s / 2, Y(_entY(b)) - s / 2, s, s);
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
   // ---- viewport ------------------------------------------------------------------------------
 
   function _drawViewport(g) {
@@ -696,6 +863,46 @@ const Render = (function () {
         // per-cell jitter breaks the crystal clusters off the cell grid
         const tj = (cx * 0x9e37 ^ cy * 0x85eb) & 63;
         ctx.drawImage(timg, X(cx * C.CELL + (tj & 7) - 3), Y(cy * C.CELL + (tj >> 3) - 4), cs, cs);
+      }
+    }
+
+    // water depth + animated shoreline foam: deep water darkens, shallow
+    // (shore) water brightens turquoise, and a foam rim shimmers on every
+    // land-facing edge. Render-only, cheap (water is a small cell fraction).
+    {
+      const t = g.tick;
+      for (let cy = c0y; cy <= c1y; cy++) {
+        for (let cx = c0x; cx <= c1x; cx++) {
+          const i = cellIdx(cx, cy);
+          if (g.terrain[i] !== 3 || g.shroud[i] !== 1) continue;
+          const landN = cy > 0 && g.terrain[cellIdx(cx, cy - 1)] !== 3;
+          const landS = cy < C.MAP_H - 1 && g.terrain[cellIdx(cx, cy + 1)] !== 3;
+          const landW = cx > 0 && g.terrain[cellIdx(cx - 1, cy)] !== 3;
+          const landE = cx < C.MAP_W - 1 && g.terrain[cellIdx(cx + 1, cy)] !== 3;
+          const x = X(cx * C.CELL), y = Y(cy * C.CELL);
+          // depth from the 8-neighbourhood water count, so it grades from
+          // shore to channel instead of a hard deep/shallow rectangle
+          let wn = 0;
+          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+            if (!dx && !dy) continue;
+            const nx = cx + dx, ny = cy + dy;
+            if (inMap(nx, ny) && g.terrain[cellIdx(nx, ny)] === 3) wn++;
+          }
+          if (!(landN || landS || landW || landE)) {
+            ctx.fillStyle = 'rgba(6,20,42,' + (0.03 + wn * 0.010).toFixed(3) + ')';  // deepens with enclosure
+            ctx.fillRect(x, y, cs, cs);
+            continue;
+          }
+          ctx.fillStyle = 'rgba(96,168,188,0.15)';   // shallow turquoise
+          ctx.fillRect(x, y, cs, cs);
+          const fa = (0.34 + 0.22 * Math.sin(t * 0.22 + (cx * 1.3 + cy * 0.7))).toFixed(3);
+          ctx.fillStyle = 'rgba(198,230,238,' + fa + ')';
+          const fw = 3;
+          if (landN) ctx.fillRect(x, y, cs, fw);
+          if (landS) ctx.fillRect(x, y + cs - fw, cs, fw);
+          if (landW) ctx.fillRect(x, y, fw, cs);
+          if (landE) ctx.fillRect(x + cs - fw, y, fw, cs);
+        }
       }
     }
 
@@ -834,6 +1041,11 @@ const Render = (function () {
       }
     }
 
+    // atmosphere: grade the scene, bloom the emissives on top, then vignette
+    _drawGrade();
+    _drawGlow(g, X, Y, c0x, c1x, c0y, c1y, cs);
+    _drawVignette();
+
     // selection brackets + health bars
     for (const id of g.selection) {
       const e = getEnt(id);
@@ -936,9 +1148,13 @@ const Render = (function () {
   // ---- tab bar ------------------------------------------------------------------------------
 
   function _bevel(x, y, w, h, lit) {
-    ctx.fillStyle = lit ? PAL.uiMetalLight : PAL.uiMetal;
+    // brushed-metal body: vertical gradient (lit from above) + chunky edges
+    const bg = ctx.createLinearGradient(x, y, x, y + h);
+    if (lit) { bg.addColorStop(0, '#82826f'); bg.addColorStop(1, '#55554a'); }
+    else { bg.addColorStop(0, '#5e5e53'); bg.addColorStop(0.5, PAL.uiMetal); bg.addColorStop(1, '#3a3a33'); }
+    ctx.fillStyle = bg;
     ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = PAL.uiMetalLight;
+    ctx.fillStyle = lit ? '#9a9a88' : PAL.uiMetalLight;
     ctx.fillRect(x, y, w, 2);
     ctx.fillRect(x, y, 2, h);
     ctx.fillStyle = PAL.uiMetalDark;
@@ -947,8 +1163,15 @@ const Render = (function () {
   }
 
   function _drawTabBar(g) {
-    ctx.fillStyle = PAL.uiMetalDark;
+    // lit metal bar with a warm gold baseline separating HUD from viewport
+    const tg = ctx.createLinearGradient(0, 0, 0, C.TAB_H);
+    tg.addColorStop(0, '#3c3c34');
+    tg.addColorStop(0.5, PAL.uiMetalDark);
+    tg.addColorStop(1, '#1c1c18');
+    ctx.fillStyle = tg;
     ctx.fillRect(0, 0, C.SCREEN_W, C.TAB_H);
+    ctx.fillStyle = 'rgba(224,184,64,0.35)';
+    ctx.fillRect(0, C.TAB_H - 1, C.VIEW_PW, 1);
     _bevel(0, 0, 120, C.TAB_H);
     ctx.font = '16px monospace';
     ctx.textBaseline = 'top';
@@ -1014,6 +1237,14 @@ const Render = (function () {
     const p = g.human;
     ctx.fillStyle = PAL.uiMetal;
     ctx.fillRect(C.SIDEBAR_X, C.TAB_H, C.SIDEBAR_W, C.SCREEN_H - C.TAB_H);
+    // lit seam where the sidebar meets the battlefield (a warm gold hairline
+    // over a bright/dark bevel) — frames the viewport
+    ctx.fillStyle = 'rgba(224,184,64,0.30)';
+    ctx.fillRect(C.SIDEBAR_X, C.TAB_H, 1, C.SCREEN_H - C.TAB_H);
+    ctx.fillStyle = PAL.uiMetalLight;
+    ctx.fillRect(C.SIDEBAR_X + 1, C.TAB_H, 2, C.SCREEN_H - C.TAB_H);
+    ctx.fillStyle = PAL.uiMetalDark;
+    ctx.fillRect(C.SIDEBAR_X + 3, C.TAB_H, 1, C.SCREEN_H - C.TAB_H);
 
     // power bar along the sidebar's left edge
     const pb = p.power;
@@ -1029,9 +1260,14 @@ const Render = (function () {
     ctx.fillStyle = '#fff';
     ctx.fillRect(C.SIDEBAR_X, drainY, 8, 4);
 
-    // radar
+    // radar — recessed bezel with a gold inner hairline
+    const rx = C.RADAR_X + 8, rw = C.RADAR_W - 8;
+    _bevel(rx - 3, C.RADAR_Y - 3, rw + 6, C.RADAR_H + 6, false);
     ctx.fillStyle = '#000';
-    ctx.fillRect(C.RADAR_X + 8, C.RADAR_Y, C.RADAR_W - 8, C.RADAR_H);
+    ctx.fillRect(rx, C.RADAR_Y, rw, C.RADAR_H);
+    ctx.strokeStyle = 'rgba(224,184,64,0.35)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(rx + 0.5, C.RADAR_Y + 0.5, rw - 1, C.RADAR_H - 1);
     if (p.radar) {
       if (g.tick - minimapTick >= 8 || minimapTick > g.tick) { _updateMinimap(g); minimapTick = g.tick; }
       ctx.drawImage(minimap, C.MM_X, C.MM_Y);
@@ -1306,13 +1542,95 @@ const Render = (function () {
       cur.c.width * Z, cur.c.height * Z);
   }
 
+  // ---- living menu backdrop --------------------------------------------------------------------
+  // A slow war-room scene behind the menus (drawn when no game exists): dawn
+  // gradient, drifting tactical grid, additive embers, vignette + scanlines.
+  // Render-only, no sim — time from performance.now, particles from Math.random.
+
+  let menuGrad = null, menuGW = 0, menuGH = 0, menuVig = null, menuHoriz = null;
+  let menuScan = null;
+  let embers = null, menuLastT = 0;
+
+  function _menuBackdrop() {
+    const w = C.SCREEN_W, h = C.SCREEN_H;
+    const t = _nowMs() / 1000;
+    let dt = t - menuLastT; menuLastT = t;
+    if (dt < 0 || dt > 0.1) dt = 0.016;
+
+    if (!menuGrad || menuGW !== w || menuGH !== h) {
+      const gg = ctx.createLinearGradient(0, 0, 0, h);
+      gg.addColorStop(0, '#0a0f1e');       // deep indigo sky
+      gg.addColorStop(0.5, '#221b22');
+      gg.addColorStop(0.6, '#2c2118');     // warm horizon
+      gg.addColorStop(0.63, '#16130e');
+      gg.addColorStop(1, '#090a08');       // dark ground
+      menuGrad = gg; menuGW = w; menuGH = h;
+      // cached vignette
+      const vc = mkCanvas(w, h), vq = vc.getContext('2d');
+      const vr = vq.createRadialGradient(w / 2, h / 2, h * 0.28, w / 2, h / 2, Math.sqrt(w * w + h * h) / 2);
+      vr.addColorStop(0, 'rgba(0,0,0,0)');
+      vr.addColorStop(1, 'rgba(0,0,0,0.7)');
+      vq.fillStyle = vr; vq.fillRect(0, 0, w, h);
+      menuVig = vc;
+      // cached 2px scanline tile
+      const sc = mkCanvas(4, 4), sq = sc.getContext('2d');
+      sq.fillStyle = 'rgba(0,0,0,0.10)'; sq.fillRect(0, 2, 4, 1);
+      menuScan = ctx.createPattern(sc, 'repeat');
+      // cached warm horizon glow
+      const hb = ctx.createRadialGradient(w / 2, h * 0.6, 0, w / 2, h * 0.6, w * 0.55);
+      hb.addColorStop(0, 'rgba(190,116,44,0.20)');
+      hb.addColorStop(1, 'rgba(190,116,44,0)');
+      menuHoriz = hb;
+    }
+    ctx.fillStyle = menuGrad;
+    ctx.fillRect(0, 0, w, h);
+
+    // warm horizon glow
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = menuHoriz;
+    ctx.fillRect(0, h * 0.35, w, h * 0.45);
+    ctx.globalCompositeOperation = 'source-over';
+
+    // drifting tactical grid
+    const cell = 58, ox = (t * 6) % cell, oy = (t * 4) % cell;
+    ctx.strokeStyle = 'rgba(224,184,64,0.055)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = -cell + ox; x <= w; x += cell) { ctx.moveTo(Math.round(x) + 0.5, 0); ctx.lineTo(Math.round(x) + 0.5, h); }
+    for (let y = -cell + oy; y <= h; y += cell) { ctx.moveTo(0, Math.round(y) + 0.5); ctx.lineTo(w, Math.round(y) + 0.5); }
+    ctx.stroke();
+
+    // drifting embers
+    if (!embers) {
+      embers = [];
+      for (let i = 0; i < 46; i++) embers.push({
+        x: Math.random() * w, y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 8, vy: -(6 + Math.random() * 16),
+        r: Math.random() < 0.28 ? 2 : 1, tw: Math.random() * Math.PI * 2,
+      });
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    for (const e of embers) {
+      e.x += e.vx * dt; e.y += e.vy * dt;
+      if (e.y < -4) { e.y = h + 4; e.x = Math.random() * w; }
+      if (e.x < -4) e.x = w + 4; else if (e.x > w + 4) e.x = -4;
+      const a = 0.34 + 0.34 * Math.sin(t * 3 + e.tw);
+      ctx.fillStyle = 'rgba(255,190,92,' + a.toFixed(3) + ')';
+      ctx.fillRect(e.x | 0, e.y | 0, e.r, e.r);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    // scanlines + vignette
+    if (menuScan) { ctx.fillStyle = menuScan; ctx.fillRect(0, 0, w, h); }
+    if (menuVig) ctx.drawImage(menuVig, 0, 0);
+  }
+
   // ---- frame ----------------------------------------------------------------------------------
 
   function frame(g) {
     if (!ctx) return;
     if (!g) {
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, C.SCREEN_W, C.SCREEN_H);
+      _menuBackdrop();
       return;
     }
     _drawViewport(g);

@@ -190,6 +190,7 @@ const Main = (function () {
         // get no surprise fullscreen — they have the pause-menu toggle.
         if (matchMedia('(pointer: coarse)').matches) _maximizeScreen();
         AUDIO.init();
+        document.body.dataset.side = btn.dataset.side;   // retint menu chrome to the faction
         _showMissions(btn.dataset.side);
       });
     });
