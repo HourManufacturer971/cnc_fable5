@@ -483,20 +483,27 @@ function _stepAlongPath(u, d) {
       u.pathi = 0;
       return 'moving';
     }
-    // crush enemy infantry standing there
     const o = occAt(wp.cx, wp.cy);
-    if (o && o !== u.id) {
-      const e = getEnt(o);
-      if (e && e.kind === 'unit' && e.owner !== u.owner && DATA.units[e.type].infantry && d.crush) {
-        spawnEffect('squish', e.x, e.y);
-        _maybePlay('squish', e.x, e.y);
-        killEntity(e, u);
-      }
+    const oe = o && o !== u.id ? getEnt(o) : null;
+    if (oe && oe.kind === 'building' && DATA.buildings[oe.type].gate) {
+      // friendly gate (isPassable already vetted ownership): pass THROUGH
+      // the cell without claiming it — the gate keeps its occ id so it
+      // never stops blocking enemy pathing while someone transits
+      clearOcc(curCx, curCy, u.id);
+      u._commit = -1;
+      u._repathFails = 0;
+    } else {
+    // crush enemy infantry standing there
+    if (oe && oe.kind === 'unit' && oe.owner !== u.owner && DATA.units[oe.type].infantry && d.crush) {
+      spawnEffect('squish', oe.x, oe.y);
+      _maybePlay('squish', oe.x, oe.y);
+      killEntity(oe, u);
     }
     clearOcc(curCx, curCy, u.id);
     setOcc(wp.cx, wp.cy, u.id);
     u._commit = wantIdx;
     u._repathFails = 0;
+    }
   }
 
   // turn before moving (vehicles); infantry snap
@@ -535,7 +542,9 @@ function _stepAlongPath(u, d) {
 
 function _autoAcquire(u, d) {
   const g = game;
-  if (!d.weapon || d.harvester || d.deploysTo || d.engineer || d.air) return;
+  // civilians carry pistols but never start fights — they only shoot back
+  // when hit (see the 'damaged' handler)
+  if (!d.weapon || d.harvester || d.deploysTo || d.engineer || d.air || d.civilian) return;
   if ((g.tick + u.id) % 8 !== 0) return;
   const w = DATA.weapons[d.weapon];
   const t = _nearestEnemy(u, d.sight + 1, { antiAir: !!(w.antiAir || d.weapon2), airOnly: !!w.airOnly });
@@ -773,6 +782,10 @@ function _harvester(u, d) {
         const take = Math.min(C.BAIL, g.tib[i]);
         g.tib[i] -= take;
         u.tib += take;
+        // blue chrysalite pays double at the refinery: the bay fills at the
+        // same physical rate, tibVal carries what the load is worth
+        u.tibVal = (u.tibVal || 0) + take * (g.tibType && g.tibType[i] === 1 ? 2 : 1);
+        if (g.tib[i] <= 0 && g.tibType) g.tibType[i] = 0;  // mined out: regrowth is green
         u.fieldCell = { cx, cy };
         if (!g.players[u.owner].isAI) _maybePlay('harvest', u.x, u.y);
       }
@@ -827,6 +840,9 @@ function _harvester(u, d) {
     if (dist(u.x, u.y, cellCenterX(dock.cx), cellCenterY(dock.cy)) <= C.CELL * 1.5) {
       u.state = 'unload';
       u._unload = 35;              // quicker turnaround keeps the economy moving
+      // pay out the load's VALUE (blue chrysalite carries a premium)
+      u.tib = Math.max(u.tib, u.tibVal || 0);
+      u.tibVal = 0;
       u._chunk = u.tib / 35;
       u._paid = 0;
       u._procId = 0;
@@ -1744,6 +1760,14 @@ EV.on('damaged', function (target, attacker, dmg) {
   const d = DATA.units[target.type];
   if (d.stealth) target.decloakTicks = Math.max(target.decloakTicks, 30);
   if (d.civilian) {
+    // shot at: villagers pull their pistols and pop back — brave, futile,
+    // barely a scratch. The home-anchor leash keeps them from chasing the
+    // shooter across the map. Unreachable attackers (aircraft) still panic.
+    if (d.weapon && attacker && !attacker._dead &&
+        _canTarget(_pickWeapon(target, attacker), attacker)) {
+      const anchor = target.guardAnchor || { x: target.x, y: target.y };
+      if (orderAttack(target, attacker, true)) { target.guardAnchor = anchor; return; }
+    }
     // panicked villager: run away from the shooter
     const ax = _entX(attacker), ay = _entY(attacker);
     const len = Math.max(1, dist(target.x, target.y, ax, ay));

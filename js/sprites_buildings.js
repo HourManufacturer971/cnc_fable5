@@ -1844,6 +1844,81 @@
   g.fillStyle = PAL.uiGold; g.fillRect(0, 44, 64, 4);
   SPRITES.cameo.brik = cam;
 
+  // ---- wall gate: a powered barrier between two posts. Frames indexed
+  // [closedH, openH, closedV, openV]; render picks orientation from the
+  // adjacent wall run and opens it when the owner's units approach.
+  function gatePost(g2, x, y) {
+    g2.fillStyle = OUT; g2.fillRect(x - 1, y - 1, 8, 22);
+    g2.fillStyle = TOP_L; g2.fillRect(x, y, 6, 6);
+    g2.fillStyle = TOP; g2.fillRect(x, y + 3, 6, 3);
+    g2.fillStyle = FACE; g2.fillRect(x, y + 6, 6, 12);
+    g2.fillStyle = FACE_D; g2.fillRect(x, y + 16, 6, 2);
+    g2.fillStyle = '#d8d8ca'; g2.fillRect(x, y, 6, 1);
+    g2.fillStyle = '#c8a83c'; g2.fillRect(x + 2, y + 7, 2, 2); // status lamp
+  }
+  function gateFrame(vert, open, damaged) {
+    const c2 = mkCanvas(24, 32);
+    const g2 = c2.getContext('2d');
+    if (!vert) {
+      g2.fillStyle = 'rgba(0,0,0,0.30)'; g2.fillRect(2, 18, 20, 4);  // recessed track
+      if (open) {
+        // bar retracted into stubs beside each post
+        g2.fillStyle = OUT; g2.fillRect(6, 12, 3, 9); g2.fillRect(15, 12, 3, 9);
+        g2.fillStyle = '#6e6e64'; g2.fillRect(7, 13, 1, 7); g2.fillRect(16, 13, 1, 7);
+      } else {
+        g2.fillStyle = OUT; g2.fillRect(3, 10, 18, 12);
+        g2.fillStyle = '#6e6e64'; g2.fillRect(4, 11, 16, 4);   // bar top face
+        for (let i = 0; i < 4; i++) {                          // warning chevrons
+          g2.fillStyle = i & 1 ? '#c8a83c' : '#2c2c26';
+          g2.fillRect(4 + i * 4, 15, 4, 6);
+        }
+        g2.fillStyle = '#8a8a7e'; g2.fillRect(4, 11, 16, 1);
+      }
+      gatePost(g2, 1, 6);
+      gatePost(g2, 18, 6);
+    } else {
+      g2.fillStyle = 'rgba(0,0,0,0.30)'; g2.fillRect(9, 2, 6, 28);   // track
+      if (open) {
+        g2.fillStyle = OUT; g2.fillRect(8, 8, 8, 3); g2.fillRect(8, 20, 8, 3);
+        g2.fillStyle = '#6e6e64'; g2.fillRect(9, 9, 6, 1); g2.fillRect(9, 21, 6, 1);
+      } else {
+        g2.fillStyle = OUT; g2.fillRect(7, 8, 10, 16);
+        g2.fillStyle = '#6e6e64'; g2.fillRect(8, 9, 8, 3);
+        for (let i = 0; i < 4; i++) {
+          g2.fillStyle = i & 1 ? '#c8a83c' : '#2c2c26';
+          g2.fillRect(8, 12 + i * 3, 8, 3);
+        }
+      }
+      gatePost(g2, 9, 0);
+      gatePost(g2, 9, 12);
+    }
+    if (damaged) {
+      g2.fillStyle = 'rgba(20,16,10,0.35)'; g2.fillRect(0, 0, 24, 32);
+      g2.fillStyle = OUT;
+      g2.fillRect(10, 12, 3, 2); g2.fillRect(6, 17, 2, 2); g2.fillRect(15, 19, 2, 2);
+    }
+    g2.fillStyle = 'rgba(0,0,0,0.22)'; g2.fillRect(18, 26, 6, 3);
+    return c2;
+  }
+  const gateN = [gateFrame(false, false, false), gateFrame(false, true, false),
+    gateFrame(true, false, false), gateFrame(true, true, false)];
+  const gateD = [gateFrame(false, false, true), gateFrame(false, true, true),
+    gateFrame(true, false, true), gateFrame(true, true, true)];
+  const gateEntry = { normal: gateN, damaged: gateD, yOff: 4, gateFrames: true };
+  SPRITES.buildings.gate = { gdi: gateEntry, nod: gateEntry, mut: gateEntry, civ: gateEntry };
+
+  const gcam = mkCanvas(64, 48);
+  const gg = gcam.getContext('2d');
+  gg.fillStyle = PAL.cameoBg; gg.fillRect(0, 0, 64, 48);
+  gg.drawImage(wallFrame(10, false), 0, 6, 24, 32);
+  gg.drawImage(gateFrame(false, false, false), 20, 6, 24, 32);
+  gg.drawImage(wallFrame(10, false), 40, 6, 24, 32);
+  gg.fillStyle = 'rgba(0,0,0,0.5)'; gg.fillRect(0, 36, 64, 8);
+  gg.font = '7px monospace'; gg.textAlign = 'center'; gg.textBaseline = 'middle';
+  gg.fillStyle = PAL.uiText; gg.fillText('Wall Gate', 32, 40, 62);
+  gg.fillStyle = PAL.uiGold; gg.fillRect(0, 44, 64, 4);
+  SPRITES.cameo.gate = gcam;
+
   // ==== CIVILIAN VILLAGE ========================================================
   // Neutral houses (48x48, 2x2 cells): pitched roofs with a lit NW slope and a
   // shaded SE slope, timber/plaster south facades, chimneys, SE cast shadows.

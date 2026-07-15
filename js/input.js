@@ -449,8 +449,10 @@ const Input = (function () {
     wallLine = null;
   }
 
-  // wall run: straight line from start toward end along the dominant axis
+  // wall run: straight line from start toward end along the dominant axis.
+  // Gates place one at a time — a drag must not sweep out a $250-a-cell run.
   function _wallCells(a, b) {
+    if (modeArg && DATA.buildings[modeArg] && DATA.buildings[modeArg].gate) return [a];
     const cells = [];
     const dx = b.cx - a.cx, dy = b.cy - a.cy;
     if (Math.abs(dx) >= Math.abs(dy)) {
@@ -938,12 +940,12 @@ const Input = (function () {
         break;
       }
       case 'e': {
-        // select every armed unit on screen (the "grab the army" key)
+        // select every unit on screen EXCEPT harvesters (the "grab the army"
+        // key — engineers, APCs and MCVs ride along; the economy stays home)
         const ids = [];
         for (const u of g.units.values()) {
           if (u.owner !== g.humanSide) continue;
-          const ud = DATA.units[u.type];
-          if (!ud.weapon || ud.harvester) continue;
+          if (DATA.units[u.type].harvester) continue;
           const sx = (u.x - g.camera.x) * 2, sy = (u.y - g.camera.y) * 2;
           if (sx >= 0 && sx <= C.VIEW_PW && sy >= 0 && sy <= C.VIEW_PH) ids.push(u.id);
         }

@@ -19,7 +19,7 @@
 // execution itself (NET.applying) go to the real implementations.
 
 const NET = (function () {
-  const PROTO = 1;         // bump when commands/handshake change shape
+  const PROTO = 2;         // bump when commands/handshake OR sim rules change shape
   const DELAY = 5;         // ticks between issuing and executing an order
   const CK_EVERY = 128;    // checksum exchange cadence (ticks)
 
@@ -48,12 +48,91 @@ const NET = (function () {
   function _status(s) { if (onStatus) onStatus(s); }
   function _other(s) { return s === 'gdi' ? 'nod' : 'gdi'; }
 
-  function _enc(obj) {
-    return btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+  // ---- code packing: keep the copy-paste codes SHORT ------------------------
+  // A datachannel-only SDP is ~95% boilerplate. We ship only the fields the
+  // peer genuinely needs (ICE credentials, DTLS fingerprint, role, candidates)
+  // and rebuild the standard SDP from a template on the other end, then
+  // deflate + base64url the JSON. Typical code: ~250 chars instead of ~2000.
+
+  function _packSdp(sdp) {
+    const get = re => { const m = sdp.match(re); return m ? m[1] : ''; };
+    const cands = [];
+    for (const line of sdp.split(/\r?\n/)) {
+      const m = line.match(/^a=(candidate:.*)$/);
+      if (m) cands.push(m[1]);
+    }
+    return {
+      u: get(/^a=ice-ufrag:(.*)$/m),
+      p: get(/^a=ice-pwd:(.*)$/m),
+      a: get(/^a=fingerprint:(\S+) /m) || 'sha-256',
+      f: get(/^a=fingerprint:\S+ (.*)$/m),
+      s: get(/^a=setup:(\w+)$/m),
+      m: get(/^a=mid:(.*)$/m) || '0',
+      c: cands,
+    };
   }
-  function _dec(str) {
+  function _unpackSdp(d) {
+    const lines = [
+      'v=0',
+      'o=- 8144460461903370238 2 IN IP4 127.0.0.1',
+      's=-',
+      't=0 0',
+      'a=group:BUNDLE ' + d.m,
+      'a=msid-semantic: WMS',
+      'm=application 9 UDP/DTLS/SCTP webrtc-datachannel',
+      'c=IN IP4 0.0.0.0',
+    ];
+    for (const c of d.c) lines.push('a=' + c);
+    lines.push(
+      'a=ice-ufrag:' + d.u,
+      'a=ice-pwd:' + d.p,
+      'a=ice-options:trickle',
+      'a=fingerprint:' + d.a + ' ' + d.f,
+      'a=setup:' + d.s,
+      'a=mid:' + d.m,
+      'a=sctp-port:5000',
+      'a=max-message-size:262144');
+    return lines.join('\r\n') + '\r\n';
+  }
+
+  function _b64u(bytes) {
+    let s = '';
+    for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function _unb64u(str) {
+    const t = atob(str.replace(/-/g, '+').replace(/_/g, '/'));
+    const u = new Uint8Array(t.length);
+    for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i);
+    return u;
+  }
+  async function _deflate(str) {
+    const st = new Blob([new TextEncoder().encode(str)]).stream()
+      .pipeThrough(new CompressionStream('deflate-raw'));
+    return new Uint8Array(await new Response(st).arrayBuffer());
+  }
+  async function _inflate(bytes) {
+    const st = new Blob([bytes]).stream()
+      .pipeThrough(new DecompressionStream('deflate-raw'));
+    return new TextDecoder().decode(await new Response(st).arrayBuffer());
+  }
+
+  async function _enc(obj) {
+    const json = JSON.stringify(obj);
+    if (typeof CompressionStream !== 'undefined') {
+      return 'HW2.' + _b64u(await _deflate(json));
+    }
+    return 'HW1.' + _b64u(new TextEncoder().encode(json)); // rare: no deflate support
+  }
+  async function _dec(str) {
+    const s = String(str).replace(/\s+/g, '');
+    if (s.startsWith('HW2.') && typeof DecompressionStream === 'undefined') {
+      throw new Error('This browser cannot read the code — both players need a current browser.');
+    }
     try {
-      return JSON.parse(decodeURIComponent(escape(atob(str.replace(/\s+/g, '')))));
+      if (s.startsWith('HW2.')) return JSON.parse(await _inflate(_unb64u(s.slice(4))));
+      if (s.startsWith('HW1.')) return JSON.parse(new TextDecoder().decode(_unb64u(s.slice(4))));
+      return JSON.parse(decodeURIComponent(escape(atob(s)))); // legacy long code
     } catch (e) {
       throw new Error('Unreadable code — copy the whole block exactly.');
     }
@@ -111,22 +190,22 @@ const NET = (function () {
     await _gathered(p);
     if (pc !== p) throw new Error('Cancelled');
     _status('Invite code ready — send it to your opponent.');
-    return _enc({ v: PROTO, k: 'o', sdp: p.localDescription.sdp });
+    return _enc({ v: PROTO, k: 'o', d: _packSdp(p.localDescription.sdp) });
   }
 
   // host: paste the guest's reply
   async function acceptAnswer(code) {
-    const m = _dec(code);
+    const m = await _dec(code);
     if (m.k !== 'a') throw new Error('That is not a reply code.');
     if (!pc) throw new Error('Host a game first, then paste the reply.');
     if (pc.signalingState !== 'have-local-offer') { _status('Connecting…'); return; }
-    await pc.setRemoteDescription({ type: 'answer', sdp: m.sdp });
+    await pc.setRemoteDescription({ type: 'answer', sdp: _unpackSdp(m.d) });
     _status('Connecting…');
   }
 
   // guest: paste the host's invite, produce the reply code
   async function join(code, statusCb) {
-    const m = _dec(code);      // validate BEFORE tearing down a prior attempt
+    const m = await _dec(code); // validate BEFORE tearing down a prior attempt
     _teardown();
     onStatus = statusCb || null;
     isHost = false;
@@ -141,14 +220,14 @@ const NET = (function () {
     };
     pc.ondatachannel = ev => _wireChannel(ev.channel);
     const p = pc;                      // this attempt's peer; Back/re-join may swap pc
-    await p.setRemoteDescription({ type: 'offer', sdp: m.sdp });
+    await p.setRemoteDescription({ type: 'offer', sdp: _unpackSdp(m.d) });
     if (pc !== p) throw new Error('Cancelled');
     const answer = await p.createAnswer();
     await p.setLocalDescription(answer);
     await _gathered(p);
     if (pc !== p) throw new Error('Cancelled');
     _status('Reply code ready — send it back, then wait…');
-    return _enc({ v: PROTO, k: 'a', sdp: p.localDescription.sdp });
+    return _enc({ v: PROTO, k: 'a', d: _packSdp(p.localDescription.sdp) });
   }
 
   // same-machine transport over BroadcastChannel: lets two tabs play without

@@ -497,7 +497,7 @@ const MAPGEN = (function () {
   // Place a tiberium field of ~`count` cells centered at (fx,fy), denser at the
   // middle with radial falloff, plus a blossom tree at the heart.
   // Only writes onto reachable grass/dirt cells outside the start ±2 squares.
-  function placeField(g, rng, fx, fy, count, starts, reach) {
+  function placeField(g, rng, fx, fy, count, starts, reach, blue) {
     const R = Math.sqrt(count / Math.PI) + 2.5;
     const Ri = Math.ceil(R);
     const cand = [];
@@ -525,6 +525,7 @@ const MAPGEN = (function () {
       const idx = cellIdx(c.x, c.y);
       const v = bails * C.BAIL;                              // 75..300
       if (v > g.tib[idx]) g.tib[idx] = v;
+      if (blue && g.tibType) g.tibType[idx] = 1;             // premium blue pocket
     }
     // Blossom tree at the heart: nearest candidate to the intended center.
     let heart = cand[0];
@@ -743,7 +744,9 @@ const MAPGEN = (function () {
       if (!bestC) bestC = { x: 32, y: 32, e: 0 };
       fieldCenters.push(bestC);
       const count = 50 + ((rng() * 31) | 0); // 50..80
-      placeField(g, rng, bestC.x, bestC.y, count, starts, reach);
+      // the first (most contested) midfield is BLUE chrysalite — worth double
+      // at the refinery, a prize worth fighting over in the map's middle
+      placeField(g, rng, bestC.x, bestC.y, count, starts, reach, i === 0);
     }
 
     // guaranteed tiberium-free route between the bases (mirrors the always-

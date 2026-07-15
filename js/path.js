@@ -41,7 +41,7 @@ const findPath = (function () {
     return top;
   }
 
-  const BLOCK = 0, FREE = 1, SOFT = 2;
+  const BLOCK = 0, FREE = 1, SOFT = 2, GATE = 3;
   function cellState(cx, cy, unit) {
     if (!inMap(cx, cy)) return BLOCK;
     const i = cellIdx(cx, cy);
@@ -50,6 +50,10 @@ const findPath = (function () {
     if (!o || (unit && o === unit.id)) return FREE;
     const e = getEnt(o);
     if (e && e.kind === 'unit') return SOFT;
+    // a finished friendly gate is a doorway: near-free passage (a token
+    // penalty keeps open ground preferred when both routes are equal)
+    if (e && e.kind === 'building' && unit && DATA.buildings[e.type].gate &&
+        e.owner === unit.owner && e.buildProgress >= 1) return GATE;
     return BLOCK;
   }
 
@@ -130,7 +134,8 @@ const findPath = (function () {
         const ni = cellIdx(nx, ny);
         if (state[ni] === closedTag) continue;
         const tibPenalty = (avoidTib && game.tib[ni] > 0) ? 30 : 0;
-        const step = (dx && dy ? 14 : 10) + (st === SOFT ? 80 : 0) + tibPenalty;
+        const step = (dx && dy ? 14 : 10) +
+          (st === SOFT ? 80 : st === GATE ? 15 : 0) + tibPenalty;
         const ng = gCost[cur] + step;
         if (state[ni] !== openTag || ng < gCost[ni]) {
           gCost[ni] = ng;

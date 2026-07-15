@@ -17,6 +17,7 @@ DATA.warheads = {
 DATA.weapons = {
   m16:       { dmg: 15, range: 3.0, rof: 12, speed: 0, warhead: 'sa', splash: 0, sound: 'mgun' },
   pistol:    { dmg: 8,  range: 2.5, rof: 8,  speed: 0, warhead: 'sa', splash: 0, sound: 'pistol' },
+  civgun:    { dmg: 4,  range: 3.0, rof: 26, speed: 0, warhead: 'sa', splash: 0, sound: 'pistol' }, // villager pot-shots: brave, futile
   sniper:    { dmg: 90, range: 5.0, rof: 25, speed: 0, warhead: 'sa', splash: 0, sound: 'pistol' },
   grenade:   { dmg: 40, range: 3.5, rof: 28, speed: 5, warhead: 'he', splash: 14, arc: true, sound: 'rocket' },
   dragon:    { dmg: 42, range: 4.5, rof: 32, speed: 6, warhead: 'ap', splash: 8, homing: true, antiAir: true, sound: 'rocket' },
@@ -70,8 +71,8 @@ DATA.units = {
   // creature — never buildable; spawns when infantry die on chrysalite
   vice: { name: 'Fleshling', cost: 0, hp: 150, speed: 1.2, sight: 3, armor: 'light', weapon: 'slime', side: null, factory: null, prereq: [], creature: true, tibImmune: true, turn: 4 },
   // neutral villagers — never buildable; wander the hamlet, flee gunfire
-  c1:   { name: 'Civilian', cost: 0, hp: 25, speed: 1.0, sight: 2, armor: 'none', weapon: null, side: null, factory: null, prereq: [], infantry: true, civilian: true },
-  c2:   { name: 'Civilian', cost: 0, hp: 25, speed: 1.0, sight: 2, armor: 'none', weapon: null, side: null, factory: null, prereq: [], infantry: true, civilian: true },
+  c1:   { name: 'Civilian', cost: 0, hp: 25, speed: 1.0, sight: 2, armor: 'none', weapon: 'civgun', side: null, factory: null, prereq: [], infantry: true, civilian: true },
+  c2:   { name: 'Civilian', cost: 0, hp: 25, speed: 1.0, sight: 2, armor: 'none', weapon: 'civgun', side: null, factory: null, prereq: [], infantry: true, civilian: true },
   // aircraft
   orca: { name: 'Kestrel', cost: 1200, hp: 125, speed: 4.0, sight: 5, armor: 'light', weapon: 'orcaRockets', side: 'gdi', factory: 'air', prereq: [], air: true, ammo: 6 },
   heli: { name: 'Gunship', cost: 1200, hp: 125, speed: 3.6, sight: 5, armor: 'light', weapon: 'heliMg', side: 'nod', factory: 'air', prereq: [], air: true, ammo: 15 },
@@ -94,6 +95,7 @@ DATA.buildings = {
   hpad: { name: 'Helipad', cost: 1500, hp: 400, w: 2, h: 2, armor: 'wood', sight: 3, power: 0, drain: 10, side: null, prereq: ['proc'], factory: 'air', freeUnitAir: true },
   fix:  { name: 'Repair Facility', cost: 1200, hp: 400, w: 3, h: 3, armor: 'wood', sight: 3, power: 0, drain: 30, side: null, prereq: ['weap', 'afld'], prereqAny: true, repairPad: true },
   brik: { name: 'Concrete Wall', cost: 100, hp: 300, w: 1, h: 1, armor: 'concrete', sight: 1, power: 0, drain: 0, side: null, prereq: [], defense: true, wall: true },
+  gate: { name: 'Wall Gate', cost: 250, hp: 350, w: 1, h: 1, armor: 'concrete', sight: 1, power: 0, drain: 0, side: null, prereq: [], defense: true, wall: true, gate: true },
   gtwr: { name: 'Guard Tower', cost: 500, hp: 400, w: 1, h: 1, armor: 'wood', sight: 4, power: 0, drain: 10, side: 'gdi', prereq: ['pyle'], weapon: 'gtwrMg', defense: true, threat: 0.4 },
   atwr: { name: 'Adv. Guard Tower', cost: 1000, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 60, side: 'gdi', prereq: ['hq'], weapon: 'atwrMissile', needsPower: true, defense: true, threat: 0.9 },
   gun:  { name: 'Gun Turret', cost: 600, hp: 400, w: 1, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 20, side: 'nod', prereq: ['hand'], weapon: 'gunTurret', turret: true, defense: true, threat: 0.5 },
@@ -112,11 +114,11 @@ DATA.buildings = {
 // sidebar ordering (filtered by prereqOk at runtime)
 DATA.buildList = {
   gdi: {
-    buildings: ['nuke', 'proc', 'pyle', 'nuk2', 'silo', 'brik', 'weap', 'hq', 'gtwr', 'fix', 'hpad', 'atwr', 'eye'],
+    buildings: ['nuke', 'proc', 'pyle', 'nuk2', 'silo', 'brik', 'gate', 'weap', 'hq', 'gtwr', 'fix', 'hpad', 'atwr', 'eye'],
     units: ['e1', 'e2', 'e3', 'e6', 'rmbo', 'jeep', 'apc', 'mtnk', 'harv', 'msam', 'htnk', 'orca', 'mcv'],
   },
   nod: {
-    buildings: ['nuke', 'proc', 'hand', 'nuk2', 'silo', 'brik', 'afld', 'hq', 'gun', 'sam', 'fix', 'hpad', 'obli', 'tmpl'],
+    buildings: ['nuke', 'proc', 'hand', 'nuk2', 'silo', 'brik', 'gate', 'afld', 'hq', 'gun', 'sam', 'fix', 'hpad', 'obli', 'tmpl'],
     units: ['e1', 'e3', 'e4', 'e6', 'e5', 'rmbo', 'bggy', 'bike', 'ltnk', 'harv', 'arty', 'ftnk', 'stnk', 'heli', 'mcv'],
   },
 };
@@ -163,6 +165,7 @@ DATA.blurb = {
   hpad: 'Builds and rearms one aircraft',
   fix: 'Repairs vehicles parked on its pad',
   brik: 'Blocks movement and absorbs fire',
+  gate: 'Wall segment that opens for your units only',
   gtwr: 'Anti-infantry machine-gun tower',
   atwr: 'Missile tower - strikes ground and air',
   gun: 'Anti-armor cannon turret',

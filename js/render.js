@@ -20,6 +20,10 @@ const Render = (function () {
   let evaWired = false;
   let vignette = null, vigW = 0, vigH = 0;   // cached radial vignette gradient
   let grainPat = null;                        // cached film-grain pattern
+  // replay spectator vision: draw the whole battle unfogged. Render-only —
+  // g.shroud still evolves exactly as it did live (the sim reads it), we
+  // just stop hiding things behind it while a replay plays.
+  let seeAll = false;
 
   function _nowMs() {
     return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
@@ -188,17 +192,46 @@ const Render = (function () {
     const mc = minimap.getContext('2d');
     if (minimapBase) mc.drawImage(minimapBase, 0, 0);
     else { mc.fillStyle = '#000'; mc.fillRect(0, 0, C.MM_S, C.MM_S); }
-    mc.fillStyle = PAL.tib2;
     for (let cy = 0; cy < C.MAP_H; cy++) {
       for (let cx = 0; cx < C.MAP_W; cx++) {
         const i = cellIdx(cx, cy);
-        if (g.shroud[i] === 1 && g.tib[i] > 0) mc.fillRect(cx * MMC, cy * MMC, MMC, MMC);
+        if ((seeAll || g.shroud[i] === 1) && g.tib[i] > 0) {
+          mc.fillStyle = (g.tibType && g.tibType[i] === 1) ? '#3c8ce0' : PAL.tib2;
+          mc.fillRect(cx * MMC, cy * MMC, MMC, MMC);
+        }
       }
     }
-    mc.fillStyle = '#000';
-    for (let cy = 0; cy < C.MAP_H; cy++) {
-      for (let cx = 0; cx < C.MAP_W; cx++) {
-        if (g.shroud[cellIdx(cx, cy)] !== 1) mc.fillRect(cx * MMC, cy * MMC, MMC, MMC);
+    if (!seeAll) {
+      const vis = g.visible;
+      // explored terrain outside anyone's current sight goes grey — the map
+      // remembers the ground, not what's happening on it
+      mc.fillStyle = 'rgba(28,30,26,0.55)';
+      for (let cy = 0; cy < C.MAP_H; cy++) {
+        for (let cx = 0; cx < C.MAP_W; cx++) {
+          const i = cellIdx(cx, cy);
+          if (g.shroud[i] === 1 && (!vis || vis[i] !== 1)) mc.fillRect(cx * MMC, cy * MMC, MMC, MMC);
+        }
+      }
+      // rim the live-sight region: the ring inside which enemy blips appear
+      if (vis) {
+        mc.fillStyle = 'rgba(150,200,140,0.5)';
+        for (let cy = 0; cy < C.MAP_H; cy++) {
+          for (let cx = 0; cx < C.MAP_W; cx++) {
+            if (vis[cellIdx(cx, cy)] !== 1) continue;
+            if ((cx > 0 && vis[cellIdx(cx - 1, cy)] !== 1) ||
+                (cx < C.MAP_W - 1 && vis[cellIdx(cx + 1, cy)] !== 1) ||
+                (cy > 0 && vis[cellIdx(cx, cy - 1)] !== 1) ||
+                (cy < C.MAP_H - 1 && vis[cellIdx(cx, cy + 1)] !== 1)) {
+              mc.fillRect(cx * MMC, cy * MMC, MMC, MMC);
+            }
+          }
+        }
+      }
+      mc.fillStyle = '#000';
+      for (let cy = 0; cy < C.MAP_H; cy++) {
+        for (let cx = 0; cx < C.MAP_W; cx++) {
+          if (g.shroud[cellIdx(cx, cy)] !== 1) mc.fillRect(cx * MMC, cy * MMC, MMC, MMC);
+        }
       }
     }
   }
@@ -234,8 +267,8 @@ const Render = (function () {
   function _drawRadarBlips(g) {
     const hunt = _huntCount(g) > 0;
     for (const b of g.buildings.values()) {
-      if (!hunt && g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
-      if (hunt && b.owner !== g.ai.side && g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
+      if (!seeAll && !hunt && g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
+      if (!seeAll && hunt && b.owner !== g.ai.side && g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
       ctx.fillStyle = OWNER_COLOR[b.owner] || '#ccc';
       ctx.fillRect(C.MM_X + b.cx * MMC, C.MM_Y + b.cy * MMC, b.w * MMC, b.h * MMC);
     }
@@ -243,7 +276,7 @@ const Render = (function () {
     if (g.crates && ((g.tick >> 3) & 1)) {
       ctx.fillStyle = '#fff';
       for (const c of g.crates) {
-        if (g.shroud[cellIdx(c.cx, c.cy)] === 1) ctx.fillRect(C.MM_X + c.cx * MMC, C.MM_Y + c.cy * MMC, MMC, MMC);
+        if (seeAll || g.shroud[cellIdx(c.cx, c.cy)] === 1) ctx.fillRect(C.MM_X + c.cx * MMC, C.MM_Y + c.cy * MMC, MMC, MMC);
       }
     }
     // alert pings: expanding rings for ~6s (Space jumps to the newest)
@@ -264,7 +297,7 @@ const Render = (function () {
     for (const u of g.units.values()) {
       const cx = worldToCell(u.x), cy = worldToCell(u.y);
       const i = cellIdx(cx, cy);
-      const revealed = hunt && u.owner === g.ai.side;   // last stragglers show
+      const revealed = seeAll || (hunt && u.owner === g.ai.side);   // spectator / stragglers
       if (!revealed) {
         if (g.shroud[i] !== 1) continue;
         if (u.owner !== g.humanSide) {
@@ -373,14 +406,34 @@ const Render = (function () {
       frames = set.open;
     }
     let frame;
-    if (set.wallMask) {
+    if (set.gateFrames) {
+      // orient to the wall run it sits in; open when the owner's ground
+      // units come close (cosmetic — passability lives in isPassable)
+      const nearWall = (cx, cy) => {
+        const o = occAt(cx, cy);
+        if (o <= 0) return false;
+        const e = getEnt(o);
+        return e && e.kind === 'building' && DATA.buildings[e.type].wall;
+      };
+      const vert = nearWall(b.cx, b.cy - 1) || nearWall(b.cx, b.cy + 1);
+      let open = false;
+      if (b.buildProgress >= 1) {
+        const gx2 = cellCenterX(b.cx), gy2 = cellCenterY(b.cy);
+        for (const u2 of g.units.values()) {
+          if (u2.owner !== b.owner || DATA.units[u2.type].air) continue;
+          if (dist(u2.x, u2.y, gx2, gy2) <= C.CELL * 1.7) { open = true; break; }
+        }
+      }
+      frame = frames[(vert ? 2 : 0) + (open ? 1 : 0)];
+    } else if (set.wallMask) {
       // walls auto-connect: frame index = neighbor bitmask (1=N 2=E 4=S 8=W)
       let m = 0;
       const isWall = (cx, cy) => {
         const o = occAt(cx, cy);
         if (o <= 0) return false;
         const e = getEnt(o);
-        return e && e.kind === 'building' && e.type === b.type;
+        return e && e.kind === 'building' &&
+          (e.type === b.type || DATA.buildings[e.type].gate);
       };
       if (isWall(b.cx, b.cy - 1)) m |= 1;
       if (isWall(b.cx + 1, b.cy)) m |= 2;
@@ -435,7 +488,8 @@ const Render = (function () {
 
   function _drawUnit(g, u, X, Y) {
     const d = DATA.units[u.type];
-    const hidden = u.cloaked && u.owner !== g.humanSide;
+    // the replay spectator sees cloaked units as the owner would (shimmer)
+    const hidden = u.cloaked && u.owner !== g.humanSide && !seeAll;
     if (hidden) return;
 
     if (d.infantry) {
@@ -490,7 +544,7 @@ const Render = (function () {
       ctx.fill();
     }
 
-    const cloakAlpha = u.cloaked && u.owner === g.humanSide;
+    const cloakAlpha = u.cloaked && (u.owner === g.humanSide || seeAll);
     if (cloakAlpha) ctx.globalAlpha = 0.35;
     drawSpr(body, x, y);
     if (set.turret) drawSpr(set.turret[u.turretFacing & 15], x, y);
@@ -768,14 +822,16 @@ const Render = (function () {
     // glowed and dominated the stamp count), and the stamp is generously
     // sized so it still reads as a continuous field.
     const green = _glow(96, 240, 128);
+    const blueG = _glow(96, 150, 255);
     for (let cy = c0y; cy <= c1y; cy++) {
       for (let cx = c0x; cx <= c1x; cx++) {
         const i = cellIdx(cx, cy);
         const v = g.tib[i];
-        if (v <= 90 || g.shroud[i] !== 1) continue;
+        if (v <= 90 || (!seeAll && g.shroud[i] !== 1)) continue;
         const sz = cs * (v > 200 ? 1.9 : 1.5);
         ctx.globalAlpha = v > 200 ? 0.17 : 0.12;
-        ctx.drawImage(green, X(cellCenterX(cx)) - sz / 2, Y(cellCenterY(cy)) - sz / 2, sz, sz);
+        ctx.drawImage(g.tibType && g.tibType[i] === 1 ? blueG : green,
+          X(cellCenterX(cx)) - sz / 2, Y(cellCenterY(cy)) - sz / 2, sz, sz);
       }
     }
     ctx.globalAlpha = 1;
@@ -786,7 +842,7 @@ const Render = (function () {
         // gate on the beam SOURCE (the firing obelisk): a beam from a fogged
         // shooter must not re-light itself over the shroud and leak position
         const scx = worldToCell(e.x1), scy = worldToCell(e.y1);
-        if (inMap(scx, scy) && g.shroud[cellIdx(scx, scy)] !== 1) continue;
+        if (!seeAll && inMap(scx, scy) && g.shroud[cellIdx(scx, scy)] !== 1) continue;
         ctx.strokeStyle = 'rgba(240,60,50,0.5)';
         ctx.lineWidth = 16;
         ctx.beginPath();
@@ -796,7 +852,7 @@ const Render = (function () {
       }
       if (e.name === 'ionBeam') {
         const icx = worldToCell(e.x), icy = worldToCell(e.y);
-        if (inMap(icx, icy) && g.shroud[cellIdx(icx, icy)] !== 1) continue;
+        if (!seeAll && inMap(icx, icy) && g.shroud[cellIdx(icx, icy)] !== 1) continue;
         // trace the beam column from the top of the viewport down to the
         // impact (a wide soft additive stroke matching _drawEffect's column)
         ctx.strokeStyle = 'rgba(170,215,255,0.4)';
@@ -809,7 +865,7 @@ const Render = (function () {
       const gd = _effectGlow(e.name);
       if (!gd) continue;
       const cx = worldToCell(e.x), cy = worldToCell(e.y);
-      if (inMap(cx, cy) && g.shroud[cellIdx(cx, cy)] !== 1) continue;
+      if (!seeAll && inMap(cx, cy) && g.shroud[cellIdx(cx, cy)] !== 1) continue;
       // fade explosion/flame glow over the effect's life
       let a = gd[2];
       if (e.ttl) a *= Math.max(0.15, 1 - e.tick / e.ttl);
@@ -822,7 +878,7 @@ const Render = (function () {
     // charging obelisks / beam spires pulse a red glow before firing
     for (const b of g.buildings.values()) {
       if (!b.charging || b._dead) continue;
-      if (g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
+      if (!seeAll && g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
       ctx.globalAlpha = 0.4 + 0.3 * Math.sin(g.tick * 0.5);
       const s = 70;
       ctx.drawImage(_glow(240, 60, 50), X(_entX(b)) - s / 2, Y(_entY(b)) - s / 2, s, s);
@@ -877,10 +933,12 @@ const Render = (function () {
     const t0x = Math.max(0, c0x - 1), t0y = Math.max(0, c0y - 1);
     for (let cy = t0y; cy <= c1y; cy++) {
       for (let cx = t0x; cx <= c1x; cx++) {
-        const v = g.tib[cellIdx(cx, cy)];
+        const i2 = cellIdx(cx, cy);
+        const v = g.tib[i2];
         if (v <= 0) continue;
         const density = v > 200 ? 2 : v > 100 ? 1 : 0;
-        const tv = SPRITES.tiberium[density];
+        const blue = g.tibType && g.tibType[i2] === 1 && SPRITES.tiberiumBlue;
+        const tv = blue ? SPRITES.tiberiumBlue[density] : SPRITES.tiberium[density];
         const timg = Array.isArray(tv) ? tv[(cx * 7 + cy * 13) % tv.length] : tv;
         // per-cell jitter breaks the crystal clusters off the cell grid
         const tj = (cx * 0x9e37 ^ cy * 0x85eb) & 63;
@@ -896,7 +954,7 @@ const Render = (function () {
       for (let cy = c0y; cy <= c1y; cy++) {
         for (let cx = c0x; cx <= c1x; cx++) {
           const i = cellIdx(cx, cy);
-          if (g.terrain[i] !== 3 || g.shroud[i] !== 1) continue;
+          if (g.terrain[i] !== 3 || (!seeAll && g.shroud[i] !== 1)) continue;
           const landN = cy > 0 && g.terrain[cellIdx(cx, cy - 1)] !== 3;
           const landS = cy < C.MAP_H - 1 && g.terrain[cellIdx(cx, cy + 1)] !== 3;
           const landW = cx > 0 && g.terrain[cellIdx(cx - 1, cy)] !== 3;
@@ -963,7 +1021,7 @@ const Render = (function () {
     // goodie crates (under everything that moves)
     if (g.crates) {
       for (const c of g.crates) {
-        if (g.shroud[cellIdx(c.cx, c.cy)] !== 1) continue;
+        if (!seeAll && g.shroud[cellIdx(c.cx, c.cy)] !== 1) continue;
         const x = X(c.cx * C.CELL), y = Y(c.cy * C.CELL);
         ctx.fillStyle = '#101008'; ctx.fillRect(x + 9, y + 11, 32, 26);
         ctx.fillStyle = '#8a6a3c'; ctx.fillRect(x + 11, y + 13, 28, 22);
@@ -1040,7 +1098,8 @@ const Render = (function () {
     // air units on top
     for (const u of units) if (DATA.units[u.type].air) _drawUnit(g, u, X, Y);
 
-    // shroud
+    // shroud (skipped entirely for the replay spectator)
+    if (!seeAll) {
     ctx.fillStyle = '#000';
     for (let cy = c0y; cy <= c1y; cy++) {
       for (let cx = c0x; cx <= c1x; cx++) {
@@ -1061,6 +1120,7 @@ const Render = (function () {
           }
         }
       }
+    }
     }
 
     // atmosphere: grade the scene, bloom the emissives on top, then vignette
@@ -1717,9 +1777,9 @@ const Render = (function () {
       ctx.fillStyle = 'rgba(0,0,0,' + (0.92 * (1 - t / 26)).toFixed(3) + ')';
       ctx.fillRect(0, 0, C.SCREEN_W, C.SCREEN_H);
     }
-    if (g.introLabel && t < 92) {
-      const a = t < 10 ? t / 10 : t > 74 ? Math.max(0, (92 - t) / 18) : 1;
-      const cx2 = C.VIEW_PW / 2, cy2 = C.TAB_H + (C.SCREEN_H - C.TAB_H) * 0.36;
+    if (g.introLabel && t < 58) {
+      const a = t < 8 ? t / 8 : t > 46 ? Math.max(0, (58 - t) / 12) : 1;
+      const cx2 = C.VIEW_PW / 2, cy2 = C.TAB_H + (C.SCREEN_H - C.TAB_H) * 0.18;
       ctx.fillStyle = 'rgba(0,0,0,' + (0.44 * a).toFixed(3) + ')';
       ctx.fillRect(0, cy2 - 36, C.VIEW_PW, 72);
       ctx.fillStyle = 'rgba(224,184,64,' + (0.75 * a).toFixed(3) + ')';
@@ -1756,6 +1816,7 @@ const Render = (function () {
       _menuBackdrop();
       return;
     }
+    seeAll = typeof REPLAY !== 'undefined' && REPLAY.playing;
     _drawViewport(g);
     _drawTabBar(g);
     _drawSidebar(g);

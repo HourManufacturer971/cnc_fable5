@@ -427,13 +427,16 @@ const MUSIC = (function () {
     damp.connect(master);
   }
 
+  let startedOnce = false;
   function start() {
     if (!enabled) return;
-    // vary the opener per mission: re-roll on every game start. When the
-    // sequencer is already running (music plays through menus), it simply
-    // picks up the new track at its next scheduled step.
+    // the session's first battle always opens on T1 — the game's original
+    // theme; later starts re-roll so missions vary. When the sequencer is
+    // already running (music plays through menus), it simply picks up the
+    // new track at its next scheduled step.
     step = 0; pos = 0; loops = 0;
-    trackIdx = (Math.random() * TRACKS.length) | 0;
+    trackIdx = startedOnce ? (Math.random() * TRACKS.length) | 0 : 0;
+    startedOnce = true;
     if (running) return;
     _ensureCtx();
     if (!ctx) return;

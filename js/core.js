@@ -267,6 +267,7 @@ function makeGame(opts) {
     terrain: new Uint8Array(n),
     tvar: new Uint8Array(n),
     tib: new Uint16Array(n),
+    tibType: new Uint8Array(n),  // 0 = green chrysalite, 1 = blue (worth 2x)
     occ: new Int32Array(n),
     units: new Map(),
     buildings: new Map(),
@@ -369,6 +370,9 @@ function isPassable(cx, cy, unit) {
     const ent = getEnt(o);
     if (ent && ent.kind === 'unit' && DATA.units[unit.type].crush &&
         ent.owner !== unit.owner && DATA.units[ent.type].infantry) return true;
+    // a finished gate opens for its owner's ground units (never for enemies)
+    if (ent && ent.kind === 'building' && DATA.buildings[ent.type].gate &&
+        ent.owner === unit.owner && ent.buildProgress >= 1) return true;
   }
   return false;
 }

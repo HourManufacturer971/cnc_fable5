@@ -501,6 +501,25 @@
     [tibCanvas(6, 3, false), tibCanvas(7, 3, false), tibCanvas(6, 4, false)],
     [tibCanvas(12, 4, true), tibCanvas(11, 4, true), tibCanvas(13, 3, true)]);
 
+  // blue chrysalite: the same crystal shapes remapped green->blue (one-time
+  // boot getImageData on 24px canvases; the no-getImageData rule is per-frame)
+  function blueTint(src) {
+    const t = mk(src.width, src.height); const g = t.g;
+    g.drawImage(src, 0, 0);
+    const img = g.getImageData(0, 0, src.width, src.height);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (!d[i + 3]) continue;
+      const r = d[i], gr = d[i + 1], b = d[i + 2];
+      d[i] = Math.min(255, (r * 0.45) | 0);
+      d[i + 1] = Math.min(255, (gr * 0.55 + b * 0.25) | 0);
+      d[i + 2] = Math.min(255, (gr * 0.95 + 30) | 0);
+    }
+    g.putImageData(img, 0, 0);
+    return t.c;
+  }
+  SPRITES.tiberiumBlue = SPRITES.tiberium.map(row => row.map(blueTint));
+
   // ==== FX =====================================================================
 
   function sparks(g, cx, cy, rad, n, color) {
