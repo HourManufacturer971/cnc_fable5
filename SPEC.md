@@ -470,6 +470,27 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   Unarmed stragglers (harvester, MCV, engineer) count as targets too — victory needs every
   unit dead, so the assist must not vanish with the last building. DISABLED whenever
   `NET.active`: in MP `g.ai` is the remote human and the reveal would be a fog cheat.
+- **Battle intro** (`_drawIntro`, render-only, keyed off `g.tick` so it is identical
+  across MP peers and in replays): ticks 0–26 fade the whole screen up from black;
+  ticks 0–92 show `g.introLabel` (set by `startGame`: `OP n: TITLE`, `SKIRMISH — DIFF`,
+  or `MULTIPLAYER BATTLE`) as a title card — dark band across the viewport, gold rules,
+  ramped in/out. The label is per-client display state; the sim never reads it.
+- **Verdict tint** (`_drawVerdict`, render-local frame counter): once `g.status` is
+  `won`/`lost` the battlefield ramps to a gold (win) or crimson+dark (loss) cast over
+  ~48 frames, bridging the 1.4 s gap before the score panel. Resets while playing.
+- **Sidebar tooltips** (`_drawIconTooltip`, fine-pointer only via `matchMedia`): hovering
+  a strip icon draws a canvas tooltip left of the sidebar — name, `$cost`, a one-line
+  role blurb from `DATA.blurb[key]` (superweapon icons use `key+'Strike'` and show the
+  weapon name), and `Power +n` / `Power drain n` for buildings. Hidden while paused; on
+  touch there is no hover so it never draws.
+- **Score debrief**: rows end with `Field rating` — score-tiered `D CONSCRIPT` →
+  `S LEGENDARY`, capped at `C` on a loss. Menu/overlay buttons play the UI click via a
+  capture-phase delegated listener in `boot` (any click is a gesture, so it may also
+  `AUDIO.init()`).
+- **Controls reference** (`#controls` overlay): opened from the Options menu button or
+  `F1`/`?` in game (`Main.showControls` pauses first); Esc steps back to the pause menu
+  (guard in `togglePause`), and `endGame`/`desyncEnd` clear it like the pause panel.
+  Mouse + keyboard columns always show; the touch column is `.coarseOnly`.
 
 ### Controls (classic left-click scheme)
 - **Left-click**: select own unit(s)/building; with selection on: click enemy → attack;

@@ -121,6 +121,58 @@ DATA.buildList = {
   },
 };
 
+// one-line role blurbs for the sidebar hover tooltips (render-only)
+DATA.blurb = {
+  // infantry
+  e1: 'Cheap rifle infantry - strongest in numbers',
+  e2: 'Lobbed grenades - good against buildings',
+  e3: 'Anti-armor missiles - also hits aircraft',
+  e4: 'Short-range flames melt infantry fast',
+  e5: 'Toxin sprayer - immune to chrysalite',
+  e6: 'Captures enemy and neutral buildings',
+  rmbo: 'Elite sniper - devastates buildings up close',
+  // vehicles
+  jeep: 'Fast scout with a mounted machine gun',
+  bggy: 'Fast raider with a mounted machine gun',
+  bike: 'Fastest unit - rockets hit ground and air',
+  apc: 'Armored transport - carries 5 infantry',
+  ltnk: 'Quick, dependable main battle tank',
+  mtnk: 'Workhorse main battle tank',
+  htnk: 'Dual cannons and missiles - self-repairs',
+  ftnk: 'Incinerates infantry and structures',
+  stnk: 'Cloaked missile ambusher - thin armor',
+  arty: 'Long-range siege shells - very fragile',
+  msam: 'Long-range rocket barrages',
+  harv: 'Collects chrysalite and hauls it to a refinery',
+  mcv: 'Deploys into a new Construction Yard',
+  orca: 'Strike aircraft - rearms at a helipad',
+  heli: 'Chaingun gunship - rearms at a helipad',
+  // buildings
+  fact: 'Constructs every structure - guard it well',
+  nuke: 'Cheap, dependable base power',
+  nuk2: 'Twice the output in the same footprint',
+  proc: 'Refines chrysalite - includes a harvester',
+  silo: 'Stores 1500 extra credits of chrysalite',
+  pyle: 'Trains infantry',
+  hand: 'Trains infantry',
+  weap: 'Builds vehicles',
+  afld: 'Builds vehicles',
+  hq: 'Radar minimap - unlocks advanced tech',
+  eye: 'Charges the orbital lance superweapon',
+  tmpl: 'Charges the nuclear missile superweapon',
+  hpad: 'Builds and rearms one aircraft',
+  fix: 'Repairs vehicles parked on its pad',
+  brik: 'Blocks movement and absorbs fire',
+  gtwr: 'Anti-infantry machine-gun tower',
+  atwr: 'Missile tower - strikes ground and air',
+  gun: 'Anti-armor cannon turret',
+  obli: 'Devastating energy beam - long charge-up',
+  sam: 'Anti-aircraft missile battery',
+  // superweapon strike icons (cameo key + 'Strike')
+  eyeStrike: 'Pick any revealed target - fires when charged',
+  tmplStrike: 'Pick any revealed target - fires when charged',
+};
+
 // EVA speech lines
 DATA.eva = {
   building: 'Building',

@@ -101,6 +101,10 @@ so bandwidth is tiny. Notes:
 | Arrow keys / screen edges | Scroll the map |
 | Two-finger touchpad scroll (or mouse wheel) | Pan the map |
 | `Esc` | Options menu / cancel placement, sell, repair, targeting |
+| `F1` (or `?`) | Pause and open the in-game controls reference (also on the Options menu) |
+
+Hovering any sidebar build icon pops a tooltip with the item's name,
+cost, a one-line role description, and its power contribution or drain.
 
 ### Touch (phones & tablets)
 
@@ -280,6 +284,10 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 - **Endgame hunt mode** — when an enemy is down to its last few buildings
   with no army left, a TARGETS REMAINING counter appears and the survivors
   blink on radar, so finishing the match never turns into a shroud-crawl
+- **Battle framing** — every match opens with a fade-in and a mission title
+  card, the battlefield takes on a gold or crimson cast the moment the
+  verdict lands, and the debrief grades your performance with a field
+  rating (Conscript up to Legendary); menu buttons answer with a click
 - **Pathfinding** — infantry bias their routes away from chrysalite (still
   crossable if it's the only way through); a chrysalite-free route always
   connects the two bases

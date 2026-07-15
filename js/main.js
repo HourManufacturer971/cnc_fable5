@@ -229,6 +229,14 @@ const Main = (function () {
       localStorage.setItem('hw_voice', AUDIO.voiceEnabled ? '1' : '0');
       $('btnVoice').textContent = 'Voice: ' + (AUDIO.voiceEnabled ? 'ON' : 'OFF');
     });
+    $('btnControls').addEventListener('click', () => {
+      $('pause').classList.add('hidden');
+      $('controls').classList.remove('hidden');
+    });
+    $('btnControlsBack').addEventListener('click', () => {
+      $('controls').classList.add('hidden');
+      if (game && game.paused) $('pause').classList.remove('hidden');
+    });
     $('speedSlider').addEventListener('input', ev => {
       if (game) game.speed = ev.target.value / 100;
     });
@@ -290,6 +298,15 @@ const Main = (function () {
       };
       r.readAsText(f);
     });
+
+    // tactile menus: every enabled overlay button answers with a click
+    // (capture phase, so it still fires when a handler swaps the panels)
+    document.addEventListener('click', ev => {
+      const b = ev.target && ev.target.closest ? ev.target.closest('button') : null;
+      if (!b || b.disabled || !b.closest('.overlay')) return;
+      AUDIO.init();   // any click is a user gesture — safe to unlock audio
+      AUDIO.play('click');
+    }, true);
 
     // URL params for testing: ?side=&seed=&nomenu=1&mute=1&mission=N
     // &mpbc=name&mphost=1 — two-tab multiplayer over BroadcastChannel
@@ -494,6 +511,10 @@ const Main = (function () {
     }
     const aiCr = (mission && mission.aiCredits) || (mySkirmish && mySkirmish.aiCredits);
     if (aiCr !== undefined && aiCr !== null) game.ai.credits = aiCr;
+    // battle-intro title card (render-only; each client labels its own view)
+    game.introLabel = opts.mp ? 'MULTIPLAYER BATTLE'
+      : mission ? 'OP ' + mission.n + ': ' + mission.title
+      : 'SKIRMISH — ' + ((mySkirmish && mySkirmish.skirmish) || 'NORMAL');
     window.game = game;
     MUSIC.start();
     MAPGEN.generate(game, game.seed, mission && mission.holdout ? { holdout: true } : undefined);
@@ -669,6 +690,7 @@ const Main = (function () {
     // or it lingers on top of the score screen and then the main menu
     game.paused = false;
     $('pause').classList.add('hidden');
+    $('controls').classList.add('hidden');
     game.status = won ? 'won' : 'lost';
     if (won && game.mission && game.mission.n) MissionProgress.unlockUpTo(game.mission.n);
     AUDIO.eva(won ? 'missionAccomplished' : 'missionFailed');
@@ -690,14 +712,21 @@ const Main = (function () {
       const ss = String(secs % 60).padStart(2, '0');
       const score = Math.max(0, g.stats.kills * 100 + g.stats.buildingsKilled * 200 +
         Math.floor(g.stats.harvested / 10) - g.stats.losses * 50);
+      // field rating: score tiers, with defeat capping the honors
+      const TIERS = [['D', 'CONSCRIPT'], ['C', 'SERGEANT'], ['B', 'FIELD OFFICER'],
+        ['A', 'IRON COMMANDER'], ['S', 'LEGENDARY']];
+      let tier = score >= 4000 ? 4 : score >= 2500 ? 3 : score >= 1200 ? 2 : score >= 500 ? 1 : 0;
+      if (!won) tier = Math.min(tier, 1);
+      const rating = TIERS[tier][0] + ' · ' + TIERS[tier][1];
       const rows = [
         ['Mission time', mm + ':' + ss],
-        ['Tiberium harvested', Math.floor(g.stats.harvested)],
+        ['Chrysalite harvested', Math.floor(g.stats.harvested)],
         ['Enemy units destroyed', g.stats.kills],
         ['Units lost', g.stats.losses],
         ['Enemy structures destroyed', g.stats.buildingsKilled],
         ['Structures lost', g.stats.buildingsLost],
         ['Score', score],
+        ['Field rating', rating],
       ];
       const title = $('scoreTitle');
       title.textContent = won ? 'MISSION ACCOMPLISHED' : 'MISSION FAILED';
@@ -715,9 +744,24 @@ const Main = (function () {
   function togglePause(force) {
     if (!game) return;
     if (!$('menu').classList.contains('hidden')) return;
+    // Esc with the controls sheet open steps back to the pause menu
+    if (force === undefined && !$('controls').classList.contains('hidden')) {
+      $('controls').classList.add('hidden');
+      $('pause').classList.remove('hidden');
+      return;
+    }
     game.paused = force !== undefined ? force : !game.paused;
     $('pause').classList.toggle('hidden', !game.paused);
+    if (!game.paused) $('controls').classList.add('hidden');
     if (NET.active) NET.notifyPause(game.paused);   // peer shows OPPONENT PAUSED
+  }
+
+  // pause (if needed) and open the controls reference — wired to F1 in Input
+  function showControls() {
+    if (!game || game.status !== 'playing') return;
+    togglePause(true);
+    $('pause').classList.add('hidden');
+    $('controls').classList.remove('hidden');
   }
 
   // desynced lockstep match: no honest winner — show a neutral verdict screen
@@ -726,6 +770,7 @@ const Main = (function () {
     ended = true;
     game.paused = false;
     $('pause').classList.add('hidden');
+    $('controls').classList.add('hidden');
     game.status = 'desync';
     const title = $('scoreTitle');
     title.textContent = 'MATCH VOID — DESYNC';
@@ -753,5 +798,5 @@ const Main = (function () {
     startGame(meta.side, { seed: meta.seed, mission, skirmish: skirm });
   }
 
-  return { boot, startGame, startReplay, endGame, desyncEnd, togglePause };
+  return { boot, startGame, startReplay, endGame, desyncEnd, togglePause, showControls };
 })();

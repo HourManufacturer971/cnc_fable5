@@ -312,6 +312,29 @@ button:active {
 }
 #mpStatus { min-height: 14px; color: #e0b840; }
 
+/* controls reference (from the pause menu / F1) */
+#controls .panel { max-width: 640px; }
+#controlCols {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 6px 34px;
+  text-align: left;
+  margin: 0 0 6px;
+}
+.cgroup h3 {
+  margin: 8px 0 6px; font-size: 11px; letter-spacing: 3px;
+  color: var(--hw-gold); text-transform: uppercase;
+  border-bottom: 1px solid rgba(224, 184, 64, 0.25); padding-bottom: 4px;
+}
+.ckey {
+  display: flex; justify-content: space-between; gap: 14px;
+  font-size: 11px; color: #9a9280; padding: 1px 0;
+}
+.ckey .k { color: #d8d0a8; white-space: nowrap; }
+@media (max-height: 480px) {
+  #controls .panel { padding: 14px 26px 12px; }
+  .ckey { font-size: 10px; }
+}
+
 /* mission select + briefing */
 #missionList button {
   display: flex; justify-content: space-between; gap: 20px;

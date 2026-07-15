@@ -1625,6 +1625,107 @@ const Render = (function () {
     if (menuVig) ctx.drawImage(menuVig, 0, 0);
   }
 
+  // ---- sidebar tooltip ------------------------------------------------------------------------
+
+  // hover is a fine-pointer concept; on touch the finger covers the tooltip anyway
+  const fineTip = typeof matchMedia !== 'undefined' && matchMedia('(pointer: fine)').matches;
+
+  function _wrapTip(text, maxW) {
+    const words = text.split(' ');
+    const lines = [];
+    let cur = '';
+    for (const w of words) {
+      const t = cur ? cur + ' ' + w : w;
+      if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; }
+      else cur = t;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  function _drawIconTooltip(g) {
+    if (!fineTip || !Input.mouse.inside || g.paused) return;
+    const hit = hitTest(Input.mouse.x, Input.mouse.y);
+    if (hit.zone !== 'icon') return;
+    const d = DATA.units[hit.key] || DATA.buildings[hit.key];
+    if (!d) return;
+    const bd = DATA.buildings[hit.key];
+    const name = hit.super ? (d.superweapon === 'ion' ? 'Orbital Lance' : 'Nuclear Missile') : d.name;
+    const blurb = (DATA.blurb && DATA.blurb[hit.super ? hit.key + 'Strike' : hit.key]) || '';
+    ctx.font = '13px monospace';
+    const lines = blurb ? _wrapTip(blurb, 262) : [];
+    const power = (!hit.super && bd) ? (bd.power || -(bd.drain || 0)) : 0;
+    const w = 292;
+    const h = 30 + lines.length * 17 + (power ? 19 : 0) + 9;
+    const x = C.SIDEBAR_X - w - 10;
+    const y = clamp(Input.mouse.y - 16, C.TAB_H + 8, C.SCREEN_H - h - 8);
+    ctx.fillStyle = 'rgba(14,14,10,0.93)';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = 'rgba(224,184,64,0.55)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    ctx.textBaseline = 'top';
+    ctx.font = 'bold 14px monospace';
+    ctx.fillStyle = PAL.uiGold;
+    ctx.fillText(name, x + 10, y + 8);
+    if (!hit.super && d.cost) {
+      const tag = '$' + d.cost;
+      ctx.fillStyle = PAL.uiText;
+      ctx.fillText(tag, x + w - 10 - ctx.measureText(tag).width, y + 8);
+    }
+    ctx.font = '13px monospace';
+    ctx.fillStyle = '#b8b09a';
+    let ty = y + 29;
+    for (const ln of lines) { ctx.fillText(ln, x + 10, ty); ty += 17; }
+    if (power) {
+      ctx.fillStyle = power > 0 ? PAL.uiGreen : '#d88860';
+      ctx.fillText(power > 0 ? 'Power +' + power : 'Power drain ' + (-power), x + 10, ty + 2);
+    }
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  // ---- battle intro & verdict overlays ----------------------------------------------------------
+
+  // opening beat: fade up from black, mission title card over the viewport.
+  // Pure render (keyed off g.tick) — deterministic across MP peers and replays.
+  function _drawIntro(g) {
+    if (g.status !== 'playing') return;
+    const t = g.tick;
+    if (t < 26) {
+      ctx.fillStyle = 'rgba(0,0,0,' + (0.92 * (1 - t / 26)).toFixed(3) + ')';
+      ctx.fillRect(0, 0, C.SCREEN_W, C.SCREEN_H);
+    }
+    if (g.introLabel && t < 92) {
+      const a = t < 10 ? t / 10 : t > 74 ? Math.max(0, (92 - t) / 18) : 1;
+      const cx2 = C.VIEW_PW / 2, cy2 = C.TAB_H + (C.SCREEN_H - C.TAB_H) * 0.36;
+      ctx.fillStyle = 'rgba(0,0,0,' + (0.44 * a).toFixed(3) + ')';
+      ctx.fillRect(0, cy2 - 36, C.VIEW_PW, 72);
+      ctx.fillStyle = 'rgba(224,184,64,' + (0.75 * a).toFixed(3) + ')';
+      ctx.fillRect(cx2 - 260, cy2 - 36, 520, 2);
+      ctx.fillRect(cx2 - 260, cy2 + 34, 520, 2);
+      ctx.font = 'bold 30px monospace';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(232,206,120,' + a.toFixed(3) + ')';
+      ctx.fillText(g.introLabel, cx2 - ctx.measureText(g.introLabel).width / 2, cy2 + 2);
+      ctx.textBaseline = 'alphabetic';
+    }
+  }
+
+  // closing beat: the battlefield takes on the verdict's color while the
+  // score panel spins up (render-local ramp; the sim is already over)
+  let verdictT = 0;
+  function _drawVerdict(g) {
+    if (g.status !== 'won' && g.status !== 'lost') { verdictT = 0; return; }
+    verdictT = Math.min(verdictT + 1, 48);
+    const a = verdictT / 48;
+    ctx.fillStyle = g.status === 'won'
+      ? 'rgba(224,184,64,' + (0.09 * a).toFixed(3) + ')'
+      : 'rgba(150,26,16,' + (0.14 * a).toFixed(3) + ')';
+    ctx.fillRect(0, 0, C.SCREEN_W, C.SCREEN_H);
+    ctx.fillStyle = 'rgba(0,0,0,' + ((g.status === 'won' ? 0.16 : 0.30) * a).toFixed(3) + ')';
+    ctx.fillRect(0, 0, C.SCREEN_W, C.SCREEN_H);
+  }
+
   // ---- frame ----------------------------------------------------------------------------------
 
   function frame(g) {
@@ -1640,6 +1741,9 @@ const Render = (function () {
     _drawNetStall(g);
     _drawReplayBadge(g);
     _drawEvaBanner();
+    _drawIconTooltip(g);
+    _drawVerdict(g);
+    _drawIntro(g);
     if (Input.mouse.inside && !g.paused) _drawCursor();
     shownTick = g.tick;
   }

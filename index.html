@@ -107,10 +107,50 @@
       <button id="btnSound">Sound: ON</button>
       <button id="btnMusic">Music: ON</button>
       <button id="btnVoice">Voice: ON</button>
+      <button id="btnControls">Controls</button>
       <button id="btnFullscreen" class="hidden">Fullscreen: OFF</button>
       <label id="speedRow">Game Speed <input type="range" id="speedSlider" min="50" max="220" value="170"></label>
       <button id="btnRestart">Restart Mission</button>
       <button id="btnAbort">Abort Mission</button>
+    </div>
+  </div>
+
+  <div id="controls" class="overlay hidden">
+    <div class="panel">
+      <h2>CONTROLS</h2>
+      <div id="controlCols">
+        <div class="cgroup">
+          <h3>Mouse</h3>
+          <div class="ckey"><span class="k">Left-click</span><span>select &middot; give orders</span></div>
+          <div class="ckey"><span class="k">Drag</span><span>box-select units</span></div>
+          <div class="ckey"><span class="k">Right-click</span><span>deselect &middot; cancel mode</span></div>
+          <div class="ckey"><span class="k">Double-click</span><span>select all of that type</span></div>
+          <div class="ckey"><span class="k">Ctrl+click</span><span>force-fire on target</span></div>
+          <div class="ckey"><span class="k">Right-click icon</span><span>cancel build (Shift: all)</span></div>
+        </div>
+        <div class="cgroup">
+          <h3>Keyboard</h3>
+          <div class="ckey"><span class="k">A</span><span>attack-move sweep</span></div>
+          <div class="ckey"><span class="k">S</span><span>stop</span></div>
+          <div class="ckey"><span class="k">E</span><span>select army on screen</span></div>
+          <div class="ckey"><span class="k">T</span><span>select same type</span></div>
+          <div class="ckey"><span class="k">D</span><span>deploy MCV</span></div>
+          <div class="ckey"><span class="k">U</span><span>unload transport / garrison</span></div>
+          <div class="ckey"><span class="k">H</span><span>jump to Construction Yard</span></div>
+          <div class="ckey"><span class="k">P</span><span>set primary factory</span></div>
+          <div class="ckey"><span class="k">Space</span><span>jump to last alert</span></div>
+          <div class="ckey"><span class="k">1&ndash;9</span><span>recall group (Ctrl/Alt sets)</span></div>
+          <div class="ckey"><span class="k">Esc</span><span>pause &middot; cancel mode</span></div>
+        </div>
+        <div class="cgroup coarseOnly">
+          <h3>Touch</h3>
+          <div class="ckey"><span class="k">Tap</span><span>select &middot; give orders</span></div>
+          <div class="ckey"><span class="k">Drag</span><span>pan the battlefield</span></div>
+          <div class="ckey"><span class="k">Hold, then drag</span><span>box-select units</span></div>
+          <div class="ckey"><span class="k">Two-finger tap</span><span>deselect</span></div>
+        </div>
+      </div>
+      <button id="btnControlsBack" class="backBtn">Back</button>
     </div>
   </div>
 

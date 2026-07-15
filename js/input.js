@@ -428,6 +428,11 @@ const Input = (function () {
         ev.preventDefault();
         return;
       }
+      if (ev.key === 'F1' || ev.key === '?') {
+        if (typeof Main !== 'undefined') Main.showControls();
+        ev.preventDefault();   // F1 must not open the browser's help
+        return;
+      }
       if (game.paused || game.status !== 'playing') return;
       _hotkeys(ev);
     });
