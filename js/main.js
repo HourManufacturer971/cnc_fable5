@@ -68,7 +68,6 @@ const Main = (function () {
     const vh = vv ? vv.height : window.innerHeight;
     if (!vw || !vh) return;
     applyScreenAspect(vw / vh);
-    Render.resize();
     // CSS box: exact fill when the internal aspect matches the screen's;
     // outside the clamp range, letterbox the leftover axis
     const internal = C.SCREEN_W / C.SCREEN_H;
@@ -77,6 +76,7 @@ const Main = (function () {
     else { cw = vw; ch = vw / internal; }
     canvas.style.width = cw + 'px';
     canvas.style.height = ch + 'px';
+    Render.resize();   // after the style set: it measures the new CSS box
     if (game) {
       game.camera.x = clamp(game.camera.x, 0, C.MAP_W * C.CELL - C.VIEW_W);
       game.camera.y = clamp(game.camera.y, 0, C.MAP_H * C.CELL - C.VIEW_H);

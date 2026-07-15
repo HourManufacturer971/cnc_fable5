@@ -10,6 +10,13 @@ Inspired by the classic RTS genre; contains no assets, names, or code from any o
   classic `<script>` that defines the global symbols listed for it below and nothing else.
 - Internal resolution **640×400** (period-correct low resolution), rendered on one `<canvas>`
   scaled up with `image-rendering: pixelated`.
+- **Device-resolution backing store** (`Render.resize`): the canvas bitmap matches the CSS
+  box × `devicePixelRatio` (capped at 2× logical), with a `setTransform(dscale)` baked in so
+  every draw call stays in logical `C.SCREEN` coordinates. Text and HUD hairlines rasterize
+  at native resolution (no browser resampling = no fuzzy text at non-integer window scales);
+  sprites still blit nearest-neighbour through the transform, keeping hard pixel edges.
+  Re-fits on window `resize` and after `_fitScreen` sets the CSS box (main.js). Input is
+  unaffected — the mouse maps through `getBoundingClientRect` ratios to logical coords.
 - Game logic runs at a fixed **15 ticks/second** (`C.TPS`) the classic "normal" RTS tick rate;
   rendering runs on `requestAnimationFrame`.
 - All randomness inside the simulation must use `game.rng()` (seeded) — never `Math.random()`
@@ -28,7 +35,9 @@ Inspired by the classic RTS genre; contains no assets, names, or code from any o
 - **Map viewport**: x 0..480, y 16..400 (480×384 → 20×16 cells of 24px).
 - **Sidebar**: x 480..640, y 16..400 (160×384), metal grey panel:
   - **Radar** area: 480..640 × 16..146 (160×130). Shows faction logo (drawn: UDC gold
-    shield-and-chevron crest on navy / Serpent Order coiled-serpent ring on black) until player owns a powered
+    heater shield on navy — rank pips over a chief divider, slim flat chevron / Serpent
+    Order angular stencil-serpent in a segmented ring on black — straight mitred
+    segments, kite head, slit eye; both flat-shaded, no gleam pixels) until player owns a powered
     `hq`; then a 128×128 minimap centered (2px per cell, terrain colors, chrysalite green,
     units as 2px team-color dots, buildings 2px blocks, shroud black, white viewport
     rectangle). Click/drag on active radar moves the camera.

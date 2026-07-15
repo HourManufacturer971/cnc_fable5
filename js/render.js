@@ -28,7 +28,9 @@ const Render = (function () {
   function init(canvas) {
     cv = canvas;
     ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
+    resize();
+    // the canvas CSS box tracks the window, so the backing store must too
+    if (typeof window !== 'undefined') window.addEventListener('resize', resize);
     minimap = mkCanvas(C.MM_S, C.MM_S);
     // show every EVA announcement as readable text (the synthesized voice is
     // flavor; the words live here). Wire once — EV is a session singleton.
@@ -38,11 +40,31 @@ const Render = (function () {
     }
   }
 
-  // after applyScreenAspect changed C.SCREEN_W: resizing the bitmap resets
-  // the 2d context's state, so pixelated rendering must be re-asserted
+  // Match the canvas backing store to the device pixels its CSS box actually
+  // covers (capped at 2x logical). Text and HUD hairlines then rasterize at
+  // native resolution instead of being resampled by the browser — resampling
+  // at non-integer window scales is what made HUD text fuzzy. Sprites still
+  // blit nearest-neighbour through the logical->device transform, keeping
+  // their hard pixel-art edges. Every draw call stays in logical C.SCREEN
+  // coordinates; the transform is baked here (and re-baked after any bitmap
+  // resize, which resets all 2d context state).
+  let dscale = 1;
   function resize() {
     if (!cv) return;
-    if (cv.width !== C.SCREEN_W) cv.width = C.SCREEN_W;
+    let s = 1;
+    if (cv.getBoundingClientRect) {
+      const rect = cv.getBoundingClientRect();
+      const dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+      if (rect.width > 0) s = rect.width * dpr / C.SCREEN_W;
+    }
+    if (!isFinite(s) || s <= 0) s = 1;
+    s = Math.min(s, 2);
+    const bw = Math.max(1, Math.round(C.SCREEN_W * s));
+    const bh = Math.max(1, Math.round(C.SCREEN_H * s));
+    if (cv.width !== bw) cv.width = bw;
+    if (cv.height !== bh) cv.height = bh;
+    dscale = bw / C.SCREEN_W;
+    ctx.setTransform(dscale, 0, 0, dscale, 0, 0);
     ctx.imageSmoothingEnabled = false;
   }
 
