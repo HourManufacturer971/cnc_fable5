@@ -146,6 +146,18 @@
       ctx.fillRect(x + 3, y + 1, 1, 3);
       ctx.fillRect(x + w - 6, y + 1, 1, 4);
     }
+    // wide walls carry a cable conduit along the base with pin brackets,
+    // ending in a small junction box with a status LED
+    if (fh >= 10 && w >= 22) {
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      ctx.fillRect(x + 2, y + fh - 5, w - 8, 1);
+      for (let sx = x + 4; sx < x + w - 8; sx += 6) ctx.fillRect(sx, y + fh - 4, 1, 1);
+      const jx = x + w - 7 - ((w * 7) % 4);
+      P(ctx, jx - 1, y + fh - 8, 5, 5, OUT);
+      P(ctx, jx, y + fh - 7, 3, 3, '#5a5a52');
+      P(ctx, jx, y + fh - 7, 3, 1, '#7a7a70');
+      P(ctx, jx + 1, y + fh - 6, 1, 1, '#d8b040');
+    }
   }
 
   // full 3/4 box: bright roof rows y..y+rh, facade y+rh..y+rh+fh, parapet
@@ -180,6 +192,18 @@
       const vy = hy > y + rh / 2 ? y + 3 : y + rh - 6;
       ctx.fillStyle = 'rgba(0,0,0,0.30)';
       for (let k = 0; k < 3; k++) ctx.fillRect(vx + k * 3, vy, 2, 3);
+      // an AC unit with a spinner grille, tucked to whichever side the
+      // hatch left free, plus hazard ticks on the parapet corners
+      const ax = hx > x + w / 2 ? x + 4 : x + w - 12;
+      const ay = y + rh - 8;
+      P(ctx, ax - 1, ay - 1, 9, 8, OUT);
+      P(ctx, ax, ay, 7, 6, m.roofD);
+      P(ctx, ax, ay, 7, 1, m.roofL);
+      circleFill(ctx, ax + 3, ay + 3, 2, '#2c2c26');
+      P(ctx, ax + 3, ay + 2, 1, 3, '#8a8a80');
+      P(ctx, ax + 2, ay + 3, 3, 1, '#8a8a80');
+      ctx.fillStyle = '#b09a34';
+      ctx.fillRect(x + 1, y + rh - 2, 3, 1); ctx.fillRect(x + w - 4, y + rh - 2, 3, 1);
     }
     facade(ctx, x, y + rh, w, fh, m);
   }
@@ -244,6 +268,14 @@
       ctx.fillStyle = 'rgba(0,0,0,0.16)';
       ctx.fillRect(cx - rx, ty + ry + (bh >> 1), rx * 2 + 1, 1);
       if (bh >= 14) ctx.fillRect(cx - rx, ty + ry + 3, rx * 2 + 1, 1);
+    }
+    // maintenance ladder up the west shoulder of tall drums
+    if (bh >= 10 && rx >= 6) {
+      const lx = cx - rx + 2;
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(lx, ty + ry + 1, 1, bh - 2);
+      ctx.fillRect(lx + 2, ty + ry + 1, 1, bh - 2);
+      for (let yy = ty + ry + 2; yy < ty + ry + bh - 2; yy += 3) ctx.fillRect(lx, yy, 3, 1);
     }
     ellipseFill(ctx, cx, ty, rx + 1, ry + 1, OUT);
     ellipseFill(ctx, cx, ty, rx, ry, cc[0]);

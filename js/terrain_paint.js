@@ -178,6 +178,58 @@ const TERRAINPAINT = (function () {
     P(q, x + 2, y - 2, 1, 1, PAL.treeLight);
   }
 
+  function fallenLog(q, x, y, k) {
+    const len = 8 + ((k * 6) | 0);
+    P(q, x - 1, y + 3, len + 2, 1, 'rgba(14,12,6,0.4)');   // ground shadow
+    P(q, x - 1, y - 1, len + 2, 5, 'rgba(18,14,8,0.55)');  // soft outline
+    P(q, x, y, len, 3, '#5c4526');
+    P(q, x, y, len, 1, '#7a5f38');
+    P(q, x, y + 2, len, 1, '#3e2e18');
+    P(q, x + len - 1, y, 1, 3, '#8a6f44');                 // cut end
+    P(q, x + 2 + ((k * 4) | 0), y, 1, 3, '#4a3820');       // bark crack
+  }
+
+  function shrooms(q, x, y, k) {
+    const n = 2 + ((k * 2) | 0);
+    for (let i = 0; i < n; i++) {
+      const sx = x + i * 3, sy = y + ((h2(sx, y, 0x99) * 3) | 0);
+      P(q, sx, sy + 1, 1, 2, '#cfc7ae');
+      P(q, sx - 1, sy, 3, 1, k < 0.5 ? '#a8543c' : '#b8a06a');
+      P(q, sx, sy - 1, 1, 1, k < 0.5 ? '#c8705a' : '#d0bc88');
+    }
+  }
+
+  function mineralStain(q, x, y, k) {
+    q.globalAlpha = 0.28;
+    ell(q, x, y, 5 + ((k * 4) | 0), 3, '#b3a98c');
+    q.globalAlpha = 0.45;
+    ell(q, x - 1, y, 3, 2, '#c4bb9e');
+    q.globalAlpha = 1;
+  }
+
+  function ruts(q, x, y, k) {
+    const len = 10 + ((k * 8) | 0);
+    q.globalAlpha = 0.4;
+    q.fillStyle = '#4e3f2a';
+    for (const off of [0, 4]) {
+      for (let i = 0; i < len; i++) {
+        const wob = ((h2(x + i, y + off, 0x77) * 2) | 0) - 1;
+        q.fillRect(x + i, y + off + wob, 1, 1);
+      }
+    }
+    q.globalAlpha = 1;
+  }
+
+  function reeds(q, x, y) {
+    P(q, x - 1, y, 9, 1, 'rgba(24,34,16,0.45)');           // mud line
+    for (let i = 0; i < 4; i++) {
+      const sx = x + i * 2 + ((h2(x + i, y, 0x88) * 2) | 0);
+      const hgt = 4 + ((h2(sx, y, 0x89) * 3) | 0);
+      P(q, sx, y - hgt, 1, hgt, i & 1 ? '#4e6b30' : '#5f7c3a');
+      P(q, sx, y - hgt, 1, 2, '#71563a');                  // cattail head
+    }
+  }
+
   // ---- boulders ---------------------------------------------------------------
 
   // 3/4-view boulder: SE cast shadow, lit NW cap, shaded SE flank.
@@ -456,20 +508,46 @@ const TERRAINPAINT = (function () {
         const t = g.terrain[i];
         if ((t !== T_GRASS && t !== T_DIRT) || g.tib[i] > 0) continue;
         const dh = h2(cx, cy, seed ^ 0xd00d);
-        if (dh > 0.20) continue;
+        if (dh > 0.23) continue;
         const k = h2(cy, cx, seed ^ 0xd11d);
         const x = cx * CS + 4 + ((k * 16) | 0), y = cy * CS + 4 + ((dh * 80) | 0) % 16;
         if (t === T_GRASS) {
-          if (k < 0.42) tuft(q, x, y, false);
-          else if (k < 0.58) flower(q, x, y, dh * 5 % 1);
-          else if (k < 0.72) bush(q, x, y);
+          if (k < 0.34) tuft(q, x, y, false);
+          else if (k < 0.48) flower(q, x, y, dh * 5 % 1);
+          else if (k < 0.60) bush(q, x, y);
+          else if (k < 0.68) fallenLog(q, x, y, dh * 5 % 1);
+          else if (k < 0.76) shrooms(q, x, y, dh * 5 % 1);
           else pebbles(q, x, y, dh * 5 % 1);
         } else {
-          if (k < 0.40) pebbles(q, x, y, dh * 5 % 1);
-          else if (k < 0.62) crack(q, x, y, dh * 5 % 1);
-          else if (k < 0.82) tuft(q, x, y, true);
+          if (k < 0.32) pebbles(q, x, y, dh * 5 % 1);
+          else if (k < 0.50) crack(q, x, y, dh * 5 % 1);
+          else if (k < 0.62) tuft(q, x, y, true);
+          else if (k < 0.72) mineralStain(q, x, y, dh * 5 % 1);
+          else if (k < 0.84) ruts(q, x, y, dh * 5 % 1);
           else bush(q, x, y);
         }
+      }
+    }
+
+    // reed beds along the waterline: land cells with a water neighbour grow
+    // cattail clumps on the wet side (grass and dirt shores both)
+    for (let cy = 1; cy < H - 1; cy++) {
+      for (let cx = 1; cx < W - 1; cx++) {
+        const i = cellIdx(cx, cy);
+        const t = g.terrain[i];
+        if ((t !== T_GRASS && t !== T_DIRT) || g.tib[i] > 0) continue;
+        if (h2(cx, cy, seed ^ 0xeed5) > 0.45) continue;
+        const wN = g.terrain[cellIdx(cx, cy - 1)] === T_WATER;
+        const wS = g.terrain[cellIdx(cx, cy + 1)] === T_WATER;
+        const wW = g.terrain[cellIdx(cx - 1, cy)] === T_WATER;
+        const wE = g.terrain[cellIdx(cx + 1, cy)] === T_WATER;
+        if (!(wN || wS || wW || wE)) continue;
+        const jx = ((h2(cy, cx, 0xeed6) * 8) | 0);
+        const bx2 = cx * CS, by2 = cy * CS;
+        if (wN) reeds(q, bx2 + 4 + jx, by2 + 6);
+        else if (wS) reeds(q, bx2 + 4 + jx, by2 + CS - 2);
+        else if (wW) reeds(q, bx2 + 2, by2 + 8 + jx);
+        else reeds(q, bx2 + CS - 10, by2 + 8 + jx);
       }
     }
 

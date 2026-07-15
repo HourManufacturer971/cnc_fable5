@@ -462,6 +462,24 @@ const Render = (function () {
     if (b.type === 'gun' && set.turret) {
       drawSpr(set.turret[b.turretFacing & 15], x, y - 8);
     }
+    // silos wear a live sight-glass: the owner's stored credits as a rising
+    // crystal column on each drum (render-only, reads p.credits/p.storage)
+    if (b.type === 'silo') {
+      const p2 = g.players[b.owner];
+      const frac = p2 && p2.storage > 0 ? Math.min(1, p2.credits / p2.storage) : 0;
+      for (const gx2 of [x + DW * 0.25, x + DW * 0.73]) {
+        const gy0 = y + DH * 0.38, gh2 = DH * 0.30;
+        ctx.fillStyle = 'rgba(8,10,6,0.85)';
+        ctx.fillRect(Math.round(gx2) - 2, gy0 - 1, 5, gh2 + 2);
+        const fh2 = Math.round(gh2 * frac);
+        if (fh2 > 0) {
+          ctx.fillStyle = '#35c93a';
+          ctx.fillRect(Math.round(gx2) - 1, gy0 + gh2 - fh2, 3, fh2);
+          ctx.fillStyle = '#b8ffb0';
+          ctx.fillRect(Math.round(gx2) - 1, gy0 + gh2 - fh2, 3, 1);
+        }
+      }
+    }
     if (b._hitT !== undefined && g.tick - b._hitT < 2) {
       _hitFlash(() => {
         drawSpr(frame, x, y);

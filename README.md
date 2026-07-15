@@ -45,7 +45,9 @@ directly browser-to-browser over WebRTC — there is no game server and no
 account:
 
 1. The **host** picks a faction, clicks *Host Game*, and sends the generated
-   **invite code** to the opponent over any chat.
+   **invite code** to the opponent over any chat (codes are short — ~350
+   characters — the boilerplate of the WebRTC handshake is rebuilt on the
+   receiving end and the rest travels compressed).
 2. The **guest** clicks *Join Game*, pastes the invite code, and sends back
    the generated **reply code**.
 3. The host pastes the reply code, clicks *Connect*, and the match starts on
@@ -94,7 +96,7 @@ so bandwidth is tiny. Notes:
 | `H` | Center on Construction Yard |
 | `S` / `G` | Stop / guard |
 | `T` | Select same type on screen |
-| `E` | Select every combat unit on screen |
+| `E` | Select every unit on screen except harvesters |
 | `Space` | Jump the camera to the latest radar alert (base attacked, harvester in trouble, incoming superweapon) |
 | `P` | Set the selected factory building as primary for its kind |
 | Shift+click a unit icon | Queue 5 at once (Shift+right-click cancels the whole batch) |
@@ -213,7 +215,8 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   deterministic, so a replay is just the seed and your orders — a few
   kilobytes). Watch the battle again from the score screen, save it to a
   file, or load one from the main menu and watch any battle re-simulate
-  move for move
+  move for move. Playback is a spectator's view: the whole map renders
+  unfogged, both sides visible, cloaked ambushers included
 - **Vehicle repairs** — click your Repair Facility with vehicles selected
   and they roll over and park; a wrench blinks while the pad patches them
   up at the same credits-per-point rate building repairs cost
@@ -237,7 +240,8 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   explosions throw a shockwave ring and tumbling debris, sunlight glints
   off the river, and the crystal fields sparkle
 - **Chrysalite economy** — harvesters (700 credits a load), refineries with
-  docking, silos, storage caps (the HUD balance shows yours, and turns red
+  docking, silos with live sight-glass gauges that show how full your
+  storage is, storage caps (the HUD balance shows yours, and turns red
   as loads start evaporating), spreading chrysalite fields seeded by blossom
   trees, infantry take damage crossing fields. Harvesters work the fields
   near home first and trek farther only when the neighborhood runs dry,
@@ -262,7 +266,9 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   Tank is visibly bigger than the rest and fires twin cannon shots.
 - **Defenses** — Guard Tower, Advanced Guard Tower, Gun Turret, SAM Site, and
   the Beam Spire with its charge-up laser; concrete walls place in
-  drag-runs, auto-connect, and block movement
+  drag-runs, auto-connect, and block movement. **Wall Gates** slot into a
+  wall run and lower automatically for your own units while staying shut
+  to the enemy — seal your base without boxing your army in
 - **Superweapons** — the UDC Orbital Lance (Advanced Comm. Center) and the Serpent Order's nuclear
   strike (Serpent Temple)
 - **Combat details** — warhead vs. armor tables, turret rotation, homing
@@ -293,8 +299,16 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   connects the two bases
 - **Fog of war** — permanent-reveal black shroud, jagged edges, and a radar
   minimap that shows the actual painted world in miniature with live,
-  smoothly-moving unit blips; enemy blips need live line-of-sight from your
-  own forces
+  smoothly-moving unit blips. Explored ground outside your current sight
+  greys out on the minimap and a soft rim traces the live-sight region —
+  the ring inside which enemy blips can appear (they need line-of-sight
+  from your own forces, not just explored ground)
+- **Blue chrysalite** — the most contested midfield spawns rare blue
+  crystal worth **double** at the refinery; mined-out blue ground regrows
+  ordinary green, so the prize doesn't last forever
+- **Civilians with spines** — shoot a villager and they pull a pistol and
+  pop back: brave, futile, four damage a shot. They never start fights,
+  and they still flee what they can't reach
 - **Fleshlings** — infantry that die on a chrysalite field mutate into hostile
   creatures that attack everyone
 - **Auto-repair** — damaged buildings start repairing themselves (toggleable

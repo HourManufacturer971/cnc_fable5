@@ -77,7 +77,7 @@ define **exactly** the globals listed and may freely call any global listed for 
 | sprites_infantry.js | fills `SPRITES.infantry[key][side]` for every infantry type, and their `SPRITES.cameo[key]` |
 | sprites_buildings.js | fills `SPRITES.buildings[key][side]` for every building, and their `SPRITES.cameo[key]`, plus `SPRITES.cameo.ion` / `SPRITES.cameo.nuke` |
 | audio.js | `AUDIO` (`init, play, eva, ack, setEnabled, enabled, setVoiceEnabled, voiceEnabled, tickCredits`) |
-| music.js | `MUSIC` (`start, stop, setEnabled, enabled` — original procedural soundtrack, eight tracks, random opener, rotates after two loops) |
+| music.js | `MUSIC` (`start, stop, setEnabled, enabled` — original procedural soundtrack, eight tracks; the session's FIRST battle opens on T1, the original theme, later starts re-roll; rotates after two loops) |
 | missions.js | `MISSIONS` (campaign definitions: seed, credits, AI knobs, objective, per-side briefings), `MissionProgress` (localStorage `hw_progress` unlock tracking) |
 | map.js | `MAPGEN` (`generate(game, seed, opts?)` — `opts.holdout` centers the human start inside a three-gated rock fortress ring with thin chrysalite inside and rich fields beyond) |
 | path.js | `findPath(unit, destCx, destCy, opts?) -> [{cx,cy},...]` |
@@ -162,6 +162,13 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   (respect storage cap; excess is lost + EVA `silosNeeded` and a red `-N` popup when ≥50
   evaporates), then return to last field.
   Idle harvesters auto-seek visible chrysalite. New refinery spawns a free harvester beside it.
+- **Blue chrysalite** (`g.tibType`, Uint8Array; 0 green / 1 blue): the first (most central)
+  midfield spawns blue. Physically identical to green — same density, capacity and growth
+  hooks — but each scoop banks `take × 2` into `u.tibVal`; at unload the load converts to
+  its VALUE (`u.tib = max(u.tib, u.tibVal)`) so a full blue load pays 1400. A mined-out
+  blue cell resets `tibType = 0` (regrowth is green). Render: `SPRITES.tiberiumBlue`
+  (boot-time green→blue remap), blue bloom stamp, `#3c8ce0` minimap tint. Silos render a
+  live sight-glass gauge of `credits/storage` (render-only, in `_drawBuilding`).
 - Harvester field discipline: target cells are LEASHED to ~20 cells of the home dock while
   local crystal lasts; when the neighborhood is dry an EMPTY harvester treks unleashed to
   whatever is left on the map (never idles the economy to death), and a PARTIALLY loaded
@@ -270,6 +277,17 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `sight+1` cells and attack (harvester/mcv/apc/engineer never auto-attack; they FLEE:
   harvester heads to refinery when hit). Attackers chase up to ~4 cells past their
   guardAnchor then return.
+- **Civilians** carry `civgun` (4 dmg, range 3, slow rof) but are excluded from
+  `_autoAcquire` — they NEVER start fights and nobody auto-guns them. The 'damaged'
+  handler makes a shot villager return fire on a reachable attacker (guardAnchor leash
+  keeps them home); unreachable attackers (aircraft) still trigger the old panic-flee.
+- **Wall Gate** (`gate: true` in DATA.buildings; wall family, $250, 1×1, instant place,
+  single-per-drag): passable ONLY to the owner's finished-gate ground units. Three layers:
+  `isPassable` allows owner+finished; A* `cellState` returns a near-free GATE state
+  (+15 step); `_stepAlongPath` transits the cell WITHOUT claiming occ — the gate keeps its
+  own occ id the whole time, so enemy pathing never sees a hole. Render picks
+  closed/open × horizontal/vertical frames (orientation from adjacent walls, opens when an
+  owner ground unit is within 1.7 cells — cosmetic only); walls auto-connect into its posts.
 - **Attack-move** (`orderAttackMove(u, cx, cy)`, state `amove`, `u._amove={cx,cy}`): sweep
   toward the cell, auto-acquiring every 8 ticks; acquisition sets `targetId`/`state='attack'`
   DIRECTLY (not via orderAttack) so `_amove` survives, and when the target dies the unit
@@ -368,10 +386,18 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 
 ### Multiplayer (net.js — deterministic lockstep, P2P)
 - 1v1 over a WebRTC data channel with MANUAL signaling: host and guest exchange
-  two base64 codes by hand (any chat) — no server, no accounts; the only outside
+  two short codes by hand (any chat) — no server, no accounts; the only outside
   service is a public STUN server for NAT discovery (LAN/same-machine works
   without it). A `BroadcastChannel` transport (`?mpbc=name&mphost=1&side=`)
   drives two-tab play on one machine and the automated tests.
+- **Short codes** (~350 chars, was ~2000): `_packSdp` ships only ICE ufrag/pwd,
+  DTLS fingerprint (+algo), setup role, mid and the candidate lines; `_unpackSdp`
+  rebuilds the standard datachannel-only SDP from a template on the receiving
+  end. The JSON envelope is `deflate-raw`-compressed (`CompressionStream`) and
+  base64url'd with an `HW2.` prefix (`HW1.` = uncompressed fallback for browsers
+  without the API; legacy full-SDP base64 still decodes). `_enc`/`_dec` are
+  async. Real-SDP round trip is covered by a two-page Playwright test
+  (BroadcastChannel tests bypass SDP entirely).
 - Lockstep: both clients run the identical sim from the host's seed; only
   orders travel. Each order is queued locally, broadcast with execution tick
   `now + DELAY` (5 ticks), and applied on BOTH clients at that tick, gdi's
@@ -458,6 +484,11 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - `_tickDamageSmoke` (sim.js): buildings under 45% hp emit drifting smoke puffs
   (period 22 ticks, 10 when under 22%); non-air vehicles under 40% hp trail smoke.
   Timed off tick+id hashes — never `game.rng` — so the sim stream is untouched.
+- **Minimap sight states** (`_updateMinimap`, every 8 ticks): explored cells outside
+  `g.visible` (live LOS, recomputed by Fog every 5 ticks) get a translucent grey wash —
+  the map remembers terrain, not activity — and the live-sight region is rimmed with a
+  soft green edge (4-neighbour boundary of the visible mask): the ring inside which
+  enemy blips can appear. Unexplored stays black. All render-side, per-client.
 - **Radar pings** (`g._pings`, per-client COSMETIC buffer, capped 24, never checksummed):
   base-attack, harvester-attack, harvester-stranded, crate and superweapon `strike` events
   push `{x,y,kind,t}`; radar draws expanding rings (strike red, harv gold, else orange,
@@ -481,7 +512,8 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `NET.active`: in MP `g.ai` is the remote human and the reveal would be a fog cheat.
 - **Battle intro** (`_drawIntro`, render-only, keyed off `g.tick` so it is identical
   across MP peers and in replays): ticks 0–26 fade the whole screen up from black;
-  ticks 0–92 show `g.introLabel` (set by `startGame`: `OP n: TITLE`, `SKIRMISH — DIFF`,
+  ticks 0–58 show `g.introLabel` high on the viewport (18% down; set by `startGame`:
+  `OP n: TITLE`, `SKIRMISH — DIFF`,
   or `MULTIPLAYER BATTLE`) as a title card — dark band across the viewport, gold rules,
   ramped in/out. The label is per-client display state; the sim never reads it.
 - **Verdict tint** (`_drawVerdict`, render-local frame counter): once `g.status` is
@@ -517,7 +549,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - Keyboard scroll: arrows; edge scroll when mouse at viewport edge (cursor becomes scroll
   arrow; red no-scroll variant at map bounds). `H` jump to conyard. `S` stop. `G` guard.
   `Esc` → pause menu / cancels modes. `D` deploy MCV. `T` select same type on screen.
-  `E` select every armed unit on screen. `Space` jump camera to the newest radar ping
+  `E` select every unit on screen except harvesters. `Space` jump camera to the newest radar ping
   (preventDefault so the page never scrolls).
 - Shift+click a unit icon queues 5 at once; Shift+right-click cancels/refunds the whole
   batch (buildings stay single — placement is one at a time anyway).
@@ -690,6 +722,8 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   (no tile seams). Water gets depth bands, foam and a wet-sand shore; rock cells get varied
   boulder formations; tree cells get overlapping canopies (deciduous + conifer) over a
   darkened forest floor; open land gets sparse doodads (tufts, flowers, pebbles, cracks,
+  fallen logs, mushroom clusters, pale mineral stains, worn tire ruts — and reed beds
+  with cattail heads along every waterline —
   bushes). The painting is nearest-upscaled ×2 into the screen-scale cache.
 - `anim` = `[{cx, cy, frames:[canvas...], phase}]`: transparent overlays render redraws live
   (blossom pods, open-water glints). Frames are world-scale (drawn ×C.ZOOM).
@@ -767,6 +801,11 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `NET.execReplay` (`applying` guard). While watching, `_rec` SWALLOWS live player
   orders (look, don't touch — selection and camera stay free) and render shows a
   blinking ▶ REPLAY badge. Multiplayer games are not recorded (v1).
+- **Spectator vision**: while `REPLAY.playing`, render sets a `seeAll` flag that skips
+  the shroud fill/edges, un-gates the glow/water/crate draws, shows all radar blips
+  (cloaked units shimmer like your own), and drops the minimap masks. STRICTLY
+  render-side: `g.shroud`/`g.visible` still evolve exactly as recorded, because the
+  sim reads them (`_exploredFor`) — touching them would break the checksum round-trip.
 - Determinism contract: identical code + seed + setup + order stream ⇒ identical sim.
   Anything that breaks same-seed determinism breaks replays AND multiplayer — the
   objtest suite verifies a record→playback checksum round-trip.
