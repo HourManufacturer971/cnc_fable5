@@ -727,7 +727,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   as `{t: game.tick, c}` using the same command encoding multiplayer sends. Sim/AI calls
   never record (they run under `NET.inSim`).
 - `endGame` → `REPLAY.finish(won)` freezes the recording as "last". Score screen offers
-  Watch Replay / Save Replay (JSON download); the main menu's "Watch a Replay" loads a
+  Watch Replay / Save Replay (JSON download); the main menu's "Watch Replay" loads a
   file. `Main.startReplay(meta)` reconstructs the setup (mission from `MISSIONS[n-1]`,
   skirmish from module-scope `DIFF_PRESETS`) and re-runs `startGame` with the recorded
   seed; REPLAY then disarms the fresh recorder and enters playback.

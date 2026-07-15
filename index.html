@@ -22,6 +22,7 @@
     <div class="panel">
       <h1>HARVEST WAR</h1>
       <p class="sub">An original retro RTS &mdash; all code, art &amp; audio built from scratch</p>
+      <div class="menuRule"></div>
       <div id="factionRow">
         <div class="faction" id="pickGdi">
           <div class="logoSlot" id="logoGdi"></div>
@@ -34,14 +35,16 @@
           <span class="fmotto">One Vision &middot; One Purpose</span>
         </div>
       </div>
-      <button id="btnMultiplayer">Multiplayer &mdash; vs a friend (P2P)</button>
-      <button id="btnLoadReplay">Watch a Replay &mdash; load a saved battle</button>
+      <div id="menuActions">
+        <button id="btnMultiplayer">Multiplayer<span class="bsub">vs a friend &middot; P2P</span></button>
+        <button id="btnLoadReplay">Watch Replay<span class="bsub">load a saved battle</span></button>
+      </div>
       <input type="file" id="replayFile" accept=".json,application/json" class="hidden">
       <button id="btnInstall" class="hidden">Install as App &mdash; plays fullscreen</button>
-      <p class="hint">Classic controls: left-click selects and orders &middot; right-click deselects</p>
-      <p class="hint">Touch: tap to select and order &middot; drag to pan &middot; hold then drag to multi-select &middot; two-finger tap deselects</p>
-      <p class="hint coarseOnly">Tip: install the game (or Add to Home Screen) to play fullscreen without the browser bar</p>
-      <p class="hint">Inspired by the classic real-time strategy games of the 1990s &middot; not affiliated with any other game or publisher</p>
+      <p class="hint fineOnly">Left-click selects and orders &middot; right-click deselects</p>
+      <p class="hint coarseOnly">Tap to select and order &middot; drag pans &middot; hold then drag to multi-select</p>
+      <p class="hint coarseOnly">Tip: install the game (or Add to Home Screen) to play fullscreen</p>
+      <p class="finePrint">Inspired by the classic RTS games of the 1990s &middot; not affiliated with any publisher</p>
     </div>
   </div>
 
