@@ -99,11 +99,14 @@ DATA.buildings = {
   gun:  { name: 'Gun Turret', cost: 600, hp: 400, w: 1, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 20, side: 'nod', prereq: ['hand'], weapon: 'gunTurret', turret: true, defense: true, threat: 0.5 },
   obli: { name: 'Beam Spire', cost: 1500, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 150, side: 'nod', prereq: ['hq'], weapon: 'obelisk', needsPower: true, defense: true, threat: 0.9 },
   sam:  { name: 'SAM Site', cost: 550, hp: 300, w: 2, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 25, side: 'nod', prereq: ['hand'], weapon: 'samMissile', needsPower: true, defense: true, threat: 0.3 },
-  // neutral village structures — never buildable, owned by 'civ'
-  vil1: { name: 'Farmhouse', cost: 0, hp: 250, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true },
-  vil2: { name: 'Cottage', cost: 0, hp: 200, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true },
-  vil3: { name: 'Barn', cost: 0, hp: 300, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true },
-  chur: { name: 'Chapel', cost: 0, hp: 400, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true },
+  // neutral village structures — never buildable, owned by 'civ'.
+  // `garrison`: armed infantry can occupy and fire from inside (capacity).
+  vil1: { name: 'Farmhouse', cost: 0, hp: 250, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true, garrison: 3 },
+  vil2: { name: 'Cottage', cost: 0, hp: 200, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true, garrison: 3 },
+  vil3: { name: 'Barn', cost: 0, hp: 300, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true, garrison: 3 },
+  chur: { name: 'Chapel', cost: 0, hp: 400, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true, garrison: 4 },
+  // abandoned supply depot: capture it (engineer) and it trickles credits
+  depo: { name: 'Supply Depot', cost: 0, hp: 500, w: 2, h: 2, armor: 'wood', sight: 2, power: 0, drain: 0, side: null, prereq: [], civ: true, depot: true },
 };
 
 // sidebar ordering (filtered by prereqOk at runtime)
@@ -134,6 +137,8 @@ DATA.eva = {
   nukeLaunched: 'Nuclear weapon launched',
   unitLost: 'Unit lost',
   buildingCaptured: 'Building captured',
+  depotSecured: 'Supply depot secured',
+  buildingGarrisoned: 'Structure garrisoned',
   cancelled: 'Cancelled',
   onHold: 'On hold',
   repairing: 'Repairing',

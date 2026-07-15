@@ -727,10 +727,32 @@ const Input = (function () {
         }
         lastClick = { t: now, id: ent.id };
       } else {
-        // second click on your already-selected factory makes it primary
+        // reinforcing your own garrison: armed infantry file in
+        if (ent.kind === 'building' && DATA.buildings[ent.type].garrison &&
+            (ent.garrison || []).length < DATA.buildings[ent.type].garrison) {
+          const inf = ownSel.filter(u => {
+            const d = DATA.units[u.type];
+            return d.infantry && d.weapon && !d.engineer;
+          });
+          if (inf.length) {
+            let acted = false;
+            for (const u of inf) if (orderEnter(u, ent)) acted = true;
+            if (acted) {
+              AUDIO.ack('move', 'inf');
+              spawnEffect('moveMark', _entX(ent), _entY(ent), { ttl: 14 });
+              return;
+            }
+          }
+        }
+        // second click on your already-selected factory makes it primary;
+        // on a garrisoned structure it empties it
         const sole = g.selection.length === 1 && g.selection[0] === ent.id;
         if (sole && DATA.buildings[ent.type].factory && Production.setPrimary(g.human, ent)) {
           AUDIO.play('click');
+          return;
+        }
+        if (sole && ent.garrison && ent.garrison.length) {
+          AUDIO.play(unloadCargo(ent) ? 'click' : 'buzz');
           return;
         }
         _select([ent.id], true);
@@ -740,6 +762,24 @@ const Input = (function () {
     }
 
     if (ent && ent.owner !== g.humanSide) {
+      // armed infantry occupy a neutral garrisonable structure (plain click;
+      // Ctrl+click still force-attacks it)
+      if (ent.kind === 'building' && ent.owner === 'civ' &&
+          DATA.buildings[ent.type].garrison && ownSel.length) {
+        const inf = ownSel.filter(u => {
+          const d = DATA.units[u.type];
+          return d.infantry && d.weapon && !d.engineer;
+        });
+        if (inf.length) {
+          let acted = false;
+          for (const u of inf) if (orderEnter(u, ent)) acted = true;
+          if (acted) {
+            AUDIO.ack('move', 'inf');
+            spawnEffect('moveMark', _entX(ent), _entY(ent), { ttl: 14 });
+            return;
+          }
+        }
+      }
       if (ownSel.length) {
         // engineers capture enemy buildings
         let acted = false;
@@ -945,6 +985,10 @@ const Input = (function () {
         for (const u of _selectedUnits()) {
           if (DATA.units[u.type].transport && unloadCargo(u)) acted = true;
         }
+        for (const id of g.selection) {
+          const b = g.buildings.get(id);
+          if (b && b.owner === g.humanSide && b.garrison && b.garrison.length && unloadCargo(b)) acted = true;
+        }
         AUDIO.play(acted ? 'click' : 'buzz');
         break;
       }
@@ -1065,10 +1109,19 @@ const Input = (function () {
       }
       if (ent.kind === 'unit' && DATA.units[ent.type].transport && sel.length &&
           sel.every(u => DATA.units[u.type].infantry) && !sel.some(u => u.id === ent.id)) return 'enter';
+      if (ent.kind === 'building' && DATA.buildings[ent.type].garrison &&
+          (ent.garrison || []).length < DATA.buildings[ent.type].garrison &&
+          sel.some(u => { const d = DATA.units[u.type]; return d.infantry && d.weapon && !d.engineer; })) {
+        return 'enter';
+      }
       return 'select';
     }
     if (ent && ent.owner !== g.humanSide) {
       if (!sel.length) return 'select';
+      if (ent.kind === 'building' && ent.owner === 'civ' && DATA.buildings[ent.type].garrison &&
+          sel.some(u => { const d = DATA.units[u.type]; return d.infantry && d.weapon && !d.engineer; })) {
+        return 'enter';
+      }
       if (sel.some(u => DATA.units[u.type].engineer) && ent.kind === 'building') return 'capture';
       if (sel.some(u => DATA.units[u.type].weapon)) return 'attack';
       return 'nomove';

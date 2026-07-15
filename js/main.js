@@ -10,6 +10,12 @@ const Main = (function () {
   let mySkirmish = null;  // skirmish difficulty preset (null = normal)
   let ended = false;
 
+  // skirmish difficulty knobs — module scope so replays can reconstruct them
+  const DIFF_PRESETS = {
+    EASY: { skirmish: 'EASY', aiCalm: 1.7, aiWaveCap: 6, aiCredits: 3500 },
+    HARD: { skirmish: 'HARD', aiCalm: 0.65, aiCredits: 9000 },
+  };
+
   function $(id) { return document.getElementById(id); }
 
   // ---- maximizing the screen on mobile ----------------------------------------------
@@ -251,6 +257,39 @@ const Main = (function () {
       else $('menu').classList.remove('hidden');
     });
 
+    // ---- replays: watch the battle you just fought, save it, load one ----
+    $('btnWatchReplay').addEventListener('click', () => {
+      if (typeof REPLAY === 'undefined' || !REPLAY.hasLast()) return;
+      $('score').classList.add('hidden');
+      REPLAY.watchLast();
+    });
+    $('btnSaveReplay').addEventListener('click', () => {
+      const data = typeof REPLAY !== 'undefined' && REPLAY.exportLast();
+      if (!data) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
+      a.download = 'harvest-war-replay.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+    $('btnLoadReplay').addEventListener('click', () => $('replayFile').click());
+    $('replayFile').addEventListener('change', ev => {
+      const f = ev.target.files && ev.target.files[0];
+      ev.target.value = '';
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          AUDIO.init();
+          REPLAY.watchData(r.result);
+        } catch (e) {
+          console.warn(e);
+          alert(e.message || 'Could not read that replay file.');
+        }
+      };
+      r.readAsText(f);
+    });
+
     // URL params for testing: ?side=&seed=&nomenu=1&mute=1&mission=N
     // &mpbc=name&mphost=1 — two-tab multiplayer over BroadcastChannel
     const q = new URLSearchParams(location.search);
@@ -371,12 +410,7 @@ const Main = (function () {
 
     // skirmish at three difficulties: the knobs the campaign already uses
     // (wave cadence, wave cap, AI war chest) exposed straight to the player
-    const DIFFS = [
-      ['EASY',   { skirmish: 'EASY', aiCalm: 1.7, aiWaveCap: 6, aiCredits: 3500 }],
-      ['NORMAL', null],
-      ['HARD',   { skirmish: 'HARD', aiCalm: 0.65, aiCredits: 9000 }],
-    ];
-    for (const [tag, diff] of DIFFS) {
+    for (const [tag, diff] of [['EASY', DIFF_PRESETS.EASY], ['NORMAL', null], ['HARD', DIFF_PRESETS.HARD]]) {
       const skirm = document.createElement('button');
       skirm.innerHTML = `<span>SKIRMISH — ${tag}</span><span class="tag">RANDOM BATTLEFIELD</span>`;
       skirm.addEventListener('click', () => {
@@ -501,6 +535,14 @@ const Main = (function () {
         addUnit(u);
       }
     }
+    // neutral supply depots — capture one (engineer) for a credit trickle
+    if (game.decor && game.decor.depots) {
+      for (const dp of game.decor.depots) {
+        const b = makeBuilding('depo', 'civ', dp.cx, dp.cy);
+        b.buildProgress = 1;
+        addBuilding(b);
+      }
+    }
 
     Production.computePower(game.human);
     Production.computePower(game.ai);
@@ -513,6 +555,17 @@ const Main = (function () {
     const myPos = opts.mp ? (side === 'gdi' ? hp : ap) : hp;
     game.camera.x = clamp(cellCenterX(myPos.cx) - C.VIEW_W / 2, 0, C.MAP_W * C.CELL - C.VIEW_W);
     game.camera.y = clamp(cellCenterY(myPos.cy) - C.VIEW_H / 2, 0, C.MAP_H * C.CELL - C.VIEW_H);
+
+    // every single-player battle records itself (a few KB: seed + orders);
+    // watching a replay re-enters here and REPLAY then disarms the recorder
+    if (!opts.mp && typeof REPLAY !== 'undefined') {
+      REPLAY.arm({
+        seed: game.seed,
+        side,
+        mission: mission && mission.n ? mission.n : null,
+        skirmish: mySkirmish && mySkirmish.skirmish ? mySkirmish.skirmish : null,
+      });
+    }
     game.startTime = Date.now();
     // lockstep pace is set by the slower client, so a local slider would be
     // misleading in MP — pin both clients to the same fixed speed instead
@@ -541,6 +594,9 @@ const Main = (function () {
         }
         acc -= step;
         guard++;
+        // replay playback: the recorded orders for "after tick T" apply here,
+        // while game.tick still equals T — the exact point live input landed
+        if (typeof REPLAY !== 'undefined' && REPLAY.playing) REPLAY.applyPending();
         game.tick++;
         if (NET.active) NET.applyTick(game.tick);
         Input.tick(game);
@@ -615,6 +671,10 @@ const Main = (function () {
     game.status = won ? 'won' : 'lost';
     if (won && game.mission && game.mission.n) MissionProgress.unlockUpTo(game.mission.n);
     AUDIO.eva(won ? 'missionAccomplished' : 'missionFailed');
+    if (typeof REPLAY !== 'undefined') {
+      if (REPLAY.playing) REPLAY.stop();
+      else REPLAY.finish(won);
+    }
 
     const g = game;
     setTimeout(() => {
@@ -643,6 +703,10 @@ const Main = (function () {
       title.style.color = won ? '#e0b840' : '#e05038';
       $('scoreLines').innerHTML = rows.map(r =>
         `<div class="row"><span>${r[0]}</span><span class="val">${r[1]}</span></div>`).join('');
+      // replay controls only when there is a finished recording to show
+      const canReplay = typeof REPLAY !== 'undefined' && REPLAY.hasLast();
+      $('btnWatchReplay').classList.toggle('hidden', !canReplay);
+      $('btnSaveReplay').classList.toggle('hidden', !canReplay);
       $('score').classList.remove('hidden');
     }, 1400);
   }
@@ -679,5 +743,14 @@ const Main = (function () {
     }
   }
 
-  return { boot, startGame, endGame, desyncEnd, togglePause };
+  // reconstruct a recorded battle's setup and boot straight into it; the
+  // REPLAY module then feeds the recorded orders at their original ticks
+  function startReplay(meta) {
+    AUDIO.init();
+    const mission = meta.mission ? MISSIONS[meta.mission - 1] : null;
+    const skirm = meta.skirmish ? DIFF_PRESETS[meta.skirmish] : null;
+    startGame(meta.side, { seed: meta.seed, mission, skirmish: skirm });
+  }
+
+  return { boot, startGame, startReplay, endGame, desyncEnd, togglePause };
 })();

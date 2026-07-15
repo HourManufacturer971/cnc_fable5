@@ -1896,6 +1896,30 @@
       VP(q, 26, 11, 4, 9, '#6e6a60'); VP(q, 26, 11, 4, 1, '#8a867c');
       VP(q, 15, 31, 5, 8, '#3c5232'); VP(q, 16, 32, 3, 6, '#4c6840'); // door
       VP(q, 24, 31, 5, 4, '#31414f'); VP(q, 24, 31, 2, 2, '#88a8c0'); // window
+    } else if (kind === 'depo') {
+      // abandoned supply depot: concrete pad, corrugated shed, fuel drums,
+      // strapped crates — obviously worth an engineer's trip
+      VP(q, 4, 24, 38, 16, '#101008');                       // pad outline
+      VP(q, 5, 25, 36, 14, '#8e8a80');                       // concrete pad
+      VP(q, 5, 25, 36, 2, '#a09c92');
+      VP(q, 6, 10, 20, 16, '#101008');                       // shed outline
+      VP(q, 7, 11, 18, 14, '#6e7462');                       // shed wall
+      for (let k = 0; k < 6; k++) VP(q, 8 + k * 3, 12, 1, 12, '#5d6353'); // corrugation
+      _roof(q, 7, 25, 10, 6, '#9aa0aa', '#7d838d', '#5a6068', '#aab0ba');
+      VP(q, 20, 18, 4, 7, '#3a4034');                        // shed door
+      for (const [dx, dy] of [[28, 14], [34, 14], [31, 19]]) { // fuel drums
+        VP(q, dx, dy, 6, 9, '#101008');
+        VP(q, dx + 1, dy + 1, 4, 7, '#8a4c30');
+        VP(q, dx + 1, dy + 1, 4, 1, '#a86040');
+        VP(q, dx + 1, dy + 4, 4, 1, '#6e3a24');
+      }
+      VP(q, 8, 28, 10, 9, '#101008');                        // crate stack
+      VP(q, 9, 29, 8, 7, '#8a6a3c');
+      VP(q, 9, 32, 8, 1, '#6a4f2a');
+      VP(q, 12, 29, 2, 7, '#c8a84c');                        // gold strap
+      VP(q, 22, 29, 9, 8, '#101008');
+      VP(q, 23, 30, 7, 6, '#7a5c34');
+      VP(q, 26, 30, 1, 6, '#c8a84c');
     } else if (kind === 'chur') {
       // chapel: whitewashed nave, slate roof, bell tower with a gold cross
       VP(q, 16, 25, 26, 15, '#101008');                       // nave outline
@@ -1942,7 +1966,7 @@
     return c;
   }
 
-  for (const key of ['vil1', 'vil2', 'vil3', 'chur']) {
+  for (const key of ['vil1', 'vil2', 'vil3', 'chur', 'depo']) {
     const entry = { normal: [_houseFrame(key, false)], damaged: [_houseFrame(key, true)] };
     SPRITES.buildings[key] = { civ: entry, gdi: entry, nod: entry };
   }

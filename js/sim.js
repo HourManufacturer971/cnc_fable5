@@ -340,7 +340,15 @@ function orderDeploy(u) {
 }
 
 function orderEnter(u, target) {
-  if (!DATA.units[u.type].engineer || !target || target.kind !== 'building') return false;
+  const ud = DATA.units[u.type];
+  if (!target || target.kind !== 'building') return false;
+  if (!ud.engineer) {
+    // armed infantry can garrison a neutral (or own, with room) structure
+    const bd = DATA.buildings[target.type];
+    if (!ud.infantry || !ud.weapon || !bd.garrison) return false;
+    if (target.owner !== 'civ' &&
+        (target.owner !== u.owner || (target.garrison || []).length >= bd.garrison)) return false;
+  }
   u.state = 'enter';
   u.targetId = target.id;
   // path to nearest perimeter cell
@@ -395,21 +403,30 @@ function _freeUnitCellNear(cx0, cy0, maxR) {
 }
 
 // disembark every passenger into free cells around the transport
-function unloadCargo(apc) {
-  if (!apc.cargo || !apc.cargo.length) return false;
-  const cx0 = worldToCell(apc.x), cy0 = worldToCell(apc.y);
+function unloadCargo(holder) {
+  // one verb for both: an APC's cargo and a garrisoned building's occupants
+  const isB = holder.kind === 'building';
+  const bag = isB ? holder.garrison : holder.cargo;
+  if (!bag || !bag.length) return false;
+  const hx = _entX(holder), hy = _entY(holder);
+  const cx0 = worldToCell(hx), cy0 = worldToCell(hy);
   let placed = 0;
-  while (apc.cargo.length) {
+  while (bag.length) {
     const spot = _freeUnitCellNear(cx0, cy0, 3);
     if (!spot) break;
-    const u = apc.cargo.pop();
+    const u = bag.pop();
     u.x = cellCenterX(spot.cx); u.y = cellCenterY(spot.cy);
     u.state = 'idle'; u.path = []; u.pathi = 0; u.boardTargetId = 0; u._commit = -1;
     u.guardAnchor = { x: u.x, y: u.y };
     addUnit(u);
     placed++;
   }
-  if (placed) _maybePlay('place', apc.x, apc.y);
+  // an emptied structure goes back to the villagers
+  if (isB && !bag.length && DATA.buildings[holder.type].garrison) {
+    holder.targetId = 0;
+    _transferBuilding(game, holder, 'civ');
+  }
+  if (placed) _maybePlay('place', hx, hy);
   return placed > 0;
 }
 
@@ -1092,6 +1109,22 @@ function _goRearm(u, d) {
 
 // ---- engineer ----------------------------------------------------------------
 
+// hand a building to a new owner (engineer capture, garrison claim/release)
+function _transferBuilding(g, t, newOwner) {
+  const oldOwner = t.owner;
+  if (oldOwner === newOwner) return;
+  const ids = g.players[oldOwner].buildingIds;
+  const i = ids.indexOf(t.id);
+  if (i >= 0) ids.splice(i, 1);
+  t.owner = newOwner;
+  t.repairing = false;
+  g.players[newOwner].buildingIds.push(t.id);
+  if (typeof Production !== 'undefined') {
+    Production.computePower(g.players[oldOwner]);
+    Production.computePower(g.players[newOwner]);
+  }
+}
+
 function _engineer(u, d) {
   const g = game;
   const t = getEnt(u.targetId);
@@ -1099,20 +1132,34 @@ function _engineer(u, d) {
   const cx = worldToCell(u.x), cy = worldToCell(u.y);
   const adjacent = cx >= t.cx - 1 && cx <= t.cx + t.w && cy >= t.cy - 1 && cy <= t.cy + t.h;
   if (adjacent) {
+    // armed infantry entering a garrisonable structure: occupy, don't consume
+    if (!d.engineer) {
+      const bd = DATA.buildings[t.type];
+      if (!bd.garrison) { u.state = 'idle'; u.targetId = 0; return; }
+      if (t.owner === 'civ') {
+        _transferBuilding(g, t, u.owner);
+        if (u.owner === g.humanSide) _evaOnce('buildingGarrisoned', 60);
+      }
+      if (t.owner !== u.owner || (t.garrison || []).length >= bd.garrison) {
+        u.state = 'idle'; u.targetId = 0; u.guardAnchor = { x: u.x, y: u.y };
+        return;
+      }
+      clearOcc(worldToCell(u.x), worldToCell(u.y), u.id);
+      if (u._commit >= 0) { clearOcc(u._commit % C.MAP_W, (u._commit / C.MAP_W) | 0, u.id); u._commit = -1; }
+      removeUnit(u);
+      u.state = 'garrisoned';
+      u.targetId = 0;
+      u.x = _entX(t); u.y = _entY(t);   // fire from the building's heart
+      (t.garrison || (t.garrison = [])).push(u);
+      _maybePlay('place', u.x, u.y);
+      return;
+    }
     if (t.owner !== u.owner) {
       // capture!
-      const oldOwner = t.owner;
-      const ids = g.players[oldOwner].buildingIds;
-      const i = ids.indexOf(t.id);
-      if (i >= 0) ids.splice(i, 1);
-      t.owner = u.owner;
-      t.repairing = false;
-      g.players[u.owner].buildingIds.push(t.id);
-      if (typeof Production !== 'undefined') {
-        Production.computePower(g.players[oldOwner]);
-        Production.computePower(g.players[u.owner]);
+      _transferBuilding(g, t, u.owner);
+      if (u.owner === g.humanSide) {
+        _evaOnce(DATA.buildings[t.type].depot ? 'depotSecured' : 'buildingCaptured', 30);
       }
-      if (u.owner === g.humanSide) _evaOnce('buildingCaptured', 30);
       _maybePlay('radarOn', u.x, u.y);
     } else if (t.hp < t.maxHp) {
       t.hp = t.maxHp;
@@ -1170,7 +1217,7 @@ function _tickUnit(u) {
     } else _harvester(u, d);
     return;
   }
-  if (d.engineer && u.state === 'enter') { _engineer(u, d); return; }
+  if ((d.engineer || d.infantry) && u.state === 'enter') { _engineer(u, d); return; }
   if (d.infantry && u.state === 'board') { _tickBoard(u, d); return; }
 
   switch (u.state) {
@@ -1276,9 +1323,58 @@ function _tickUnit(u) {
 
 // ---- buildings ---------------------------------------------------------------
 
+// a garrisoned structure fights with its occupants' own guns: shared target,
+// per-occupant cooldowns and ranges (+1 cell for the elevation), occupants
+// keep their veterancy. Deterministic: sim state only.
+function _tickGarrisonFire(b) {
+  const g = game;
+  if (!b.garrison || !b.garrison.length) return;
+  let t = getEnt(b.targetId);
+  if (!t || t._dead || _distTo(_entX(b), _entY(b), t) > 8 * C.CELL ||
+      (t.kind === 'unit' && t.cloaked)) {
+    t = null;
+    b.targetId = 0;
+    if ((g.tick + b.id) % 4 === 0) {
+      t = _nearestEnemy(b, 6.5, {});
+      if (t) b.targetId = t.id;
+    }
+  }
+  if (!t) return;
+  const tx = _entX(t), ty = _entY(t);
+  for (const occ of b.garrison) {
+    if (occ.cooldown > 0) { occ.cooldown--; continue; }
+    const od = DATA.units[occ.type];
+    const w = Object.assign({ key: od.weapon }, DATA.weapons[od.weapon]);
+    if (!_canTarget(w, t)) continue;
+    if (dist(occ.x, occ.y, tx, ty) > (w.range + 1) * C.CELL) continue;
+    occ.facing = dirTo16(tx - occ.x, ty - occ.y);
+    _fireWeapon(occ, w, t);
+    occ.cooldown = w.rof;
+  }
+}
+
+// a captured supply depot pays its keeper a steady trickle. Like crate
+// salvage this is FOUND money — it ignores the silo cap, so the prize is
+// worth holding from the first minute (harvest income still respects caps)
+function _tickDepots(g) {
+  if (g.tick % 150 !== 0) return;
+  for (const side of ['gdi', 'nod']) {
+    const p = g.players[side];
+    for (const id of p.buildingIds) {
+      const b = g.buildings.get(id);
+      if (!b || !DATA.buildings[b.type].depot || b.buildProgress < 1) continue;
+      p.credits += 25;
+      if (side === g.humanSide) {
+        spawnEffect('cash', _entX(b), _entY(b) - 10, { ttl: 20, vy: -0.9, amount: 25 });
+      }
+    }
+  }
+}
+
 function _tickBuildingWeapon(b) {
   const g = game;
   const bd = DATA.buildings[b.type];
+  _tickGarrisonFire(b);
   if (!bd.weapon || b.buildProgress < 1) return;
   const p = g.players[b.owner];
   const lowPower = p.power.drain > p.power.out;
@@ -1594,6 +1690,14 @@ function killEntity(ent, attacker) {
     spawnEffect('expL', _entX(ent), _entY(ent));
     spawnEffect('scorch', _entX(ent), _entY(ent));
     _maybePlay('expL', _entX(ent), _entY(ent));
+    // a collapsing structure buries its garrison
+    if (ent.garrison && ent.garrison.length) {
+      for (const occ of ent.garrison) {
+        spawnEffect('infdie', occ.x, occ.y, { itype: occ.type, side: occ.owner });
+        if (occ.owner === human) g.stats.losses++; else g.stats.kills++;
+      }
+      ent.garrison.length = 0;
+    }
     // the chapel keeps its collection box in the rubble — a guaranteed cash
     // crate (sim state, deterministic on both clients)
     if (ent.type === 'chur') {
@@ -1804,6 +1908,7 @@ const Sim = {
     _tickTiberium(g);
     _tickCrates(g);
     _tickRepairPads(g);
+    _tickDepots(g);
     _tickCloak(g);
   },
 };

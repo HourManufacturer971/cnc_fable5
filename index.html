@@ -33,6 +33,8 @@
         </div>
       </div>
       <button id="btnMultiplayer">Multiplayer &mdash; vs a friend (P2P)</button>
+      <button id="btnLoadReplay">Watch a Replay &mdash; load a saved battle</button>
+      <input type="file" id="replayFile" accept=".json,application/json" class="hidden">
       <button id="btnInstall" class="hidden">Install as App &mdash; plays fullscreen</button>
       <p class="hint">Classic controls: left-click selects and orders &middot; right-click deselects</p>
       <p class="hint">Touch: tap to select and order &middot; drag to pan &middot; hold then drag to multi-select &middot; two-finger tap deselects</p>
@@ -111,6 +113,8 @@
     <div class="panel">
       <h2 id="scoreTitle">MISSION ACCOMPLISHED</h2>
       <div id="scoreLines"></div>
+      <button id="btnWatchReplay" class="hidden">Watch Replay</button>
+      <button id="btnSaveReplay" class="hidden">Save Replay</button>
       <button id="btnAgain">Continue</button>
     </div>
   </div>
@@ -144,6 +148,7 @@
 <script src="js/input.js"></script>
 <script src="js/render.js"></script>
 <script src="js/net.js"></script>
+<script src="js/replay.js"></script>
 <script src="js/main.js"></script>
 </body>
 </html>

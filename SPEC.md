@@ -78,8 +78,9 @@ define **exactly** the globals listed and may freely call any global listed for 
 | ai.js | `AI` (`init, tick, _peek` — `_peek` is a read-only debug/test hook) |
 | input.js | `Input` (`init, tick, mouse, cursorKind, mode, modeArg`) |
 | render.js | `Render` (`init, frame, worldFromScreen, hitTest`) |
-| net.js | `NET` (P2P lockstep: `host, acceptAnswer, join, testLocal, close, pump, ready, applyTick, postTick, stalledMs, initExplored, checksum`, flags `active/applying/inSim/side/desynced`) |
-| main.js | `Main` (`boot, startGame, endGame`), starts loop, menu DOM wiring |
+| net.js | `NET` (P2P lockstep: `host, acceptAnswer, join, testLocal, close, pump, ready, applyTick, postTick, stalledMs, initExplored, checksum, execReplay`, flags `active/applying/inSim/side/desynced`) |
+| replay.js | `REPLAY` (`arm, logCmd, finish, hasLast, exportLast, watchLast, watchData, applyPending, stop`, flags `recording/playing` — see "Replays") |
+| main.js | `Main` (`boot, startGame, startReplay, endGame`), starts loop, menu DOM wiring |
 
 ## Game state (created by `makeGame` in core.js — read it)
 
@@ -127,7 +128,20 @@ MAPGEN also fills `game.decor = { bridge, waterfall, village }`: bridge cells, t
 waterfall cell, and the neutral hamlet layout that main.js spawns as 'civ'-owned
 buildings/units (players include a `civ` stub owner nobody auto-targets). The hamlet is
 farmhouse + chapel (`chur`) + two cottages + barn; the chapel drops a guaranteed cash
-crate when destroyed (see Crates).
+crate when destroyed (see Crates). Skirmish maps also place two neutral SUPPLY DEPOTS
+(`depo`) on contested ground (near crossings/midfield, ≥18 cells from both starts) —
+engineer-capturable; a held depot pays its owner 25 credits every 150 ticks
+(`_tickDepots`, found money like crates: ignores the silo cap; cash popup humanSide-only).
+GARRISONS: armed non-engineer infantry `orderEnter` a DATA `garrison`-capable civ (or own,
+with room) building: the structure transfers to the occupier (`_transferBuilding` — the
+same helper engineer capture uses; ownership gives radar color + fog sight), occupants
+leave the map into `b.garrison[]` with their position synced to the building's heart, and
+`_tickGarrisonFire` fights with each occupant's own weapon (+1 range, per-occupant
+cooldowns, veterancy intact, occupant is the _fireWeapon shooter so kills credit).
+Second-click/`U` unloads (generic `unloadCargo`, net op `unl` resolves buildings too) and
+an EMPTIED structure reverts to 'civ'; a destroyed one kills its garrison (transport
+rule). Render marks occupied buildings with owner-colored dots. All sim-state reads —
+lockstep-safe; `orderEnter`/`unl` were already net commands.
 
 ## Core game rules (be faithful to the 1995 original)
 
@@ -675,6 +689,28 @@ crate when destroyed (see Crates).
   to 1.7, Restart mission, Abort mission); score screen. Esc toggles.
 - Win check per rules; on end: `Main.endGame(won)` shows score screen; sound
   `missionAccomplished`/`missionFailed` EVA.
+
+### Replays (`replay.js`, global `REPLAY`)
+- The sim is deterministic lockstep, so a battle IS `{seed, setup, orders}`. Every
+  single-player game auto-records: `Main.startGame` arms `REPLAY.arm({seed, side,
+  mission: n|null, skirmish: 'EASY'|'HARD'|null})`; the net.js wrapper layer's `_rec(c)`
+  logs each GENUINE player order (passthru path with `!active && !inSim && !applying`)
+  as `{t: game.tick, c}` using the same command encoding multiplayer sends. Sim/AI calls
+  never record (they run under `NET.inSim`).
+- `endGame` → `REPLAY.finish(won)` freezes the recording as "last". Score screen offers
+  Watch Replay / Save Replay (JSON download); the main menu's "Watch a Replay" loads a
+  file. `Main.startReplay(meta)` reconstructs the setup (mission from `MISSIONS[n-1]`,
+  skirmish from module-scope `DIFF_PRESETS`) and re-runs `startGame` with the recorded
+  seed; REPLAY then disarms the fresh recorder and enters playback.
+- Playback: the main loop calls `REPLAY.applyPending()` at the top of each tick
+  iteration — while `game.tick` still equals the recorded T (live input always lands
+  between frames, i.e. after tick T completed) — feeding commands through
+  `NET.execReplay` (`applying` guard). While watching, `_rec` SWALLOWS live player
+  orders (look, don't touch — selection and camera stay free) and render shows a
+  blinking ▶ REPLAY badge. Multiplayer games are not recorded (v1).
+- Determinism contract: identical code + seed + setup + order stream ⇒ identical sim.
+  Anything that breaks same-seed determinism breaks replays AND multiplayer — the
+  objtest suite verifies a record→playback checksum round-trip.
 
 ## Testing hooks (must implement)
 

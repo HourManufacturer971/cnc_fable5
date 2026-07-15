@@ -396,6 +396,17 @@ const Render = (function () {
       drawSpr(wr, x + (b.w * C.CELL * Z - wr.width * sca(wr)) / 2,
         Y(b.cy * C.CELL) + (b.h * C.CELL * Z - wr.height * sca(wr)) / 2);
     }
+    // garrison marker: one dot per occupant in the holder's color, so an
+    // occupied building reads as hostile/friendly at a glance
+    if (b.garrison && b.garrison.length) {
+      const gx = X(b.cx * C.CELL) + 4, gy = Y(b.cy * C.CELL) + 3;
+      for (let i = 0; i < b.garrison.length; i++) {
+        ctx.fillStyle = '#101008';
+        ctx.fillRect(gx + i * 9 - 1, gy - 1, 8, 8);
+        ctx.fillStyle = OWNER_COLOR[b.owner] || '#fff';
+        ctx.fillRect(gx + i * 9, gy, 6, 6);
+      }
+    }
   }
 
   function _drawUnit(g, u, X, Y) {
@@ -1243,6 +1254,25 @@ const Render = (function () {
     ctx.textBaseline = 'alphabetic';
   }
 
+  // watching a recorded battle: an unmissable badge so nobody mistakes it
+  // for a live game they've lost control of
+  function _drawReplayBadge(g) {
+    if (typeof REPLAY === 'undefined' || !REPLAY.playing) return;
+    ctx.font = 'bold 14px monospace';
+    ctx.textBaseline = 'middle';
+    const s = '▶ REPLAY';
+    const bw = ctx.measureText(s).width + 22;
+    const bx = C.VIEW_PW / 2 - bw / 2, by = C.TAB_H + 8;
+    ctx.fillStyle = 'rgba(20,10,8,0.8)';
+    ctx.fillRect(bx, by, bw, 24);
+    ctx.strokeStyle = ((g.tick >> 4) & 1) ? '#e05038' : '#8a2c20';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, 23);
+    ctx.fillStyle = '#f0c8b8';
+    ctx.fillText(s, bx + 11, by + 13);
+    ctx.textBaseline = 'alphabetic';
+  }
+
   // ---- multiplayer stall notice ----------------------------------------------------------------
 
   function _drawNetStall(g) {
@@ -1290,6 +1320,7 @@ const Render = (function () {
     _drawSidebar(g);
     _drawObjective(g);
     _drawNetStall(g);
+    _drawReplayBadge(g);
     _drawEvaBanner();
     if (Input.mouse.inside && !g.paused) _drawCursor();
     shownTick = g.tick;

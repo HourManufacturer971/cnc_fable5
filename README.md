@@ -83,6 +83,9 @@ so bandwidth is tiny. Notes:
 | Click selected MCV (or `D`) | Deploy into Construction Yard |
 | Select infantry, click a friendly APC | Board it (up to 5 passengers) |
 | Select vehicles, click your Repair Facility | Drive to the pad and repair (costs credits) |
+| Select armed infantry, click a village building | Garrison it and fire from the windows |
+| Click the selected garrisoned building (or `U`) | Order the squad back out |
+| Select an engineer, click a Supply Depot | Capture it for a credit trickle |
 | Click the selected loaded APC (or `U`) | Unload its passengers |
 | Alt+1..9 (or Ctrl+1..9) | Assign control group — Alt is the reliable one; browsers steal Ctrl+1..8 for tab switching |
 | 1..9 | Recall group (double-tap to center camera, Shift adds the group to the selection) |
@@ -188,11 +191,25 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   hunt down the enemy economy, and crack a fortress; each tunes the AI's
   aggression and war chest, wins unlock the next, and an objective chip on
   the HUD tracks live progress
-- **A civilian hamlet** — farmhouse, cottages, a barn and a little chapel,
-  with villagers who wander about and flee gunfire; nobody auto-targets
-  them (except the fleshlings), but Ctrl+click will. Rumor says the
-  chapel's collection box survives its demolition — a guaranteed cash
-  crate in the rubble, if your conscience allows
+- **A civilian hamlet you can fight over** — farmhouse, cottages, a barn
+  and a little chapel, with villagers who wander about and flee gunfire;
+  nobody auto-targets them (except the fleshlings), but Ctrl+click will.
+  **Armed infantry can garrison the buildings** and fire from the windows
+  (with a +1 range height advantage) — the structure flies your colors
+  while occupied, click it again to order everyone out, and if it
+  collapses the squad goes with it. Rumor says the chapel's collection
+  box survives its demolition — a guaranteed cash crate in the rubble,
+  if your conscience allows
+- **Neutral supply depots** — two abandoned depots sit on contested ground
+  near the river crossings and midfield. Send an engineer to capture one
+  and it pays a steady credit trickle for as long as you hold it; the
+  enemy can shell it or steal it right back. Suddenly the middle of the
+  map is worth owning
+- **Replays** — every single-player battle records itself (the sim is
+  deterministic, so a replay is just the seed and your orders — a few
+  kilobytes). Watch the battle again from the score screen, save it to a
+  file, or load one from the main menu and watch any battle re-simulate
+  move for move
 - **Vehicle repairs** — click your Repair Facility with vehicles selected
   and they roll over and park; a wrench blinks while the pad patches them
   up at the same credits-per-point rate building repairs cost

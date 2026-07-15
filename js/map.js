@@ -843,6 +843,49 @@ const MAPGEN = (function () {
       }
     }
 
+    // --- neutral supply depots: two prizes worth fighting over -------------------
+    // Contested ground by construction: each wants to sit near the midfield
+    // (or a river crossing), far from both bases, on clear reachable land.
+    if (!opts.holdout) {
+      g.decor.depots = [];
+      const anchors = [];
+      if (riv) {
+        anchors.push({ cx: riv.fordX1, cy: Math.round(riv.yc[riv.fordX1]) });
+        if (g.decor.bridge && g.decor.bridge.length) {
+          const mid = g.decor.bridge[(g.decor.bridge.length / 2) | 0];
+          anchors.push({ cx: mid.cx, cy: mid.cy });
+        } else {
+          anchors.push({ cx: riv.fordX2, cy: Math.round(riv.yc[riv.fordX2]) });
+        }
+      } else {
+        anchors.push({ cx: 32, cy: 32 }, { cx: 32, cy: 32 });
+      }
+      for (const anchor of anchors.slice(0, 2)) {
+        let best = null, bestScore = Infinity;
+        for (let a = 0; a < 120; a++) {
+          const dx = 4 + ((rng() * (W - 10)) | 0), dy = 4 + ((rng() * (H - 10)) | 0);
+          if (distC(dx + 1, dy + 1, hs.cx, hs.cy) < 18 || distC(dx + 1, dy + 1, as.cx, as.cy) < 18) continue;
+          if (g.decor.village) {
+            const v = g.decor.village.houses[0];
+            if (distC(dx, dy, v.cx + 4, v.cy + 3) < 8) continue;
+          }
+          let clear = true;
+          for (let yy = dy - 1; yy <= dy + 2 && clear; yy++) {
+            for (let xx = dx - 1; xx <= dx + 2; xx++) {
+              const i = cellIdx(xx, yy);
+              const t = g.terrain[i];
+              if ((t !== T_GRASS && t !== T_DIRT) || g.tib[i] > 0 || !reach2[i]) { clear = false; break; }
+            }
+          }
+          if (!clear) continue;
+          let score = distC(dx, dy, anchor.cx, anchor.cy);
+          for (const other of g.decor.depots) score += Math.max(0, 14 - distC(dx, dy, other.cx, other.cy)) * 3;
+          if (score < bestScore) { bestScore = score; best = { cx: dx, cy: dy }; }
+        }
+        if (best) g.decor.depots.push(best);
+      }
+    }
+
     // --- terrain variants for every cell -----------------------------------------
     for (let i = 0; i < n; i++) g.tvar[i] = (rng() * 4) | 0;
   }

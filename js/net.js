@@ -423,7 +423,7 @@ const NET = (function () {
       case 'dep': { const u = _unit(g, c.id, s); if (u) R.orderDeploy(u); break; }
       case 'ent': { const u = _unit(g, c.id, s); const t = getEnt(c.tid); if (u && t && !t._dead) R.orderEnter(u, t); break; }
       case 'brd': { const u = _unit(g, c.id, s); const t = _unit(g, c.tid, s); if (u && t) R.orderBoard(u, t); break; }
-      case 'unl': { const u = _unit(g, c.id, s); if (u) R.unloadCargo(u); break; }
+      case 'unl': { const u = _unit(g, c.id, s) || _bld(g, c.id, s); if (u) R.unloadCargo(u); break; }
       case 'stp': { const u = _unit(g, c.id, s); if (u) R.stopUnit(u); break; }
       case 'rly': { const b = _bld(g, c.bid, s); if (b) R.orderRally(b, c.cx, c.cy); break; }
       case 'str': R.tryStart(p, c.key); break;
@@ -440,106 +440,145 @@ const NET = (function () {
 
   // ---- wrappers (installed at load; inert while NET is inactive) -----------------
 
+  // replay tap: in single-player, _passthru() is where GENUINE player input
+  // flows (sim/AI/exec calls carry inSim/applying). The recorder logs the
+  // command; while a replay is being WATCHED the order is swallowed instead
+  // (look, don't touch). Returns true when the order must be swallowed.
+  function _rec(c) {
+    if (active || inSim || applying) return false;
+    if (typeof REPLAY === 'undefined' || typeof game === 'undefined' || !game) return false;
+    if (REPLAY.playing) return true;
+    if (REPLAY.recording) REPLAY.logCmd(c);
+    return false;
+  }
+
   orderMove = function (u, cx, cy) {
-    if (_passthru()) return R.orderMove(u, cx, cy);
-    _q({ o: 'mv', id: u.id, cx, cy }); return true;
+    const c = { o: 'mv', id: u.id, cx, cy };
+    if (_passthru()) return _rec(c) ? false : R.orderMove(u, cx, cy);
+    _q(c); return true;
   };
   orderAttackMove = function (u, cx, cy) {
-    if (_passthru()) return R.orderAttackMove(u, cx, cy);
-    _q({ o: 'amv', id: u.id, cx, cy }); return true;
+    const c = { o: 'amv', id: u.id, cx, cy };
+    if (_passthru()) return _rec(c) ? false : R.orderAttackMove(u, cx, cy);
+    _q(c); return true;
   };
   orderAttack = function (u, target, keepAnchor) {
-    if (_passthru()) return R.orderAttack(u, target, keepAnchor);
+    const c = target ? { o: 'atk', id: u.id, tid: target.id } : null;
+    if (_passthru()) return c && _rec(c) ? false : R.orderAttack(u, target, keepAnchor);
     if (!target || target._dead || !DATA.units[u.type].weapon) return false;
     // mirror the real validation so the ack/buzz feedback is honest
     // (e.g. a ground-only gun ordered onto an aircraft must buzz, not ack)
     if (!_canTarget(_pickWeapon(u, target), target)) return false;
-    _q({ o: 'atk', id: u.id, tid: target.id }); return true;
+    _q(c); return true;
   };
   orderHarvest = function (u, cx, cy) {
-    if (_passthru()) return R.orderHarvest(u, cx, cy);
-    _q({ o: 'hrv', id: u.id, cx, cy });
+    const c = { o: 'hrv', id: u.id, cx, cy };
+    if (_passthru()) return _rec(c) ? undefined : R.orderHarvest(u, cx, cy);
+    _q(c);
   };
   orderDeploy = function (u) {
-    if (_passthru()) return R.orderDeploy(u);
-    _q({ o: 'dep', id: u.id }); return true;
+    const c = { o: 'dep', id: u.id };
+    if (_passthru()) return _rec(c) ? false : R.orderDeploy(u);
+    _q(c); return true;
   };
   orderEnter = function (u, target) {
-    if (_passthru()) return R.orderEnter(u, target);
+    const c = target && target.id !== undefined ? { o: 'ent', id: u.id, tid: target.id } : null;
+    if (_passthru()) return c && _rec(c) ? false : R.orderEnter(u, target);
     if (!target || target.kind !== 'building') return false;
-    _q({ o: 'ent', id: u.id, tid: target.id }); return true;
+    _q(c); return true;
   };
   orderBoard = function (u, apc) {
-    if (_passthru()) return R.orderBoard(u, apc);
+    const c = apc ? { o: 'brd', id: u.id, tid: apc.id } : null;
+    if (_passthru()) return c && _rec(c) ? false : R.orderBoard(u, apc);
     const cd = apc && DATA.units[apc.type];
     if (!cd || !cd.transport || !apc.cargo || apc.cargo.length >= cd.transport) return false;
-    _q({ o: 'brd', id: u.id, tid: apc.id }); return true;
+    _q(c); return true;
   };
-  unloadCargo = function (apc) {
-    if (_passthru()) return R.unloadCargo(apc);
-    if (!apc.cargo || !apc.cargo.length) return false;
-    _q({ o: 'unl', id: apc.id }); return true;
+  unloadCargo = function (holder) {
+    const c = { o: 'unl', id: holder.id };
+    if (_passthru()) return _rec(c) ? false : R.unloadCargo(holder);
+    const bag = holder.kind === 'building' ? holder.garrison : holder.cargo;
+    if (!bag || !bag.length) return false;
+    _q(c); return true;
   };
   stopUnit = function (u) {
-    if (_passthru()) return R.stopUnit(u);
-    _q({ o: 'stp', id: u.id });
+    const c = { o: 'stp', id: u.id };
+    if (_passthru()) return _rec(c) ? undefined : R.stopUnit(u);
+    _q(c);
   };
   orderRally = function (b, cx, cy) {
-    if (_passthru()) return R.orderRally(b, cx, cy);
-    _q({ o: 'rly', bid: b.id, cx, cy }); return true;
+    const c = { o: 'rly', bid: b.id, cx, cy };
+    if (_passthru()) return _rec(c) ? false : R.orderRally(b, cx, cy);
+    _q(c); return true;
   };
 
   Production.tryStart = function (p, key) {
-    if (_passthru()) return R.tryStart(p, key);
+    const c = { o: 'str', key };
+    if (_passthru()) return _rec(c) ? false : R.tryStart(p, key);
     if (!Production.prereqOk(p, key)) { AUDIO.play('buzz'); return false; }
-    _q({ o: 'str', key }); return true;
+    _q(c); return true;
   };
   Production.cancel = function (p, key) {
-    if (_passthru()) return R.cancel(p, key);
-    _q({ o: 'cnl', key });
+    const c = { o: 'cnl', key };
+    if (_passthru()) return _rec(c) ? undefined : R.cancel(p, key);
+    _q(c);
   };
   Production.toggleHold = function (p, key) {
-    if (_passthru()) return R.toggleHold(p, key);
-    _q({ o: 'hld', key });
+    const c = { o: 'hld', key };
+    if (_passthru()) return _rec(c) ? undefined : R.toggleHold(p, key);
+    _q(c);
   };
   Production.place = function (g, p, key, cx, cy) {
-    if (_passthru()) return R.place(g, p, key, cx, cy);
+    const c = { o: 'plc', key, cx, cy };
+    if (_passthru()) return _rec(c) ? false : R.place(g, p, key, cx, cy);
     // local pre-validation (with OUR fog) for immediate UX; the queued
     // command re-validates against shared state on both clients
     if (p.ready.building !== key || !Production.canPlace(g, p, key, cx, cy)) {
       AUDIO.play('buzz'); return false;
     }
-    _q({ o: 'plc', key, cx, cy }); return true;
+    _q(c); return true;
   };
   Production.placeWallLine = function (g, p, key, cells) {
-    if (_passthru()) return R.placeWallLine(g, p, key, cells);
+    const c = { o: 'wal', key, cells: cells.map(w => [w.cx, w.cy]) };
+    if (_passthru()) return _rec(c) ? 0 : R.placeWallLine(g, p, key, cells);
     if (!cells.length) return 0;
-    _q({ o: 'wal', key, cells: cells.map(c => [c.cx, c.cy]) });
+    _q(c);
     return cells.length;
   };
   Production.sell = function (g, p, b) {
-    if (_passthru()) return R.sell(g, p, b);
+    const c = b ? { o: 'sel', bid: b.id } : null;
+    if (_passthru()) return c && _rec(c) ? false : R.sell(g, p, b);
     if (!b || b.owner !== p.side || b._dead) return false;
-    _q({ o: 'sel', bid: b.id }); return true;
+    _q(c); return true;
   };
   Production.toggleRepair = function (g, p, b) {
-    if (_passthru()) return R.toggleRepair(g, p, b);
+    const c = b ? { o: 'rep', bid: b.id } : null;
+    if (_passthru()) return c && _rec(c) ? false : R.toggleRepair(g, p, b);
     if (!b || b.owner !== p.side || b.buildProgress < 1) return false;
-    _q({ o: 'rep', bid: b.id }); return true;
+    _q(c); return true;
   };
   Production.launchSuper = function (g, p, cx, cy) {
-    if (_passthru()) return R.launchSuper(g, p, cx, cy);
+    const c = { o: 'sup', cx, cy };
+    if (_passthru()) return _rec(c) ? false : R.launchSuper(g, p, cx, cy);
     if (!Production.superReady(p)) return false;
     if (!Fog.isExplored(g, cx, cy)) { AUDIO.play('buzz'); return false; }
-    _q({ o: 'sup', cx, cy }); return true;
+    _q(c); return true;
   };
   Production.setPrimary = function (p, b) {
-    if (_passthru()) return R.setPrimary(p, b);
+    const c = b ? { o: 'pri', bid: b.id } : null;
+    if (_passthru()) return c && _rec(c) ? false : R.setPrimary(p, b);
     if (!b || b.owner !== p.side) return false;
     const kind = DATA.buildings[b.type] && DATA.buildings[b.type].factory;
     if (!kind) return false;
-    _q({ o: 'pri', bid: b.id }); return true;
+    _q(c); return true;
   };
+
+  // apply one recorded command during replay playback (mirrors the MP path)
+  function execReplay(c, s) {
+    applying = true;
+    try { _exec(c, s); } catch (e) { console.warn('bad replay command', c, e); }
+    finally { applying = false; }
+  }
 
   return {
     get active() { return active; },
@@ -552,5 +591,6 @@ const NET = (function () {
     DELAY,
     host, acceptAnswer, join, testLocal, close,
     pump, ready, applyTick, postTick, stalledMs, notifyPause, initExplored, checksum,
+    execReplay,
   };
 })();
