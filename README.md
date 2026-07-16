@@ -233,9 +233,9 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 - **Original soundtrack** — twelve synthesized tracks in the dark mid-90s
   RTS style, sequenced live with WebAudio — and each faction fights to its
   own score: the Coalition marches to the original eight, while the Serpent
-  Order plays a four-track liturgy of its own (slower pulses, phrygian
-  darkness, processional drums). Toggle with Music: ON/OFF in the options
-  menu
+  Order gets four tracks of its own — driving phrygian bass pumps,
+  octave-jump riffs, a 134 bpm gallop, and hooks that circle back like the
+  snake on their banner. Toggle with Music: ON/OFF in the options menu
 - **A graded, luminous look** — the whole battlefield sits under a cinematic
   colour grade and vignette that fuse the procedural sprites into one lit
   scene, with a whisper of film grain to kill banding. Bright things

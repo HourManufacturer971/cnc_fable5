@@ -367,124 +367,123 @@ const MUSIC = (function () {
     order: ['a', 'b', 'b', 'c', 'b', 'c', 'd', 'e', 'f', 'b', 'c', 'd', 'd'],
   };
 
-  // ---- Serpent Order liturgy (faction-exclusive tracks) -------------------------
-  // The Order does not march to Coalition drums. Four ritual tracks: slower
-  // pulses, phrygian darkness, tritones, processional toms and chant pads.
+  // ---- Serpent Order playlist (faction-exclusive tracks) ------------------------
+  // The Order does not march to Coalition drums. Four tracks built on driving
+  // syncopated bass pumps, octave-jump riffs and short hooks that keep coming
+  // back — dark phrygian identity with actual groove.
 
-  // S1 'Coil' — A phrygian. The Serpent theme: a drone that tightens into a
-  // winding riff, always circling back to the b2 sting.
+  // S1 'Coil' — E phrygian anthem, the Serpent theme. A tresillo bass pump
+  // with the b2 sting and a zigzag hook that answers itself.
   const S1 = {
-    bpm: 96,
+    bpm: 120,
     bars: {
-      a: { // drone and distant drums
-        k: '1.......1.......', h: '..1...1...1...1.',
-        toms: [[4, 96], [12, 72]],
-        bass: [[0, 21, 14]],
-        pad: [[45, 48, 52]],
+      a: { // intro groove: the pump alone, hats ticking
+        k: '1...1...1...1...', h: '..1...1...1...1.',
+        bass: [[0, 28, 2], [3, 28, 1], [6, 28, 1], [8, 29, 2], [11, 28, 1], [14, 26, 1]],
       },
-      b: { // the coil: A Bb A G A E
-        k: '1...1...1...1...', s: '....1.......1..1', h: '1.1.1.1.1.1.1.12',
-        bass: [[0, 33, 3], [4, 34, 2], [6, 33, 2], [8, 31, 3], [12, 33, 2], [14, 28, 2]],
-      },
-      c: { // riff + serpent call above
-        k: '1...1...1...1...', s: '....1.......1..1', h: '1.1.1.1.1.1.1.12',
-        bass: [[0, 33, 3], [4, 34, 2], [6, 33, 2], [8, 31, 3], [12, 33, 2], [14, 28, 2]],
-        lead: [[0, 57, 2], [3, 58, 3], [8, 57, 2], [11, 55, 4]],
-      },
-      d: { // lift: the coil climbs, then slides home
+      b: { // full groove: backbeat + octave accents in the pump
         k: '1...1...1...1.1.', s: '....1.......1...', h: '1.1.1.1.1.1.1.12',
-        bass: [[0, 38, 3], [4, 36, 3], [8, 34, 2], [10, 33, 2], [12, 31, 4]],
-        lead: [[2, 62, 3], [6, 60, 2], [8, 58, 3], [12, 57, 4]],
+        bass: [[0, 28, 2], [3, 28, 1], [6, 40, 1], [8, 29, 2], [11, 28, 1], [12, 28, 1], [14, 26, 1]],
       },
-      e: { // procession: toms under the bII chant
-        h: '..1...1...1...2.',
-        toms: [[0, 110], [6, 82], [10, 64]],
-        bass: [[0, 21, 12]],
-        pad: [[46, 50, 53]],
+      c: { // THE HOOK: E G E F | G E D E — zigzag call
+        k: '1...1...1...1.1.', s: '....1.......1...', h: '1.1.1.1.1.1.1.12',
+        bass: [[0, 28, 2], [3, 28, 1], [6, 40, 1], [8, 29, 2], [11, 28, 1], [12, 28, 1], [14, 26, 1]],
+        lead: [[0, 52, 1], [2, 55, 1], [4, 52, 1], [6, 53, 2], [8, 55, 1], [10, 52, 1], [12, 50, 1], [14, 52, 2]],
+      },
+      d: { // the response: starts high, tumbles home as the bass walks down
+        k: '1...1...1...1.1.', s: '....1.......1..1', h: '1.1.1.1.1.1.1.12',
+        bass: [[0, 28, 2], [3, 28, 1], [6, 26, 1], [8, 24, 2], [11, 24, 1], [12, 23, 1], [14, 28, 1]],
+        lead: [[0, 57, 1], [2, 55, 1], [4, 53, 1], [6, 55, 2], [8, 52, 1], [10, 50, 1], [12, 48, 2], [14, 52, 2]],
+      },
+      e: { // breakdown: power-chord pad, toms, open hats — then back to it
+        h: '..2...2...2...2.',
+        toms: [[0, 110], [4, 82], [8, 110], [12, 64]],
+        bass: [[0, 16, 12]],
+        pad: [[40, 47, 52]],
       },
     },
-    order: ['a', 'b', 'b', 'c', 'c', 'd', 'b', 'c', 'e', 'b', 'c', 'd'],
+    order: ['a', 'b', 'c', 'c', 'd', 'b', 'c', 'c', 'd', 'e', 'b', 'c', 'c', 'd'],
   };
 
-  // S2 'Rite of Ash' — D minor with a raised seventh and a buried tritone.
-  // Half-time processional; drums like a funeral cortege.
+  // S2 'Rite of Ash' — D minor stomp march. Octave-jump riff (the catchiest
+  // trick in the bass book) under a harmonic-minor hook with the C# bite.
   const S2 = {
-    bpm: 84,
+    bpm: 112,
     bars: {
-      a: {
-        k: '1.......1.......', h: '....1.......1...',
-        toms: [[4, 88], [6, 66], [12, 88], [14, 54]],
-        bass: [[0, 26, 6], [8, 25, 6]],
+      a: { // the stomp and the octave riff: D D D↑ D C D D↑ C#
+        k: '1...1...1...1...', s: '....1.......1...',
+        toms: [[14, 88]],
+        bass: [[0, 26, 1], [2, 26, 1], [4, 38, 1], [6, 26, 1], [8, 24, 1], [10, 26, 1], [12, 38, 1], [14, 25, 1]],
+      },
+      b: { // hats join, the march tightens
+        k: '1...1...1...1...', s: '....1.......1..1', h: '1.1.1.1.1.1.1.1.',
+        bass: [[0, 26, 1], [2, 26, 1], [4, 38, 1], [6, 26, 1], [8, 24, 1], [10, 26, 1], [12, 38, 1], [14, 25, 1]],
+      },
+      c: { // hook: D D F E D C# Bb C# — the raised seventh stings twice
+        k: '1...1...1...1...', s: '....1.......1..1', h: '1.1.1.1.1.1.1.12',
+        bass: [[0, 26, 1], [2, 26, 1], [4, 38, 1], [6, 26, 1], [8, 24, 1], [10, 26, 1], [12, 38, 1], [14, 25, 1]],
+        lead: [[0, 62, 1], [2, 62, 1], [4, 65, 2], [7, 64, 1], [8, 62, 1], [10, 61, 1], [12, 58, 2], [14, 61, 1]],
+      },
+      d: { // the ash: chant pad over the riff, fills on the skins
+        k: '1...1...1...1...', toms: [[4, 96], [6, 72], [12, 96], [14, 58]],
+        bass: [[0, 26, 1], [2, 26, 1], [4, 38, 1], [6, 26, 1], [8, 24, 1], [10, 26, 1], [12, 38, 1], [14, 25, 1]],
         pad: [[50, 53, 57]],
       },
-      b: { // the rite: D F D G# C# — the tritone swallowed mid-phrase
-        k: '1.......1.....1.', s: '........1.......', h: '..1...1...1...1.',
-        bass: [[0, 26, 3], [4, 29, 2], [6, 26, 2], [8, 32, 3], [12, 25, 3]],
-      },
-      c: {
-        k: '1.......1.....1.', s: '........1.......', h: '..1...1...1...1.',
-        bass: [[0, 26, 3], [4, 29, 2], [6, 26, 2], [8, 32, 3], [12, 25, 3]],
-        lead: [[0, 62, 4], [6, 61, 3], [10, 58, 4]],
-      },
-      d: { // the ash falls: darker chord, heavier skins
-        k: '1.......1.......', toms: [[2, 96], [4, 72], [10, 96], [12, 58], [14, 48]],
-        bass: [[0, 26, 6], [8, 20, 7]],
-        pad: [[49, 53, 56]],
-      },
     },
-    order: ['a', 'a', 'b', 'b', 'c', 'b', 'c', 'd', 'b', 'c'],
+    order: ['a', 'a', 'b', 'b', 'c', 'b', 'c', 'c', 'd', 'b', 'c', 'c'],
   };
 
-  // S3 'Fang and Shadow' — E phrygian strike music: sixteenth-note hats and
-  // an ostinato that bites on the flat second.
+  // S3 'Fang and Shadow' — 134 bpm gallop: root-octave chug with double-tap
+  // lead stabs. Strike music that actually strikes.
   const S3 = {
-    bpm: 126,
+    bpm: 134,
     bars: {
-      a: {
-        k: '1...1...1...1.1.', s: '....1.......1...', h: '1111111111111112',
-        bass: [[0, 28, 1], [2, 28, 1], [4, 29, 1], [6, 28, 1], [8, 31, 1], [10, 28, 1], [12, 26, 1], [14, 28, 1]],
+      a: { // the gallop: E e E E e E e E D F
+        k: '1...1...1...1...', s: '....1.......1...', h: '1111111111111112',
+        bass: [[0, 28, 1], [2, 40, 1], [3, 28, 1], [4, 28, 1], [6, 40, 1], [8, 28, 1], [10, 40, 1], [11, 28, 1], [12, 26, 1], [14, 29, 1]],
       },
-      b: {
-        k: '1...1...1...1.1.', s: '....1.......1...', h: '1111111111111112',
-        bass: [[0, 28, 1], [2, 28, 1], [4, 29, 1], [6, 28, 1], [8, 31, 1], [10, 28, 1], [12, 26, 1], [14, 28, 1]],
-        lead: [[0, 52, 1], [4, 53, 1], [8, 52, 1], [12, 50, 2]],
+      b: { // double-tap stabs riding the gallop
+        k: '1...1...1...1...', s: '....1.......1...', h: '1111111111111112',
+        bass: [[0, 28, 1], [2, 40, 1], [3, 28, 1], [4, 28, 1], [6, 40, 1], [8, 28, 1], [10, 40, 1], [11, 28, 1], [12, 26, 1], [14, 29, 1]],
+        lead: [[0, 52, 1], [1, 52, 1], [4, 53, 1], [8, 52, 1], [9, 52, 1], [12, 55, 1]],
       },
-      c: { // strike lifted a fourth, the shadow answers
+      c: { // lift: gallop up to G, the answer phrase rides down
         k: '1...1...1...1.1.', s: '....1.......1..1', h: '1111111111111112',
-        bass: [[0, 33, 1], [2, 33, 1], [4, 34, 1], [6, 33, 1], [8, 36, 1], [10, 33, 1], [12, 31, 1], [14, 33, 1]],
-        lead: [[2, 57, 2], [6, 55, 2], [10, 53, 2], [14, 52, 2]],
+        bass: [[0, 31, 1], [2, 43, 1], [3, 31, 1], [4, 31, 1], [6, 43, 1], [8, 31, 1], [10, 43, 1], [11, 31, 1], [12, 29, 1], [14, 28, 1]],
+        lead: [[0, 55, 1], [2, 57, 1], [4, 55, 1], [8, 53, 1], [10, 52, 1], [12, 53, 2]],
       },
-      d: { // coiled: open hats over a tritone drone
-        h: '..2...2...2...2.',
-        bass: [[0, 16, 12]],
+      d: { // whiplash break: half a bar of air, then the toms throw you back in
+        h: '2...2...2...2...',
+        toms: [[0, 96], [2, 72], [8, 96], [10, 58]],
+        bass: [[0, 28, 3], [8, 29, 3]],
         pad: [[40, 46, 52]],
       },
     },
-    order: ['a', 'a', 'b', 'b', 'c', 'b', 'c', 'd', 'a', 'b'],
+    order: ['a', 'a', 'b', 'b', 'c', 'b', 'c', 'd', 'a', 'b', 'b', 'c'],
   };
 
-  // S4 'Under the Skin' — B with a hanging minor second; sneaking offbeats,
-  // a whispered two-note motif, a diminished chant in the low mist.
+  // S4 'Under the Skin' — 116 bpm swagger. A broken-beat groove and a
+  // chromatic slink in B: the sneaky one you hum later.
   const S4 = {
-    bpm: 108,
+    bpm: 116,
     bars: {
-      a: {
-        k: '1.....1...1.....', h: '..1...1...1...1.',
-        bass: [[0, 23, 2], [3, 23, 1], [6, 24, 2], [10, 23, 2], [13, 21, 2]],
+      a: { // the swagger: B B D C B b↑ C over a broken kick
+        k: '1.....1.1.....1.', s: '....1.......1...', h: '..1...1...1...1.',
+        bass: [[0, 23, 1], [3, 23, 1], [6, 26, 1], [8, 24, 1], [10, 23, 1], [13, 35, 1], [14, 24, 1]],
       },
-      b: {
-        k: '1.....1...1.....', s: '....1.......1...', h: '..1...1...1...1.',
-        bass: [[0, 23, 2], [3, 23, 1], [6, 24, 2], [10, 23, 2], [13, 21, 2]],
-        lead: [[0, 59, 3], [6, 60, 2], [10, 59, 2]],
+      b: { // the slink: B C B D B Bb — chromatic hook with the echo working
+        k: '1.....1.1.....1.', s: '....1.......1...', h: '..1...1...1...12',
+        bass: [[0, 23, 1], [3, 23, 1], [6, 26, 1], [8, 24, 1], [10, 23, 1], [13, 35, 1], [14, 24, 1]],
+        lead: [[0, 59, 1], [3, 60, 1], [6, 59, 2], [10, 62, 1], [12, 59, 1], [14, 58, 1]],
       },
-      c: { // the skin crawls: diminished pad over a held drone
-        k: '1.......1.......', h: '....1.......1...',
-        toms: [[8, 76], [12, 58]],
-        bass: [[0, 23, 12]],
-        pad: [[47, 50, 53]],
+      c: { // drop: the groove thins to hats and a minor pad, tom pickup out
+        k: '1.......1.......', h: '..1...1...1...2.',
+        toms: [[12, 76], [14, 58]],
+        bass: [[0, 23, 2], [6, 26, 1], [8, 23, 2]],
+        pad: [[47, 50, 54]],
       },
     },
-    order: ['a', 'a', 'b', 'b', 'c', 'b', 'b', 'c'],
+    order: ['a', 'a', 'b', 'b', 'a', 'b', 'b', 'c', 'a', 'b', 'b'],
   };
 
   const TRACKS = [T1, T2, T3, T4, T5, T6, T7, T8];
