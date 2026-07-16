@@ -29,12 +29,13 @@ python3 -m http.server 8000
 (Opening `index.html` directly with `file://` also works in most browsers.)
 
 Pick your side — United Defense Coalition or The Serpent Order — then pick
-your battle: a **skirmish** on a random map, or one of five **campaign
-operations**, each with its own briefing, fixed battlefield and objective
-(annihilation, a harvest quota, a timed last stand, an economy hunt, and a
-final assault). Winning an operation unlocks the next; progress is saved in
-your browser. You start with an MCV: click it twice to deploy your
-Construction Yard.
+your battle: a **skirmish** on a random map, or one of eight **campaign
+operations**, each with its own briefing, fixed battlefield, objective and
+scripted mission events (annihilation, a harvest quota, a timed last stand,
+an economy hunt, a stronghold assault, a no-base convoy escort, a
+capture-it-intact heist, and a fortress finale). Winning an operation
+unlocks the next; progress is saved in your browser. You start with an MCV:
+click it twice to deploy your Construction Yard.
 
 Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1&mission=2`.
 
@@ -190,13 +191,22 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 - **P2P multiplayer** — 1v1 deterministic-lockstep netcode over a WebRTC data
   channel with copy-paste matchmaking codes: serverless, accountless, and
   checksummed against desyncs (see the Multiplayer section above)
-- **A campaign** — five operations per side with in-universe briefings and
-  distinct objectives: annihilate an outpost, amass a 6000-credit war chest
-  (held at once — build silos), survive fifteen minutes on a walled center
-  plateau with three defensible passes and the rich chrysalite outside them,
-  hunt down the enemy economy, and crack a fortress; each tunes the AI's
-  aggression and war chest, wins unlock the next, and an objective chip on
-  the HUD tracks live progress
+- **A campaign** — eight operations per side with in-universe briefings,
+  distinct objectives, and **scripted mission events**: timed and
+  conditional radio calls, reinforcement columns rolling in off the map
+  edge, enemy raids announced by direction, supply drops, fleshling
+  migrations, and revenge waves when you hit what the enemy loves.
+  Annihilate an outpost; amass a 6000-credit war chest (held at once —
+  build silos) while raiders hunt your harvesters; survive fifteen minutes
+  of announced, escalating assaults on a walled plateau, through to a
+  final all-out wave; hunt down an economy that punches back; crack a
+  stronghold under a charging superweapon with a reinforcement drip;
+  escort an irreplaceable transport down a checkpoint-lined valley road
+  with no base at all (a pulsing beacon marks the goal); capture a
+  superweapon facility INTACT — one stray shell fails the mission; and
+  finally bring down a fully-built fortress that has been waiting for you.
+  Each op tunes the AI's aggression and war chest, wins unlock the next,
+  and an objective chip on the HUD tracks live progress
 - **A civilian hamlet you can fight over** — farmhouse, cottages, a barn
   and a little chapel, with villagers who wander about and flee gunfire;
   nobody auto-targets them (except the fleshlings), but Ctrl+click will.

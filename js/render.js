@@ -279,6 +279,14 @@ const Render = (function () {
         if (seeAll || g.shroud[cellIdx(c.cx, c.cy)] === 1) ctx.fillRect(C.MM_X + c.cx * MMC, C.MM_Y + c.cy * MMC, MMC, MMC);
       }
     }
+    // escort beacon on the radar: a blinking gold marker at the goal
+    const obE = g.mission && g.mission.objective;
+    if (obE && obE.type === 'escort' && g.status === 'playing' && ((g.tick >> 3) & 1)) {
+      const d = obE.dest === 'ai' ? g.startPos.ai : obE.dest;
+      ctx.fillStyle = '#ffe28a';
+      ctx.fillRect(C.MM_X + d.cx * MMC - 1, C.MM_Y + d.cy * MMC - 1, MMC + 2, MMC + 2);
+    }
+
     // alert pings: expanding rings for ~6s (Space jumps to the newest)
     if (g._pings) {
       for (const p2 of g._pings) {
@@ -1141,6 +1149,25 @@ const Render = (function () {
     }
     }
 
+    // escort beacon: pulsing gold rings at the delivery point, drawn over
+    // the shroud — mission intel outranks the fog
+    const obEsc = g.mission && g.mission.objective;
+    if (obEsc && obEsc.type === 'escort' && g.status === 'playing') {
+      const d = obEsc.dest === 'ai' ? g.startPos.ai : obEsc.dest;
+      const bx = X(cellCenterX(d.cx)), by = Y(cellCenterY(d.cy));
+      const ph = (g.tick % 30) / 30;
+      ctx.strokeStyle = 'rgba(224,184,64,' + (0.85 - ph * 0.6).toFixed(2) + ')';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(bx, by, 8 + ph * 26, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = 'rgba(224,184,64,0.9)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(bx, by, 6, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#141208';
+      ctx.fillRect(bx - 1, by - 18, 3, 16);
+      ctx.fillStyle = (g.tick >> 3) & 1 ? '#ffe28a' : '#c8a030';
+      ctx.fillRect(bx + 2, by - 18, 8, 6);
+    }
+
     // atmosphere: grade the scene, bloom the emissives on top, then vignette
     _drawGrade();
     _drawGlow(g, X, Y, c0x, c1x, c0y, c1y, cs);
@@ -1570,6 +1597,23 @@ const Render = (function () {
         if (u && DATA.units[u.type].harvester) n++;
       }
       return n > 0 ? 'ECONOMY TARGETS LEFT: ' + n : 'FIND THE ENEMY ECONOMY';
+    }
+    if (ob.type === 'capture') {
+      const bt = typeof ob.btype === 'object' ? ob.btype[g.humanSide] : ob.btype;
+      return 'CAPTURE THE ' + DATA.buildings[bt].name.toUpperCase() + ' — INTACT';
+    }
+    if (ob.type === 'escort') {
+      const d = ob.dest === 'ai' ? g.startPos.ai : ob.dest;
+      let esc = null;
+      for (const id of g.human.unitIds) {
+        const u = g.units.get(id);
+        if (u && u.type === ob.unit) { esc = u; break; }
+      }
+      if (esc) {
+        const cells = Math.round(dist(esc.x, esc.y, cellCenterX(d.cx), cellCenterY(d.cy)) / C.CELL);
+        return 'DELIVER THE TRANSPORT — ' + cells + ' CELLS TO THE BEACON';
+      }
+      return 'DELIVER THE TRANSPORT TO THE BEACON';
     }
     return 'DESTROY ALL ENEMY FORCES';
   }

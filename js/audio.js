@@ -690,12 +690,19 @@ const AUDIO = (function () {
   function eva(key) {
     const text = (typeof DATA !== 'undefined' && DATA && DATA.eva) ? DATA.eva[key] : null;
     if (!text) return;
+    evaText(text);
+  }
+
+  // mission scripting speaks in full sentences, not DATA.eva keys — same
+  // banner + voice path, arbitrary text
+  function evaText(text) {
+    if (!text) return;
     // surface the message on the HUD regardless of audio settings — the words
     // live in the banner, the voice is just flavor
-    if (typeof EV !== 'undefined' && EV) EV.emit('eva', text);
+    if (typeof EV !== 'undefined' && EV) EV.emit('eva', String(text));
     if (!enabled || !inited || !voiceEnabled) return;
     if (evaQueue.length >= EVA_QUEUE_MAX) return; // drop when badly backlogged
-    evaQueue.push(text);
+    evaQueue.push(String(text));
     pumpEva();
   }
 
@@ -742,6 +749,7 @@ const AUDIO = (function () {
     setVoiceEnabled: setVoiceEnabled,
     play: play,
     eva: eva,
+    evaText: evaText,
     ack: ack,
     tickCredits: tickCredits,
   };

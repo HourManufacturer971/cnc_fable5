@@ -376,13 +376,46 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   sets you back, storage silos are required to hold it), `survive {minutes}` (win at
   the bell; mission 3 pairs this with `holdout: true` map gen), `killEconomy` (arms once
   the AI owns a refinery or harvester — flag `game._ecoArmed` — then wins when the count
-  returns to zero). Winning unlocks the next mission (`MissionProgress.unlockUpTo`).
+  returns to zero), `capture {btype}` (win the moment a building of that type flies the
+  human's colors — an engineer walks in; btype may be a per-side map `{gdi, nod}`; if
+  every standing copy dies first — armed via `g._capArmed` — the mission FAILS), and
+  `escort {unit, dest, radius}` (win when the human's unit of that type stands within
+  `radius` cells of dest — `dest: 'ai'` resolves to `g.startPos.ai`; the unit dying
+  loses instantly). Winning unlocks the next mission (`MissionProgress.unlockUpTo`).
+- **Mission event engine** (`MISSIONS.tick(g)`, called from the main loop inside the
+  deterministic step, SP only — skirmish and MP no-op): missions carry `events`, each
+  with ONE trigger — `at: seconds`, `every: seconds [,from][,until]`, or
+  `when: g=>bool [,repeat]` (rising edge) — and any mix of actions: `eva` (radio line
+  via `AUDIO.evaText`, side-keyed strings allowed), `reinforce {types[,at]}` (friendly
+  column spawns at the map edge and rolls to base; types side-keyed vs HUMAN side),
+  `attack {types[,from][,target:'base'|'harv']}` (raid spawns at a compass edge and
+  attack-moves in; types keyed vs AI side; arrays of specs allowed), `crates: n`
+  (supply drop on the base perimeter), `creatures: n` (fleshlings in the fields),
+  `credits: n`, `fn(g)`. Per-event runtime state in `g._mEv`; every action is a pure
+  function of tick + sim state + `game.rng`, so REPLAYS re-run the script identically
+  (covered by mtest3's record→playback checksum with a scripted raid inside).
+- **Mission setup hooks**: `mission.noHumanSpawn` skips the default MCV+escort;
+  `mission.setup(g, {hs, as, side, aiSide})` runs after standard spawns (stage
+  dressing: pre-built enemy works, convoys, checkpoints). Helpers exported on the
+  MISSIONS array: `MISSIONS.placeB(g, side, type, cx, cy)` (spiral-search finished
+  building placement), `MISSIONS.squad(g, side, types, at)`, `MISSIONS.openNear`.
+- The campaign is EIGHT ops: 1 LANDFALL (annihilate + scripted probe/reinforcement),
+  2 GREEN GOLD (harvest 6000 + blue-lode reveal + harvester-hunting raids), 3 HOLD THE
+  LINE (survive 15 + announced directional waves, supply drops, relief vanguard, final
+  assault), 4 SCORCHED HARVEST (killEconomy + fleshling migrations + revenge waves on
+  each economy kill), 5 SEVERED HEAD (annihilate stronghold + heavy reinforcements +
+  superweapon-down beat), 6 THE LONG ROAD (escort: no base, convoy + checkpoints, AI
+  camp stripped in setup, pulsing beacon at `g.startPos.ai`), 7 INSIDE JOB (capture the
+  tmpl/eye INTACT, prize pre-built + revealed, damage warnings, engineer detachment),
+  8 AVALANCHE (annihilate a fully pre-built fortress; reinforcement/supply drip).
 - AI difficulty knobs read from `game.mission` by ai.js: `aiCalm` multiplies wave-cadence
   delays (first strike + between waves), `aiWaveCap` caps units per strike wave.
   Skirmish (`game.mission` null) keeps the exact original cadence.
 - Render draws a small objective status chip at the top-left of the viewport
-  (`TREASURY n / m`, `HOLD OUT mm:ss`, `ECONOMY TARGETS LEFT: n`, or the annihilate
-  line); skirmish shows none.
+  (`TREASURY n / m`, `HOLD OUT mm:ss`, `ECONOMY TARGETS LEFT: n`, `CAPTURE THE X —
+  INTACT`, `DELIVER THE TRANSPORT — n CELLS TO THE BEACON`, or the annihilate line);
+  skirmish shows none. Escort missions also draw a pulsing gold beacon at the goal
+  (over the shroud — mission intel outranks fog) and a blinking radar marker.
 
 ### Multiplayer (net.js — deterministic lockstep, P2P)
 - 1v1 over a WebRTC data channel with MANUAL signaling: host and guest exchange

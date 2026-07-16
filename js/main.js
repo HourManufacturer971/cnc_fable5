@@ -531,8 +531,8 @@ const Main = (function () {
       _spawnEscort(game, 'gdi', hp, true);
       _spawnEscort(game, 'nod', ap, true);
     } else {
-      // human: MCV + escort
-      _spawnEscort(game, side, hp, true);
+      // human: MCV + escort (missions may bring their own force instead)
+      if (!mission || !mission.noHumanSpawn) _spawnEscort(game, side, hp, true);
       // AI: pre-deployed conyard + power plant + escort
       const fact = makeBuilding('fact', aiSide, ap.cx - 1, ap.cy - 1);
       fact.buildProgress = 1;
@@ -564,6 +564,11 @@ const Main = (function () {
         b.buildProgress = 1;
         addBuilding(b);
       }
+    }
+    // mission-specific stage dressing: pre-built enemy works, convoys,
+    // checkpoint garrisons… (deterministic — replays rebuild identically)
+    if (mission && mission.setup && !opts.mp) {
+      mission.setup(game, { hs: hp, as: ap, side, aiSide });
     }
 
     Production.computePower(game.human);
@@ -630,6 +635,9 @@ const Main = (function () {
           Production.tick(game, game.players.nod);
           Sim.tick(game);
           if (!NET.active) AI.tick(game);
+          // mission script: deterministic (tick + sim state + game.rng), so
+          // replays re-run the same reinforcements, raids and radio calls
+          if (!NET.active && MISSIONS.tick) MISSIONS.tick(game);
         } finally {
           NET.inSim = false;
         }
@@ -667,6 +675,30 @@ const Main = (function () {
       const n = _aiEconomyCount(g);
       if (n > 0) g._ecoArmed = true;
       else if (g._ecoArmed) return endGame(true);
+    }
+    if (ob.type === 'capture') {
+      // win the moment the target type flies your colors; if every standing
+      // copy of it dies first, the mission is failed — the prize was the point
+      const bt = typeof ob.btype === 'object' ? ob.btype[g.humanSide] : ob.btype;
+      let standing = false;
+      for (const b of g.buildings.values()) {
+        if (b.type !== bt) continue;
+        if (b.owner === g.humanSide) return endGame(true);
+        standing = true;
+      }
+      if (standing) g._capArmed = true;
+      else if (g._capArmed) return endGame(false);
+    }
+    if (ob.type === 'escort') {
+      let esc = null;
+      for (const id of g.human.unitIds) {
+        const u = g.units.get(id);
+        if (u && u.type === ob.unit) { esc = u; break; }
+      }
+      if (!esc) return endGame(false);   // the convoy is gone
+      const d2 = ob.dest === 'ai' ? g.startPos.ai : ob.dest;
+      if (dist(esc.x, esc.y, cellCenterX(d2.cx), cellCenterY(d2.cy)) <=
+          (ob.radius || 2) * C.CELL) return endGame(true);
     }
   }
 
@@ -798,5 +830,6 @@ const Main = (function () {
     startGame(meta.side, { seed: meta.seed, mission, skirmish: skirm });
   }
 
-  return { boot, startGame, startReplay, endGame, desyncEnd, togglePause, showControls };
+  // _checkEnd is exposed for the headless test harness (manual sim rolls)
+  return { boot, startGame, startReplay, endGame, desyncEnd, togglePause, showControls, _checkEnd };
 })();
