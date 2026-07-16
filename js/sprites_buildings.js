@@ -1939,12 +1939,12 @@
       g2.fillStyle = 'rgba(0,0,0,0.30)'; g2.fillRect(4, 17, 64, 6);
       g2.fillStyle = 'rgba(255,255,255,0.06)'; g2.fillRect(4, 17, 64, 1);
       if (open) {
-        // the barrier halves retract flush against the piers
-        for (const [bx] of [[11], [49]]) {
-          g2.fillStyle = OUT; g2.fillRect(bx, 10, 13, 12);
-          g2.fillStyle = '#6e6e64'; g2.fillRect(bx + 1, 11, 11, 3);
-          g2.fillStyle = '#54544c'; g2.fillRect(bx + 1, 14, 11, 7);
-          g2.fillStyle = '#c8a83c'; g2.fillRect(bx + 1, 14, 2, 7);
+        // the barrier halves retract flush against the piers — WIDE mouth
+        for (const bx of [11, 55]) {
+          g2.fillStyle = OUT; g2.fillRect(bx, 10, 7, 12);
+          g2.fillStyle = '#6e6e64'; g2.fillRect(bx + 1, 11, 5, 3);
+          g2.fillStyle = '#54544c'; g2.fillRect(bx + 1, 14, 5, 7);
+          g2.fillStyle = '#c8a83c'; g2.fillRect(bx + 1, 14, 1, 7);
         }
       } else {
         // one long armored barrier: lit top face, chevroned south face
@@ -1962,24 +1962,26 @@
       g2.fillStyle = 'rgba(0,0,0,0.22)'; g2.fillRect(64, 26, 8, 4);
     } else {
       // vertical span: piers top and bottom, roadway running north-south
-      g2.fillStyle = 'rgba(0,0,0,0.30)'; g2.fillRect(9, 8, 6, 64);
-      g2.fillStyle = 'rgba(255,255,255,0.06)'; g2.fillRect(9, 8, 1, 64);
+      g2.fillStyle = 'rgba(0,0,0,0.30)'; g2.fillRect(8, 8, 8, 64);
+      g2.fillStyle = 'rgba(255,255,255,0.06)'; g2.fillRect(8, 8, 1, 64);
       if (open) {
-        for (const by of [14, 52]) {
-          g2.fillStyle = OUT; g2.fillRect(6, by, 12, 13);
-          g2.fillStyle = '#6e6e64'; g2.fillRect(7, by + 1, 10, 3);
-          g2.fillStyle = '#54544c'; g2.fillRect(7, by + 4, 10, 8);
-          g2.fillStyle = '#c8a83c'; g2.fillRect(7, by + 4, 10, 2);
+        // halves hug the piers — a long clear roadway between them
+        for (const by of [12, 60]) {
+          g2.fillStyle = OUT; g2.fillRect(8, by, 8, 7);
+          g2.fillStyle = '#6e6e64'; g2.fillRect(9, by + 1, 6, 2);
+          g2.fillStyle = '#54544c'; g2.fillRect(9, by + 3, 6, 3);
+          g2.fillStyle = '#c8a83c'; g2.fillRect(9, by + 3, 6, 1);
         }
       } else {
-        g2.fillStyle = OUT; g2.fillRect(5, 12, 14, 55);
-        g2.fillStyle = '#76766c'; g2.fillRect(6, 13, 12, 4);
-        g2.fillStyle = '#8a8a7e'; g2.fillRect(6, 13, 12, 1);
+        // slim barrier — a gate arm, not a wall of steel
+        g2.fillStyle = OUT; g2.fillRect(7, 12, 10, 55);
+        g2.fillStyle = '#76766c'; g2.fillRect(8, 13, 8, 3);
+        g2.fillStyle = '#8a8a7e'; g2.fillRect(8, 13, 8, 1);
         for (let i = 0; i < 13; i++) {
           g2.fillStyle = i & 1 ? '#c8a83c' : '#2c2c26';
-          g2.fillRect(6, 17 + i * 4, 12, 4);
+          g2.fillRect(8, 16 + i * 4, 8, 4);
         }
-        g2.fillStyle = '#1c1c16'; g2.fillRect(6, 38, 12, 2);    // center seam
+        g2.fillStyle = '#1c1c16'; g2.fillRect(8, 38, 8, 2);     // center seam
       }
       gatePost(g2, 7, 2);
       gatePost(g2, 7, 56);

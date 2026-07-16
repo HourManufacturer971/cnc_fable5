@@ -295,8 +295,9 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `cellState` returns a near-free GATE state (+15 step); `_stepAlongPath` transits WITHOUT
   claiming occ — the gate keeps its own occ id, so enemy pathing never sees a hole.
   Render picks closed/open × horizontal/vertical frames from the instance footprint
-  (opens when an owner ground unit is within 2.4 cells — cosmetic only); walls
-  auto-connect into its end piers; the placement ghost previews the oriented 3-cell span.
+  (opens when an owner ground unit is within 1.5 cells — cosmetic only, with a servo
+  clunk SFX on state changes near the camera, tracked render-locally in `_gateWas`);
+  walls auto-connect into its end piers; the placement ghost previews the oriented span.
 - **Attack-move** (`orderAttackMove(u, cx, cy)`, state `amove`, `u._amove={cx,cy}`): sweep
   toward the cell, auto-acquiring every 8 ticks; acquisition sets `targetId`/`state='attack'`
   DIRECTLY (not via orderAttack) so `_amove` survives, and when the target dies the unit
@@ -362,10 +363,10 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `game.visible` is the LIVE line-of-sight mask, recomputed by Fog every 5 ticks.
   AI sees everything. Hidden cells: draw black; cells adjacent to hidden get jagged dark
   edge overlay (`SPRITES.shroudEdge`).
-- **Units live under true fog** (`_unitSeen`, render-only): non-human-side units (enemy,
-  civilian, fleshling) draw in the viewport ONLY where `g.visible === 1` — explored-but-
-  dark ground remembers terrain and buildings, not troop movements. Buildings keep the
-  classic explored-visibility. The replay spectator (`seeAll`) bypasses the gate.
+- **Units follow the classic shroud rule** (`_unitSeen`, render-only): anything standing
+  on EXPLORED ground draws in the viewport (an experiment with live-LOS-only unit
+  visibility was reverted — it fought the permanent-reveal shroud). The minimap still
+  gates enemy BLIPS on live line-of-sight. The replay spectator (`seeAll`) bypasses all.
 - **Endgame reveal** (`revealAll`, recomputed per frame, SP only — never when `NET.active`):
   once the AI owns zero non-wall buildings, its surviving units draw everywhere and show
   on radar — complements hunt mode; no shroud-crawl for the last stragglers.
@@ -525,6 +526,19 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   console panels — vertical gradient + scanlines + targeting corner-brackets + faction-tinted
   glow (`--accent`, retinted by `body[data-side]` set on faction pick), glowing title,
   hover-lit buttons, recessed faction cards with mottos. All cosmetic; determinism-safe.
+- **Battle aftermath decals** (sim-spawned in `killEntity`, drawn in the ground-marks
+  pass before entities): destroyed buildings leave a `rubble` effect sized to their
+  footprint (ttl 1350 — charred bed, hashed broken slabs, wall stubs, embers that cool
+  over the first ~17s, alpha fade near expiry); non-air vehicles leave a `wreck` husk
+  (ttl 675 — soot ring, burnt hull, collapsed cabin, cooling ember). Deterministic:
+  spawned in the sim path, drawn from position hashes (`_gl`), no rng, not checksummed.
+- **Hover feedback** (fine pointer, render-only): the unit or building under the cursor
+  shows its health bar without being selected; in SELL mode the cursor quotes the
+  refund (`+$n`, hp-scaled) before the click. Selected harvesters show 5 cargo pips
+  (`u.tib / HARV_CAP`, green) like transports/aircraft show theirs.
+- **First-battle nudge** (`_drawF1Tip`, localStorage `hw_tip_f1`): a one-time chip under
+  the EVA banner (ticks 90–320 of the player's first SP battle) pointing at F1 / the
+  Options menu for the controls reference.
 - Pad repairs blink a small gold wrench over the vehicle (`u._fixT`, `_drawWrench`).
 - `applyDamage` stamps `target._hitT = game.tick`; render re-draws the sprite twice with
   `globalCompositeOperation='lighter'` for 2 ticks — a white hit-flash (units, buildings).

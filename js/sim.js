@@ -1691,7 +1691,11 @@ function killEntity(ent, attacker) {
     } else {
       const big = d.hp >= 300 || d.harvester;
       spawnEffect(big ? 'expL' : 'expS', ent.x, ent.y);
-      if (!d.air) spawnEffect('scorch', ent.x, ent.y);
+      if (!d.air) {
+        spawnEffect('scorch', ent.x, ent.y);
+        // a burnt-out husk cools on the spot for a while
+        spawnEffect('wreck', ent.x, ent.y, { ttl: 675, big });
+      }
       _maybePlay(d.air ? (big ? 'expL' : 'expS') : 'vehDeath', ent.x, ent.y);
     }
     if (ent.owner === human) {
@@ -1705,6 +1709,8 @@ function killEntity(ent, attacker) {
     removeBuilding(ent);
     spawnEffect('expL', _entX(ent), _entY(ent));
     spawnEffect('scorch', _entX(ent), _entY(ent));
+    // the footprint stays a rubble field: broken slabs, wall stubs, embers
+    spawnEffect('rubble', _entX(ent), _entY(ent), { ttl: 1350, w: ent.w, h: ent.h });
     _maybePlay('expL', _entX(ent), _entY(ent));
     // a collapsing structure buries its garrison
     if (ent.garrison && ent.garrison.length) {

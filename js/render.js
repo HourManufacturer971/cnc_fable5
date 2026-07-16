@@ -38,18 +38,57 @@ const Render = (function () {
     return true;
   }
 
-  // fog of war for UNITS: enemies (and neutrals) render only inside live
-  // line-of-sight — explored-but-dark ground remembers buildings, not
-  // troop movements. Own units always show; the endgame reveal and the
-  // replay spectator bypass the gate.
+  // classic shroud rule for units: anything on EXPLORED ground shows (the
+  // black shroud hides the rest). The endgame reveal and the replay
+  // spectator bypass even that.
   function _unitSeen(g, u) {
     if (seeAll || u.owner === g.humanSide) return true;
     if (revealAll && u.owner === g.ai.side) return true;
     const cx = worldToCell(u.x), cy = worldToCell(u.y);
-    if (!inMap(cx, cy)) return false;
-    const i = cellIdx(cx, cy);
-    if (g.shroud[i] !== 1) return false;
-    return !g.visible || g.visible[i] === 1;
+    return inMap(cx, cy) && g.shroud[cellIdx(cx, cy)] === 1;
+  }
+
+  // render-local gate state memory for the servo sound
+  const _gateWas = new Map();
+  function _maybeGateSnd(g, x, y) {
+    const m = 4 * C.CELL;
+    if (x >= g.camera.x - m && x <= g.camera.x + C.VIEW_W + m &&
+        y >= g.camera.y - m && y <= g.camera.y + C.VIEW_H + m) AUDIO.play('gate');
+  }
+
+  // one-time newcomer nudge toward the controls reference (localStorage-gated)
+  let f1Tip = null;
+  function _drawF1Tip(g) {
+    if (typeof NET !== 'undefined' && NET.active) return;
+    if (typeof REPLAY !== 'undefined' && REPLAY.playing) return;
+    if (g.status !== 'playing') return;
+    if (f1Tip === null) {
+      try { f1Tip = localStorage.getItem('hw_tip_f1') ? 0 : 1; } catch (e) { f1Tip = 0; }
+    }
+    if (!f1Tip) return;
+    if (g.tick >= 320) {
+      f1Tip = 0;
+      try { localStorage.setItem('hw_tip_f1', '1'); } catch (e) { /* memory only */ }
+      return;
+    }
+    if (g.tick < 90) return;
+    const s = fineTip ? 'New here?  F1 opens the controls reference'
+      : 'New here?  The controls reference lives in the Options menu';
+    ctx.font = '14px monospace';
+    ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(s).width;
+    const bx = C.VIEW_PW / 2 - tw / 2 - 10, by = C.TAB_H + 44;
+    const a = g.tick < 105 ? (g.tick - 90) / 15 : g.tick > 300 ? (320 - g.tick) / 20 : 1;
+    ctx.globalAlpha = Math.max(0, Math.min(1, a));
+    ctx.fillStyle = 'rgba(8,14,10,0.75)';
+    ctx.fillRect(bx, by, tw + 20, 24);
+    ctx.strokeStyle = 'rgba(224,184,64,0.4)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bx + 0.5, by + 0.5, tw + 19, 23);
+    ctx.fillStyle = '#c8c0a0';
+    ctx.fillText(s, bx + 10, by + 13);
+    ctx.globalAlpha = 1;
+    ctx.textBaseline = 'alphabetic';
   }
 
   function _nowMs() {
@@ -451,8 +490,15 @@ const Render = (function () {
         const gx2 = (b.cx + b.w / 2) * C.CELL, gy2 = (b.cy + b.h / 2) * C.CELL;
         for (const u2 of g.units.values()) {
           if (u2.owner !== b.owner || DATA.units[u2.type].air) continue;
-          if (dist(u2.x, u2.y, gx2, gy2) <= C.CELL * 2.4) { open = true; break; }
+          if (dist(u2.x, u2.y, gx2, gy2) <= C.CELL * 1.5) { open = true; break; }
         }
+      }
+      // servo clank when a visible gate changes state (cosmetic, render-local)
+      if (b.buildProgress >= 1 && _gateWas.get(b.id) !== open) {
+        if (_gateWas.has(b.id) && g.shroud[cellIdx(b.cx, b.cy)] === 1) {
+          _maybeGateSnd(g, (b.cx + b.w / 2) * C.CELL, (b.cy + b.h / 2) * C.CELL);
+        }
+        _gateWas.set(b.id, open);
       }
       frame = frames[(vert ? 2 : 0) + (open ? 1 : 0)];
     } else if (set.wallMask) {
@@ -682,6 +728,72 @@ const Render = (function () {
           drawSpr(img, Math.round(X(e.x) - img.width * sca(img) / 2),
             Math.round(Y(e.y) - img.height * sca(img) / 2));
         }
+        return;
+      }
+      case 'rubble': {
+        // a collapsed building's footprint: charred bed, broken slabs, wall
+        // stubs, embers that die as the ruin cools; fades out near expiry
+        const csz = C.CELL * Z;
+        const sw = (e.w || 2) * csz, sh = (e.h || 2) * csz;
+        const x = X(e.x) - sw / 2, y = Y(e.y) - sh / 2;
+        const life = e.ttl ? e.tick / e.ttl : 0;
+        ctx.globalAlpha = life > 0.75 ? (1 - life) / 0.25 : 1;
+        ctx.fillStyle = 'rgba(14,12,9,0.5)';
+        ctx.fillRect(x + 3, y + 5, sw - 6, sh - 8);
+        for (let i = 0; i < 3 + (e.w || 2) * 2; i++) {           // broken slabs
+          const hx = _gl(e.x | 0, e.y | 0, i * 3 + 1);
+          const hy = _gl(e.y | 0, e.x | 0, i * 3 + 2);
+          const hs2 = 8 + ((_gl(e.x | 0, i, 7) * 12) | 0);
+          const sx2 = x + 4 + hx * (sw - hs2 - 8), sy2 = y + 5 + hy * (sh - hs2 - 9);
+          ctx.fillStyle = i & 1 ? '#3f3b33' : '#4c473d';
+          ctx.fillRect(sx2, sy2, hs2, hs2 * 0.6);
+          ctx.fillStyle = 'rgba(255,255,255,0.10)';
+          ctx.fillRect(sx2, sy2, hs2, 2);
+        }
+        for (let i = 0; i < 2; i++) {                            // wall stubs
+          const hx = _gl(e.x | 0, e.y | 0, 40 + i);
+          const sx2 = x + 5 + hx * (sw - 16);
+          ctx.fillStyle = '#555044';
+          ctx.fillRect(sx2, y + 4 + i * (sh - 18), 10, 10);
+          ctx.fillStyle = '#6a655a';
+          ctx.fillRect(sx2, y + 4 + i * (sh - 18), 10, 2);
+        }
+        if (e.tick < 260) {                                      // cooling embers
+          for (let i = 0; i < 4; i++) {
+            const em = _gl(e.x | 0, i * 11, g.tick >> 2);
+            if (em > 0.55) continue;
+            ctx.fillStyle = 'rgba(255,120,40,' + (0.55 * (1 - e.tick / 260)).toFixed(2) + ')';
+            ctx.fillRect(x + 6 + em * (sw - 12), y + 6 + _gl(i, e.y | 0, 5) * (sh - 12), 2, 2);
+          }
+        }
+        ctx.globalAlpha = 1;
+        return;
+      }
+      case 'wreck': {
+        // a burnt-out vehicle husk cooling where it died
+        const life = e.ttl ? e.tick / e.ttl : 0;
+        const x = X(e.x), y = Y(e.y);
+        ctx.globalAlpha = life > 0.7 ? (1 - life) / 0.3 : 1;
+        ctx.fillStyle = 'rgba(12,10,8,0.45)';                    // soot ring
+        ctx.beginPath();
+        ctx.ellipse(x, y + 4, e.big ? 26 : 18, e.big ? 12 : 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#26221c';                               // hull
+        ctx.beginPath();
+        ctx.ellipse(x, y, e.big ? 18 : 13, e.big ? 9 : 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#3a342a';                               // collapsed cabin
+        ctx.fillRect(x - (e.big ? 8 : 6), y - (e.big ? 7 : 5), e.big ? 16 : 12, e.big ? 6 : 5);
+        ctx.fillStyle = '#171310';
+        ctx.fillRect(x - 3, y - 2, 7, 4);
+        if (e.tick < 180) {
+          const em = _gl(e.x | 0, e.y | 0, g.tick >> 2);
+          if (em < 0.5) {
+            ctx.fillStyle = 'rgba(255,120,40,' + (0.5 * (1 - e.tick / 180)).toFixed(2) + ')';
+            ctx.fillRect(x - 2 + ((em * 9) | 0), y - 1, 2, 2);
+          }
+        }
+        ctx.globalAlpha = 1;
         return;
       }
       case 'moveMark': case 'atkMark': {
@@ -987,7 +1099,8 @@ const Render = (function () {
 
     // ground marks below everything else
     for (const e of g.effects) {
-      if (e.name === 'scorch' || e.name === 'crater') _drawEffect(g, e, X, Y);
+      if (e.name === 'scorch' || e.name === 'crater' ||
+          e.name === 'rubble' || e.name === 'wreck') _drawEffect(g, e, X, Y);
     }
 
     // tiberium
@@ -1040,9 +1153,11 @@ const Render = (function () {
           }
           ctx.fillStyle = 'rgba(96,168,188,0.15)';   // shallow turquoise
           ctx.fillRect(x, y, cs, cs);
-          const fa = (0.34 + 0.22 * Math.sin(t * 0.22 + (cx * 1.3 + cy * 0.7))).toFixed(3);
+          // soft foam: low alpha and a thin rim, so small ponds don't read
+          // as boxes traced in white
+          const fa = (0.20 + 0.12 * Math.sin(t * 0.22 + (cx * 1.3 + cy * 0.7))).toFixed(3);
           ctx.fillStyle = 'rgba(198,230,238,' + fa + ')';
-          const fw = 3;
+          const fw = 2;
           if (landN) ctx.fillRect(x, y, cs, fw);
           if (landS) ctx.fillRect(x, y + cs - fw, cs, fw);
           if (landW) ctx.fillRect(x, y, fw, cs);
@@ -1141,7 +1256,8 @@ const Render = (function () {
 
     // effects (non-ground)
     for (const e of g.effects) {
-      if (e.name !== 'scorch' && e.name !== 'crater') _drawEffect(g, e, X, Y);
+      if (e.name !== 'scorch' && e.name !== 'crater' &&
+          e.name !== 'rubble' && e.name !== 'wreck') _drawEffect(g, e, X, Y);
     }
 
     // incoming superweapon: pulsing reticle at the aim point (3s of warning
@@ -1243,6 +1359,17 @@ const Render = (function () {
             px += pw + 1;
           }
         }
+        // harvester cargo pips: how much crystal is in the hopper
+        if (ud.harvester) {
+          const n = 5, pw = 6, gap = 2;
+          const filled = Math.round((e.tib / C.HARV_CAP) * n);
+          let px = x + cs / 2 - (n * pw + (n - 1) * gap) / 2;
+          for (let i = 0; i < n; i++) {
+            ctx.fillStyle = i < filled ? '#4ce03c' : 'rgba(255,255,255,0.25)';
+            ctx.fillRect(px, y - 20, pw, 5);
+            px += pw + gap;
+          }
+        }
       } else {
         const x = X(e.cx * C.CELL), y = Y(e.cy * C.CELL);
         _drawBrackets(x, y, e.w * cs, e.h * cs);
@@ -1259,6 +1386,60 @@ const Render = (function () {
         if (!e) continue;
         ctx.fillStyle = '#fff';
         ctx.fillText(n, X(e.x) - cs / 2, Y(e.y) - cs / 2 - 22);
+      }
+    }
+
+    // hover: whatever is under the cursor shows its health without a click
+    if (fineTip && Input.mouse.inside && !g.paused && Input.mode === 'normal' &&
+        Input.mouse.y >= C.TAB_H && Input.mouse.x < C.VIEW_PW) {
+      const w = worldFromScreen(Input.mouse.x, Input.mouse.y);
+      if (w) {
+        let hov = null, best = 18 * 18;
+        for (const u of g.units.values()) {
+          if (!_unitSeen(g, u)) continue;
+          const dx = u.x - w.x, dy = u.y - w.y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < best) { best = d2; hov = u; }
+        }
+        if (!hov) {
+          const o = occAt(worldToCell(w.x), worldToCell(w.y));
+          if (o) {
+            const e2 = getEnt(o);
+            if (e2 && e2.kind === 'building' &&
+                (seeAll || g.shroud[cellIdx(e2.cx, e2.cy)] === 1)) hov = e2;
+          }
+        }
+        if (hov && !g.selection.includes(hov.id)) {
+          if (hov.kind === 'unit') {
+            const air = DATA.units[hov.type].air;
+            _drawHealthBar(X(hov.x) - cs / 2, Y(hov.y) - cs / 2 - 10 - (air ? 16 : 0),
+              cs, hov.hp / hov.maxHp);
+          } else {
+            _drawHealthBar(X(hov.cx * C.CELL), Y(hov.cy * C.CELL) - 10,
+              hov.w * cs, hov.hp / hov.maxHp);
+          }
+        }
+      }
+    }
+
+    // sell mode: quote the refund at the cursor before the deed is done
+    if (Input.mode === 'sell' && fineTip && Input.mouse.inside && Input.mouse.x < C.VIEW_PW) {
+      const w = worldFromScreen(Input.mouse.x, Input.mouse.y);
+      if (w) {
+        const o = occAt(worldToCell(w.x), worldToCell(w.y));
+        const b2 = o ? getEnt(o) : null;
+        if (b2 && b2.kind === 'building' && b2.owner === g.humanSide && b2.buildProgress >= 1) {
+          const refund = Math.floor(DATA.buildings[b2.type].cost * C.SELL_REFUND * (b2.hp / b2.maxHp));
+          const tag = '+$' + refund;
+          ctx.font = 'bold 14px monospace';
+          const tw2 = ctx.measureText(tag).width;
+          ctx.fillStyle = 'rgba(8,10,6,0.8)';
+          ctx.fillRect(Input.mouse.x + 14, Input.mouse.y - 8, tw2 + 10, 20);
+          ctx.fillStyle = '#8fe08f';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(tag, Input.mouse.x + 19, Input.mouse.y + 2);
+          ctx.textBaseline = 'alphabetic';
+        }
       }
     }
 
@@ -1945,6 +2126,7 @@ const Render = (function () {
     _drawNetStall(g);
     _drawReplayBadge(g);
     _drawEvaBanner();
+    _drawF1Tip(g);
     _drawIconTooltip(g);
     _drawVerdict(g);
     _drawIntro(g);

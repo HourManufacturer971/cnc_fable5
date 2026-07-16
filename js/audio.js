@@ -208,6 +208,17 @@ const AUDIO = (function () {
     },
 
     // heavy placement thunk: snap + sub + body, then ringing metal (high-Q noise pings)
+    // gate servo: a short motor whirr into a metal seat-clunk
+    gate(t) {
+      noiseHit(t, 0.16, 'bandpass', [[0, 420], [0.16, 900]], 6,
+        [[0, 0.001], [0.02, 0.10], [0.13, 0.06], [0.16, 0.001]]);
+      tone(t, 0.14, 'sawtooth', [[0, 88], [0.14, 132]],
+        [[0, 0.001], [0.02, 0.05], [0.14, 0.001]],
+        { filt: ['lowpass', 2, [[0, 900]]] });
+      snap(t + 0.15, 520, 0.12);
+      thump(t + 0.15, 120, 60, 0.10, 0.25);
+    },
+
     place(t) {
       snap(t, 700, 0.2);
       thump(t, 150, 42, 0.2, 0.5);

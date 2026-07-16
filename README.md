@@ -251,7 +251,14 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   credit counters, and wounded buildings and vehicles trail smoke. Units
   cast soft contact shadows, vehicles kick up dust on dirt roads, big
   explosions throw a shockwave ring and tumbling debris, sunlight glints
-  off the river, and the crystal fields sparkle
+  off the river, and the crystal fields sparkle. Battles leave marks:
+  destroyed buildings collapse into rubble fields — broken slabs, wall
+  stubs, embers cooling — and vehicles leave burnt-out husks that fade
+  away over a minute. Hovering anything shows its health without a click,
+  selected harvesters show cargo pips, SELL mode quotes the refund at the
+  cursor before you commit, gates answer with a servo clunk as they open,
+  and your very first battle offers a one-time nudge toward the controls
+  reference
 - **Chrysalite economy** — harvesters (700 credits a load), refineries with
   docking, silos with live sight-glass gauges that show how full your
   storage is, storage caps (the HUD balance shows yours, and turns red
@@ -314,12 +321,12 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   connects the two bases
 - **Fog of war** — permanent-reveal black shroud, jagged edges, and a radar
   minimap that shows the actual painted world in miniature with live,
-  smoothly-moving unit blips. Explored ground remembers TERRAIN and
-  BUILDINGS, not troop movements: enemy units are visible — on the map and
-  the minimap alike — only inside your live line-of-sight. The minimap greys
-  ground outside your current sight and a soft rim traces the live-sight
-  region. And when the enemy's last building falls, every surviving enemy
-  unit is revealed — the endgame is a hunt, not a shroud-crawl
+  smoothly-moving unit blips. Anything on explored ground is visible on the
+  battlefield; on the MINIMAP, enemy blips still need live line-of-sight —
+  the map greys ground outside your current sight and a soft rim traces the
+  live-sight region. And when the enemy's last building falls, every
+  surviving enemy unit is revealed — the endgame is a hunt, not a
+  shroud-crawl
 - **Blue chrysalite** — the most contested midfield spawns rare blue
   crystal worth **double** at the refinery; mined-out blue ground regrows
   ordinary green, so the prize doesn't last forever
