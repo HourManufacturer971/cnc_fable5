@@ -24,6 +24,33 @@ const Render = (function () {
   // g.shroud still evolves exactly as it did live (the sim reads it), we
   // just stop hiding things behind it while a replay plays.
   let seeAll = false;
+  // endgame reveal: once every enemy building is rubble, their surviving
+  // units show everywhere — no shroud-crawl for the last stragglers.
+  // Recomputed per frame; SP only (in MP g.ai is the remote human).
+  let revealAll = false;
+
+  function _computeRevealAll(g) {
+    if (!g.ai || (typeof NET !== 'undefined' && NET.active)) return false;
+    for (const id of g.ai.buildingIds) {
+      const b = g.buildings.get(id);
+      if (b && !DATA.buildings[b.type].wall) return false;
+    }
+    return true;
+  }
+
+  // fog of war for UNITS: enemies (and neutrals) render only inside live
+  // line-of-sight — explored-but-dark ground remembers buildings, not
+  // troop movements. Own units always show; the endgame reveal and the
+  // replay spectator bypass the gate.
+  function _unitSeen(g, u) {
+    if (seeAll || u.owner === g.humanSide) return true;
+    if (revealAll && u.owner === g.ai.side) return true;
+    const cx = worldToCell(u.x), cy = worldToCell(u.y);
+    if (!inMap(cx, cy)) return false;
+    const i = cellIdx(cx, cy);
+    if (g.shroud[i] !== 1) return false;
+    return !g.visible || g.visible[i] === 1;
+  }
 
   function _nowMs() {
     return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
@@ -305,7 +332,7 @@ const Render = (function () {
     for (const u of g.units.values()) {
       const cx = worldToCell(u.x), cy = worldToCell(u.y);
       const i = cellIdx(cx, cy);
-      const revealed = seeAll || (hunt && u.owner === g.ai.side);   // spectator / stragglers
+      const revealed = seeAll || ((hunt || revealAll) && u.owner === g.ai.side);
       if (!revealed) {
         if (g.shroud[i] !== 1) continue;
         if (u.owner !== g.humanSide) {
@@ -415,21 +442,16 @@ const Render = (function () {
     }
     let frame;
     if (set.gateFrames) {
-      // orient to the wall run it sits in; open when the owner's ground
-      // units come close (cosmetic — passability lives in isPassable)
-      const nearWall = (cx, cy) => {
-        const o = occAt(cx, cy);
-        if (o <= 0) return false;
-        const e = getEnt(o);
-        return e && e.kind === 'building' && DATA.buildings[e.type].wall;
-      };
-      const vert = nearWall(b.cx, b.cy - 1) || nearWall(b.cx, b.cy + 1);
+      // orientation is baked into the instance footprint at placement;
+      // open when the owner's ground units approach (cosmetic — the real
+      // passability lives in isPassable)
+      const vert = b.h > 1;
       let open = false;
       if (b.buildProgress >= 1) {
-        const gx2 = cellCenterX(b.cx), gy2 = cellCenterY(b.cy);
+        const gx2 = (b.cx + b.w / 2) * C.CELL, gy2 = (b.cy + b.h / 2) * C.CELL;
         for (const u2 of g.units.values()) {
           if (u2.owner !== b.owner || DATA.units[u2.type].air) continue;
-          if (dist(u2.x, u2.y, gx2, gy2) <= C.CELL * 1.7) { open = true; break; }
+          if (dist(u2.x, u2.y, gx2, gy2) <= C.CELL * 2.4) { open = true; break; }
         }
       }
       frame = frames[(vert ? 2 : 0) + (open ? 1 : 0)];
@@ -498,6 +520,23 @@ const Render = (function () {
       const wr = SPRITES.fx.wrench[0];
       drawSpr(wr, x + (b.w * C.CELL * Z - wr.width * sca(wr)) / 2,
         Y(b.cy * C.CELL) + (b.h * C.CELL * Z - wr.height * sca(wr)) / 2);
+    }
+    // PRIMARY tag: the factory new units will come out of (own side only)
+    if (b.owner === g.humanSide && g.human && g.human.primary) {
+      const kind = DATA.buildings[b.type].factory;
+      if (kind && g.human.primary[kind] === b.id) {
+        ctx.font = 'bold 11px monospace';
+        const tag = 'PRIMARY';
+        const tw2 = ctx.measureText(tag).width;
+        const tx2 = x + (DW - tw2) / 2;
+        const ty2 = Y(b.cy * C.CELL) - 14;
+        ctx.fillStyle = 'rgba(8,10,6,0.75)';
+        ctx.fillRect(tx2 - 4, ty2 - 2, tw2 + 8, 14);
+        ctx.fillStyle = PAL.uiGold;
+        ctx.textBaseline = 'top';
+        ctx.fillText(tag, tx2, ty2);
+        ctx.textBaseline = 'alphabetic';
+      }
     }
     // garrison marker: one dot per occupant in the holder's color, so an
     // occupied building reads as hostile/friendly at a glance
@@ -1064,7 +1103,7 @@ const Render = (function () {
     const units = Array.from(g.units.values()).sort((a, b) => a.y - b.y);
     const ground = [];
     for (const b of g.buildings.values()) ground.push(b);
-    for (const u of units) if (!DATA.units[u.type].air) ground.push(u);
+    for (const u of units) if (!DATA.units[u.type].air && _unitSeen(g, u)) ground.push(u);
     const baseY = e => e.kind === 'building'
       ? (e.cy + e.h) * C.CELL           // footprint bottom edge
       : e.y + C.CELL * 0.5;             // feet, half a cell below center
@@ -1122,7 +1161,7 @@ const Render = (function () {
     }
 
     // air units on top
-    for (const u of units) if (DATA.units[u.type].air) _drawUnit(g, u, X, Y);
+    for (const u of units) if (DATA.units[u.type].air && _unitSeen(g, u)) _drawUnit(g, u, X, Y);
 
     // shroud (skipped entirely for the replay spectator)
     if (!seeAll) {
@@ -1224,7 +1263,26 @@ const Render = (function () {
     }
 
     // placement overlay
-    if (Input.mode === 'place' && Input.modeArg && Input.wallLine && Input.wallLine.length) {
+    const placingGate = Input.mode === 'place' && Input.modeArg &&
+      DATA.buildings[Input.modeArg] && DATA.buildings[Input.modeArg].gate;
+    if (placingGate) {
+      // gate ghost: the full 3-cell span, oriented by the wall run under
+      // the cursor, valid as a whole (own wall segments underneath are ok)
+      const w = worldFromScreen(Input.mouse.x, Input.mouse.y);
+      if (w) {
+        const ccx = worldToCell(w.x), ccy = worldToCell(w.y);
+        const fp = Production.gateFootprint(g, ccx, ccy);
+        const ok = Production.canPlaceGate(g, g.human, ccx, ccy);
+        for (let k = 0; k < 3; k++) {
+          const x2 = fp.cx + (fp.w === 3 ? k : 0), y2 = fp.cy + (fp.h === 3 ? k : 0);
+          ctx.fillStyle = ok ? 'rgba(80,240,80,0.4)' : 'rgba(240,60,40,0.4)';
+          ctx.fillRect(X(x2 * C.CELL), Y(y2 * C.CELL), cs, cs);
+          ctx.strokeStyle = ok ? '#8f8' : '#f88';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(X(x2 * C.CELL) + 0.5, Y(y2 * C.CELL) + 0.5, cs - 1, cs - 1);
+        }
+      }
+    } else if (Input.mode === 'place' && Input.modeArg && Input.wallLine && Input.wallLine.length) {
       // RA2-style wall drag: preview the whole segment line
       for (const cell of Input.wallLine) {
         const ok = Production.cellOk(g, g.human, cell.cx, cell.cy);
@@ -1879,6 +1937,7 @@ const Render = (function () {
       return;
     }
     seeAll = typeof REPLAY !== 'undefined' && REPLAY.playing;
+    revealAll = _computeRevealAll(g);
     _drawViewport(g);
     _drawTabBar(g);
     _drawSidebar(g);

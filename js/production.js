@@ -284,12 +284,94 @@ const Production = (function () {
     return true;
   }
 
+  // ---- gates: 3-cell spans that slot into a wall run -------------------------
+
+  // orientation follows the walls around the CLICKED cell: wall segments
+  // north/south mean the run is vertical, so the gate is too
+  function gateOrient(g, cx, cy) {
+    const wallAt = (x, y) => {
+      if (!inMap(x, y)) return false;
+      const o = g.occ[cellIdx(x, y)];
+      if (!o) return false;
+      const e = getEnt(o);
+      return e && e.kind === 'building' && DATA.buildings[e.type].wall;
+    };
+    return (wallAt(cx, cy - 1) || wallAt(cx, cy + 1)) ? 'v' : 'h';
+  }
+
+  // footprint centered on the clicked cell
+  function gateFootprint(g, cx, cy) {
+    return gateOrient(g, cx, cy) === 'v'
+      ? { cx, cy: cy - 1, w: 1, h: 3 }
+      : { cx: cx - 1, cy, w: 3, h: 1 };
+  }
+
+  function _gateCellOk(g, player, x, y) {
+    if (!inMap(x, y)) return false;
+    const i = cellIdx(x, y);
+    if (!terrainPassable(g.terrain[i]) || g.tib[i] > 0) return false;
+    const o = g.occ[i];
+    if (o) {
+      const e = getEnt(o);
+      // own plain wall segments make way for the gate; anything else blocks
+      if (!(e && e.kind === 'building' && e.owner === player.side &&
+            DATA.buildings[e.type].wall && !DATA.buildings[e.type].gate)) return false;
+    }
+    if (!player.isAI && !(typeof NET !== 'undefined' && NET.applying) && g.shroud[i] !== 1) return false;
+    return true;
+  }
+
+  // cx,cy is the clicked CENTER cell
+  function canPlaceGate(g, player, cx, cy) {
+    const fp = gateFootprint(g, cx, cy);
+    for (let k = 0; k < 3; k++) {
+      const x = fp.cx + (fp.w === 3 ? k : 0), y = fp.cy + (fp.h === 3 ? k : 0);
+      if (!_gateCellOk(g, player, x, y)) return false;
+    }
+    for (const id of player.buildingIds) {
+      const b = g.buildings.get(id);
+      if (!b || b.buildProgress < 1) continue;
+      if (fp.cx <= b.cx + b.w + C.ADJACENCY && b.cx <= fp.cx + fp.w + C.ADJACENCY &&
+          fp.cy <= b.cy + b.h + C.ADJACENCY && b.cy <= fp.cy + fp.h + C.ADJACENCY) return true;
+    }
+    return false;
+  }
+
+  function _placeGate(g, player, key, cell) {
+    if (player.ready.building !== key) return 0;
+    if (!canPlaceGate(g, player, cell.cx, cell.cy)) {
+      if (_isHuman(player)) AUDIO.play('buzz');
+      return 0;
+    }
+    const fp = gateFootprint(g, cell.cx, cell.cy);
+    // own wall segments under the frame are absorbed by the gate
+    for (let k = 0; k < 3; k++) {
+      const x = fp.cx + (fp.w === 3 ? k : 0), y = fp.cy + (fp.h === 3 ? k : 0);
+      const o = g.occ[cellIdx(x, y)];
+      if (o) {
+        const e = getEnt(o);
+        if (e && e.kind === 'building') removeBuilding(e);
+      }
+    }
+    const b = makeBuilding(key, player.side, fp.cx, fp.cy);
+    b.w = fp.w; b.h = fp.h;
+    b.hp = b.maxHp = DATA.buildings[key].hp;
+    b.buildProgress = 1;
+    addBuilding(b);
+    computePower(player);
+    player.ready.building = null;
+    player.queues.building = null;
+    if (_isHuman(player)) AUDIO.play('place');
+    return 1;
+  }
+
   // RA2-style wall run: the pre-paid ready segment goes down first, each
   // further segment charges its cost on the spot; placement chains adjacency
   // (a placed wall is a finished building the next segment can hug).
   function placeWallLine(g, player, key, cells) {
     const d = DATA.buildings[key];
     if (!d || !d.wall || !cells.length) return 0;
+    if (d.gate) return _placeGate(g, player, key, cells[0]);
     let placed = 0;
     for (const cell of cells) {
       if (player.ready.building === key) {
@@ -384,13 +466,19 @@ const Production = (function () {
     if (!fac) return false;
 
     if (d.factory === 'air') {
-      // find an unclaimed pad and spawn hovering on it
-      let pad = null;
-      for (const id of player.buildingIds) {
-        const b = g.buildings.get(id);
-        if (!b || b.type !== 'hpad' || b.buildProgress < 1) continue;
+      // find an unclaimed pad — the PRIMARY pad gets first claim, so setting
+      // a primary helipad genuinely routes new aircraft to it
+      const free = b => {
+        if (!b || b.type !== 'hpad' || b.buildProgress < 1) return false;
         const claimer = b.claimedBy ? g.units.get(b.claimedBy) : null;
-        if (!claimer || claimer._dead) { pad = b; break; }
+        return !claimer || claimer._dead;
+      };
+      let pad = free(fac) ? fac : null;
+      if (!pad) {
+        for (const id of player.buildingIds) {
+          const b = g.buildings.get(id);
+          if (free(b)) { pad = b; break; }
+        }
       }
       if (!pad) pad = fac;
       const u = makeUnit(key, player.side, pad.cx, pad.cy);
@@ -639,6 +727,6 @@ const Production = (function () {
   return {
     tick, tryStart, toggleHold, cancel, items, canPlace, cellOk, place, sell,
     placeWallLine, toggleRepair, computePower, categoryOf, prereqOk, superReady,
-    launchSuper, setPrimary,
+    launchSuper, setPrimary, gateFootprint, canPlaceGate,
   };
 })();

@@ -1,12 +1,14 @@
 'use strict';
 // music.js — procedural soundtrack. Defines exactly one global: MUSIC.
-// Eight original tracks composed for this project, synthesized live with
+// Twelve original tracks composed for this project, synthesized live with
 // WebAudio and sequenced on a lookahead clock: dark, driving electronic /
-// industrial in the spirit of mid-90s RTS scores. All note data here is
+// industrial in the spirit of mid-90s RTS scores — eight for the Coalition,
+// four ritual tracks reserved for the Serpent Order. All note data here is
 // original. Mixed low and glued with a compressor so it sits under the SFX.
 //
-// MUSIC.start()            begin playback (creates the AudioContext lazily —
-//                          call from a user-gesture handler)
+// MUSIC.start(side)        begin playback with the faction's playlist
+//                          (creates the AudioContext lazily — call from a
+//                          user-gesture handler)
 // MUSIC.stop()             halt playback
 // MUSIC.setEnabled(bool)   user toggle; persisted by main.js
 // MUSIC.enabled            current toggle state
@@ -365,7 +367,131 @@ const MUSIC = (function () {
     order: ['a', 'b', 'b', 'c', 'b', 'c', 'd', 'e', 'f', 'b', 'c', 'd', 'd'],
   };
 
+  // ---- Serpent Order liturgy (faction-exclusive tracks) -------------------------
+  // The Order does not march to Coalition drums. Four ritual tracks: slower
+  // pulses, phrygian darkness, tritones, processional toms and chant pads.
+
+  // S1 'Coil' — A phrygian. The Serpent theme: a drone that tightens into a
+  // winding riff, always circling back to the b2 sting.
+  const S1 = {
+    bpm: 96,
+    bars: {
+      a: { // drone and distant drums
+        k: '1.......1.......', h: '..1...1...1...1.',
+        toms: [[4, 96], [12, 72]],
+        bass: [[0, 21, 14]],
+        pad: [[45, 48, 52]],
+      },
+      b: { // the coil: A Bb A G A E
+        k: '1...1...1...1...', s: '....1.......1..1', h: '1.1.1.1.1.1.1.12',
+        bass: [[0, 33, 3], [4, 34, 2], [6, 33, 2], [8, 31, 3], [12, 33, 2], [14, 28, 2]],
+      },
+      c: { // riff + serpent call above
+        k: '1...1...1...1...', s: '....1.......1..1', h: '1.1.1.1.1.1.1.12',
+        bass: [[0, 33, 3], [4, 34, 2], [6, 33, 2], [8, 31, 3], [12, 33, 2], [14, 28, 2]],
+        lead: [[0, 57, 2], [3, 58, 3], [8, 57, 2], [11, 55, 4]],
+      },
+      d: { // lift: the coil climbs, then slides home
+        k: '1...1...1...1.1.', s: '....1.......1...', h: '1.1.1.1.1.1.1.12',
+        bass: [[0, 38, 3], [4, 36, 3], [8, 34, 2], [10, 33, 2], [12, 31, 4]],
+        lead: [[2, 62, 3], [6, 60, 2], [8, 58, 3], [12, 57, 4]],
+      },
+      e: { // procession: toms under the bII chant
+        h: '..1...1...1...2.',
+        toms: [[0, 110], [6, 82], [10, 64]],
+        bass: [[0, 21, 12]],
+        pad: [[46, 50, 53]],
+      },
+    },
+    order: ['a', 'b', 'b', 'c', 'c', 'd', 'b', 'c', 'e', 'b', 'c', 'd'],
+  };
+
+  // S2 'Rite of Ash' — D minor with a raised seventh and a buried tritone.
+  // Half-time processional; drums like a funeral cortege.
+  const S2 = {
+    bpm: 84,
+    bars: {
+      a: {
+        k: '1.......1.......', h: '....1.......1...',
+        toms: [[4, 88], [6, 66], [12, 88], [14, 54]],
+        bass: [[0, 26, 6], [8, 25, 6]],
+        pad: [[50, 53, 57]],
+      },
+      b: { // the rite: D F D G# C# — the tritone swallowed mid-phrase
+        k: '1.......1.....1.', s: '........1.......', h: '..1...1...1...1.',
+        bass: [[0, 26, 3], [4, 29, 2], [6, 26, 2], [8, 32, 3], [12, 25, 3]],
+      },
+      c: {
+        k: '1.......1.....1.', s: '........1.......', h: '..1...1...1...1.',
+        bass: [[0, 26, 3], [4, 29, 2], [6, 26, 2], [8, 32, 3], [12, 25, 3]],
+        lead: [[0, 62, 4], [6, 61, 3], [10, 58, 4]],
+      },
+      d: { // the ash falls: darker chord, heavier skins
+        k: '1.......1.......', toms: [[2, 96], [4, 72], [10, 96], [12, 58], [14, 48]],
+        bass: [[0, 26, 6], [8, 20, 7]],
+        pad: [[49, 53, 56]],
+      },
+    },
+    order: ['a', 'a', 'b', 'b', 'c', 'b', 'c', 'd', 'b', 'c'],
+  };
+
+  // S3 'Fang and Shadow' — E phrygian strike music: sixteenth-note hats and
+  // an ostinato that bites on the flat second.
+  const S3 = {
+    bpm: 126,
+    bars: {
+      a: {
+        k: '1...1...1...1.1.', s: '....1.......1...', h: '1111111111111112',
+        bass: [[0, 28, 1], [2, 28, 1], [4, 29, 1], [6, 28, 1], [8, 31, 1], [10, 28, 1], [12, 26, 1], [14, 28, 1]],
+      },
+      b: {
+        k: '1...1...1...1.1.', s: '....1.......1...', h: '1111111111111112',
+        bass: [[0, 28, 1], [2, 28, 1], [4, 29, 1], [6, 28, 1], [8, 31, 1], [10, 28, 1], [12, 26, 1], [14, 28, 1]],
+        lead: [[0, 52, 1], [4, 53, 1], [8, 52, 1], [12, 50, 2]],
+      },
+      c: { // strike lifted a fourth, the shadow answers
+        k: '1...1...1...1.1.', s: '....1.......1..1', h: '1111111111111112',
+        bass: [[0, 33, 1], [2, 33, 1], [4, 34, 1], [6, 33, 1], [8, 36, 1], [10, 33, 1], [12, 31, 1], [14, 33, 1]],
+        lead: [[2, 57, 2], [6, 55, 2], [10, 53, 2], [14, 52, 2]],
+      },
+      d: { // coiled: open hats over a tritone drone
+        h: '..2...2...2...2.',
+        bass: [[0, 16, 12]],
+        pad: [[40, 46, 52]],
+      },
+    },
+    order: ['a', 'a', 'b', 'b', 'c', 'b', 'c', 'd', 'a', 'b'],
+  };
+
+  // S4 'Under the Skin' — B with a hanging minor second; sneaking offbeats,
+  // a whispered two-note motif, a diminished chant in the low mist.
+  const S4 = {
+    bpm: 108,
+    bars: {
+      a: {
+        k: '1.....1...1.....', h: '..1...1...1...1.',
+        bass: [[0, 23, 2], [3, 23, 1], [6, 24, 2], [10, 23, 2], [13, 21, 2]],
+      },
+      b: {
+        k: '1.....1...1.....', s: '....1.......1...', h: '..1...1...1...1.',
+        bass: [[0, 23, 2], [3, 23, 1], [6, 24, 2], [10, 23, 2], [13, 21, 2]],
+        lead: [[0, 59, 3], [6, 60, 2], [10, 59, 2]],
+      },
+      c: { // the skin crawls: diminished pad over a held drone
+        k: '1.......1.......', h: '....1.......1...',
+        toms: [[8, 76], [12, 58]],
+        bass: [[0, 23, 12]],
+        pad: [[47, 50, 53]],
+      },
+    },
+    order: ['a', 'a', 'b', 'b', 'c', 'b', 'b', 'c'],
+  };
+
   const TRACKS = [T1, T2, T3, T4, T5, T6, T7, T8];
+  // faction playlists: the Coalition marches to the original eight; the
+  // Serpent Order plays only its own liturgy
+  const PLAYLISTS = { gdi: TRACKS, nod: [S1, S2, S3, S4] };
+  let list = TRACKS;
 
   // ---- sequencer -----------------------------------------------------------------
 
@@ -383,7 +509,7 @@ const MUSIC = (function () {
 
   function _tick() {
     if (!running) return;
-    const tr = TRACKS[trackIdx];
+    const tr = list[trackIdx % list.length];
     const stepDur = 60 / tr.bpm / 4;
     while (nextTime < ctx.currentTime + 0.28) {
       _scheduleBarStep(tr, tr.order[pos], step, nextTime, stepDur);
@@ -397,7 +523,7 @@ const MUSIC = (function () {
           loops++;
           if (loops >= 2) {          // rotate tracks with a breather between
             loops = 0;
-            trackIdx = (trackIdx + 1) % TRACKS.length;
+            trackIdx = (trackIdx + 1) % list.length;
             nextTime += 2.5;
           }
         }
@@ -428,14 +554,16 @@ const MUSIC = (function () {
   }
 
   let startedOnce = false;
-  function start() {
+  function start(side) {
     if (!enabled) return;
-    // the session's first battle always opens on T1 — the game's original
-    // theme; later starts re-roll so missions vary. When the sequencer is
-    // already running (music plays through menus), it simply picks up the
-    // new track at its next scheduled step.
+    // each faction fights to its own score: the Coalition to the original
+    // eight, the Serpent Order to its liturgy. The session's first battle
+    // opens on the faction theme (track 0); later starts re-roll. When the
+    // sequencer is already running (music plays through menus), it simply
+    // picks up the new playlist at its next scheduled step.
+    if (side) list = PLAYLISTS[side === 'nod' ? 'nod' : 'gdi'];
     step = 0; pos = 0; loops = 0;
-    trackIdx = startedOnce ? (Math.random() * TRACKS.length) | 0 : 0;
+    trackIdx = startedOnce ? (Math.random() * list.length) | 0 : 0;
     startedOnce = true;
     if (running) return;
     _ensureCtx();

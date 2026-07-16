@@ -1014,36 +1014,77 @@
     P(ctx, x + 1, y - 5, 1, 2, pal.trim);
   }
 
-  function drawTmpl(ctx, W, H, pal, f, side, rnd) { // 72x72 +12 — step pyramid
+  function drawTmpl(ctx, W, H, pal, f, side, rnd) { // 72x72 +12 — obsidian monolith
     baseSlab(ctx, W, H, '#68685f', '#79796f', '#525249'); slabNoise(ctx, W, H, rnd);
-    const g = [0, 1, 2, 1][f % 4];  // rune-glow pulse 0..2
-    // tiers bottom-up so each upper tier overdraws the platform behind it
-    tier(ctx, 4, 64, 42, 8, 14, pal, rnd);
-    tier(ctx, 12, 48, 22, 8, 12, pal, rnd);
-    tier(ctx, 20, 32, 4, 8, 10, pal, rnd);
-    tier(ctx, 28, 16, -10, 6, 8, pal, rnd);
-    // glowing slit on the apex platform
-    const slitCol = ['#b02818', '#e04028', '#ff7050'][g];
-    const slitHi = ['#d04030', '#ffa080', '#ffd0b0'][g];
-    P(ctx, 32, -8, 8, 2, slitCol);
-    P(ctx, 33, -9, 6, 1, slitHi);
-    ctx.fillStyle = 'rgba(255,96,56,' + (0.12 + g * 0.09).toFixed(2) + ')';
-    ctx.fillRect(29, -12, 14, 8);
-    // rune dots along the tier faces, pulsing with the slit
-    const runeCol = ['#8a2015', '#c83422', '#ff6a4a'][g];
-    for (let i = 0; i < 5; i++) P(ctx, 16 + i * 10, 57, 2, 2, runeCol);
-    for (let i = 0; i < 4; i++) P(ctx, 20 + i * 9, 36, 2, 2, runeCol);
-    for (let i = 0; i < 3; i++) P(ctx, 26 + i * 9, 15, 2, 2, runeCol);
-    // entrance on the base face with red arch + hazard
-    P(ctx, 32, 54, 8, 10, '#0d0d10');
-    P(ctx, 33, 54, 6, 1, '#2a1215');
-    outlineRect(ctx, 31, 53, 10, 11);
-    P(ctx, 31, 53, 10, 1, pal.trim);
-    P(ctx, 30, 52, 12, 1, pal.blackC);
-    hazardH(ctx, 31, 62, 10, pal.haz);
-    // corner pylons on the base platform
-    pylon(ctx, 7, 44, pal);
-    pylon(ctx, 62, 44, pal);
+    const g = [0, 1, 2, 1][f % 4];  // ember pulse 0..2
+    const glow = ['#8a2015', '#c83422', '#ff6a4a'][g];
+    const glowHi = ['#d04030', '#ffa080', '#ffd0b0'][g];
+
+    // wide temple terrace + low western annex wing
+    tier(ctx, 4, 64, 44, 6, 12, pal, rnd);
+    tier(ctx, 8, 26, 28, 7, 11, pal, rnd);
+    // annex roof detail: a shallow ember channel feeding the monolith
+    P(ctx, 12, 31, 20, 1, '#1a1a20');
+    P(ctx, 13, 31, (6 + g * 5), 1, glow);
+
+    // the monolith: an asymmetric obsidian slab, roofline climbing to an
+    // eastern peak — drawn per-column so the silhouette stays razor sharp
+    const mx0 = 34, mx1 = 64, peak = 56;
+    ctx.fillStyle = SH;
+    ctx.fillRect(mx1 + 1, 0, 3, 46);           // east cast shadow
+    for (let x = mx0; x <= mx1; x++) {
+      const t = x <= peak
+        ? (x - mx0) / (peak - mx0)              // long climb west->peak
+        : 1 - (x - peak) / (mx1 - peak) * 0.45; // short drop past the peak
+      const topY = Math.round(4 - 16 * t);
+      P(ctx, x, topY - 1, 1, 1, OUT);
+      P(ctx, x, topY, 1, 2, '#5a5a68');                       // lit ridge
+      P(ctx, x, topY + 2, 1, 44 - (topY + 2), x > mx1 - 3 ? pal.blackA : pal.blackB);
+      if (x === mx0) P(ctx, x, topY, 1, 44 - topY, '#4c4c58'); // west edge light
+    }
+    P(ctx, mx0 - 1, 3, 1, 42, OUT);
+    P(ctx, mx1 + 1, -6, 1, 51, OUT);
+    // faceted panel seams on the front face
+    ctx.fillStyle = 'rgba(96,96,112,0.30)';
+    ctx.fillRect(mx0 + 5, -2, 1, 45); ctx.fillRect(mx0 + 19, -8, 1, 51);
+    // west-side buttress fins stepping down off the monolith
+    for (let i = 0; i < 3; i++) {
+      const bx = mx0 - 4 - i * 5, ty = 14 + i * 9;
+      P(ctx, bx, ty, 5, 30 - ty + 14, pal.blackB);
+      P(ctx, bx, ty, 5, 1, '#5a5a68');
+      P(ctx, bx, ty, 1, 30 - ty + 14, '#4c4c58');
+      P(ctx, bx - 1, ty - 1, 5, 1, OUT);
+      P(ctx, bx + 4, ty, 1, 30 - ty + 14, pal.blackA);
+    }
+
+    // the serpent's eye: a glowing vertical seam splitting the monolith,
+    // swelling to an almond eye at its heart
+    const ex = 48;
+    P(ctx, ex, -6, 2, 48, '#14141a');
+    P(ctx, ex, -4 + (g === 0 ? 6 : 0), 2, 44 - (g === 0 ? 6 : 0), glow);
+    P(ctx, ex - 2, 16, 6, 10, '#14141a');       // socket
+    P(ctx, ex - 1, 18, 4, 6, glow);
+    P(ctx, ex, 20, 2, 2, glowHi);
+    ctx.fillStyle = 'rgba(255,96,56,' + (0.10 + g * 0.08).toFixed(2) + ')';
+    ctx.fillRect(ex - 4, 12, 10, 18);           // eye halo
+    // apex spire + slow-blinking summit beacon
+    P(ctx, peak, -22, 2, 10, '#26262e');
+    P(ctx, peak - 1, -24, 4, 3, (f % 2) ? glowHi : '#571b12');
+    if (f % 2) { ctx.fillStyle = 'rgba(255,96,56,0.25)'; ctx.fillRect(peak - 3, -27, 8, 7); }
+
+    // ember seam along the terrace face (in place of the old rune dots)
+    for (let i = 0; i < 6; i++) P(ctx, 10 + i * 10, 55, 4, 1, i % 3 === g ? glow : '#3a1410');
+
+    // entrance in the annex face: tall black arch, red lintel, hazard skirt
+    P(ctx, 16, 44, 10, 14, '#0d0d10');
+    P(ctx, 17, 44, 8, 1, '#2a1215');
+    outlineRect(ctx, 15, 43, 12, 15);
+    P(ctx, 15, 43, 12, 1, pal.trim);
+    P(ctx, 14, 42, 14, 1, pal.blackC);
+    hazardH(ctx, 15, 59, 12, pal.haz);
+    // twin horn pylons flanking the approach
+    pylon(ctx, 8, 52, pal);
+    pylon(ctx, 30, 52, pal);
   }
 
   function drawHpad(ctx, W, H, pal, f, side, rnd) { // 48x48 — raised deck
@@ -1876,60 +1917,81 @@
   g.fillStyle = PAL.uiGold; g.fillRect(0, 44, 64, 4);
   SPRITES.cameo.brik = cam;
 
-  // ---- wall gate: a powered barrier between two posts. Frames indexed
-  // [closedH, openH, closedV, openV]; render picks orientation from the
-  // adjacent wall run and opens it when the owner's units approach.
+  // ---- wall gate: a 3-cell powered gatehouse. Frames indexed
+  // [closedH, openH, closedV, openV]; render picks the orientation from the
+  // instance footprint and opens it when the owner's units approach.
   function gatePost(g2, x, y) {
-    g2.fillStyle = OUT; g2.fillRect(x - 1, y - 1, 8, 22);
-    g2.fillStyle = TOP_L; g2.fillRect(x, y, 6, 6);
-    g2.fillStyle = TOP; g2.fillRect(x, y + 3, 6, 3);
-    g2.fillStyle = FACE; g2.fillRect(x, y + 6, 6, 12);
-    g2.fillStyle = FACE_D; g2.fillRect(x, y + 16, 6, 2);
-    g2.fillStyle = '#d8d8ca'; g2.fillRect(x, y, 6, 1);
-    g2.fillStyle = '#c8a83c'; g2.fillRect(x + 2, y + 7, 2, 2); // status lamp
+    // a chunky gatehouse pier, taller than the wall it anchors
+    g2.fillStyle = OUT; g2.fillRect(x - 1, y - 1, 12, 26);
+    g2.fillStyle = TOP_L; g2.fillRect(x, y, 10, 7);
+    g2.fillStyle = TOP; g2.fillRect(x, y + 4, 10, 3);
+    g2.fillStyle = FACE; g2.fillRect(x, y + 7, 10, 14);
+    g2.fillStyle = FACE_D; g2.fillRect(x, y + 19, 10, 2);
+    g2.fillStyle = '#d8d8ca'; g2.fillRect(x, y, 10, 1);
+    g2.fillStyle = '#3c3c34'; g2.fillRect(x + 2, y + 9, 6, 3);   // vision slit
+    g2.fillStyle = '#c8a83c'; g2.fillRect(x + 4, y + 10, 2, 1);  // status lamp
   }
   function gateFrame(vert, open, damaged) {
-    const c2 = mkCanvas(24, 32);
+    const c2 = vert ? mkCanvas(24, 80) : mkCanvas(72, 32);
     const g2 = c2.getContext('2d');
     if (!vert) {
-      g2.fillStyle = 'rgba(0,0,0,0.30)'; g2.fillRect(2, 18, 20, 4);  // recessed track
+      // recessed roadway across the whole span
+      g2.fillStyle = 'rgba(0,0,0,0.30)'; g2.fillRect(4, 17, 64, 6);
+      g2.fillStyle = 'rgba(255,255,255,0.06)'; g2.fillRect(4, 17, 64, 1);
       if (open) {
-        // bar retracted into stubs beside each post
-        g2.fillStyle = OUT; g2.fillRect(6, 12, 3, 9); g2.fillRect(15, 12, 3, 9);
-        g2.fillStyle = '#6e6e64'; g2.fillRect(7, 13, 1, 7); g2.fillRect(16, 13, 1, 7);
-      } else {
-        g2.fillStyle = OUT; g2.fillRect(3, 10, 18, 12);
-        g2.fillStyle = '#6e6e64'; g2.fillRect(4, 11, 16, 4);   // bar top face
-        for (let i = 0; i < 4; i++) {                          // warning chevrons
-          g2.fillStyle = i & 1 ? '#c8a83c' : '#2c2c26';
-          g2.fillRect(4 + i * 4, 15, 4, 6);
+        // the barrier halves retract flush against the piers
+        for (const [bx] of [[11], [49]]) {
+          g2.fillStyle = OUT; g2.fillRect(bx, 10, 13, 12);
+          g2.fillStyle = '#6e6e64'; g2.fillRect(bx + 1, 11, 11, 3);
+          g2.fillStyle = '#54544c'; g2.fillRect(bx + 1, 14, 11, 7);
+          g2.fillStyle = '#c8a83c'; g2.fillRect(bx + 1, 14, 2, 7);
         }
-        g2.fillStyle = '#8a8a7e'; g2.fillRect(4, 11, 16, 1);
+      } else {
+        // one long armored barrier: lit top face, chevroned south face
+        g2.fillStyle = OUT; g2.fillRect(9, 9, 54, 13);
+        g2.fillStyle = '#76766c'; g2.fillRect(10, 10, 52, 4);
+        g2.fillStyle = '#8a8a7e'; g2.fillRect(10, 10, 52, 1);
+        for (let i = 0; i < 13; i++) {
+          g2.fillStyle = i & 1 ? '#c8a83c' : '#2c2c26';
+          g2.fillRect(10 + i * 4, 14, 4, 7);
+        }
+        g2.fillStyle = '#1c1c16'; g2.fillRect(35, 10, 2, 11);   // center seam
       }
-      gatePost(g2, 1, 6);
-      gatePost(g2, 18, 6);
+      gatePost(g2, 1, 4);
+      gatePost(g2, 60, 4);
+      g2.fillStyle = 'rgba(0,0,0,0.22)'; g2.fillRect(64, 26, 8, 4);
     } else {
-      g2.fillStyle = 'rgba(0,0,0,0.30)'; g2.fillRect(9, 2, 6, 28);   // track
+      // vertical span: piers top and bottom, roadway running north-south
+      g2.fillStyle = 'rgba(0,0,0,0.30)'; g2.fillRect(9, 8, 6, 64);
+      g2.fillStyle = 'rgba(255,255,255,0.06)'; g2.fillRect(9, 8, 1, 64);
       if (open) {
-        g2.fillStyle = OUT; g2.fillRect(8, 8, 8, 3); g2.fillRect(8, 20, 8, 3);
-        g2.fillStyle = '#6e6e64'; g2.fillRect(9, 9, 6, 1); g2.fillRect(9, 21, 6, 1);
-      } else {
-        g2.fillStyle = OUT; g2.fillRect(7, 8, 10, 16);
-        g2.fillStyle = '#6e6e64'; g2.fillRect(8, 9, 8, 3);
-        for (let i = 0; i < 4; i++) {
-          g2.fillStyle = i & 1 ? '#c8a83c' : '#2c2c26';
-          g2.fillRect(8, 12 + i * 3, 8, 3);
+        for (const by of [14, 52]) {
+          g2.fillStyle = OUT; g2.fillRect(6, by, 12, 13);
+          g2.fillStyle = '#6e6e64'; g2.fillRect(7, by + 1, 10, 3);
+          g2.fillStyle = '#54544c'; g2.fillRect(7, by + 4, 10, 8);
+          g2.fillStyle = '#c8a83c'; g2.fillRect(7, by + 4, 10, 2);
         }
+      } else {
+        g2.fillStyle = OUT; g2.fillRect(5, 12, 14, 55);
+        g2.fillStyle = '#76766c'; g2.fillRect(6, 13, 12, 4);
+        g2.fillStyle = '#8a8a7e'; g2.fillRect(6, 13, 12, 1);
+        for (let i = 0; i < 13; i++) {
+          g2.fillStyle = i & 1 ? '#c8a83c' : '#2c2c26';
+          g2.fillRect(6, 17 + i * 4, 12, 4);
+        }
+        g2.fillStyle = '#1c1c16'; g2.fillRect(6, 38, 12, 2);    // center seam
       }
-      gatePost(g2, 9, 0);
-      gatePost(g2, 9, 12);
+      gatePost(g2, 7, 2);
+      gatePost(g2, 7, 56);
+      g2.fillStyle = 'rgba(0,0,0,0.22)'; g2.fillRect(18, 74, 6, 4);
     }
     if (damaged) {
-      g2.fillStyle = 'rgba(20,16,10,0.35)'; g2.fillRect(0, 0, 24, 32);
+      g2.fillStyle = 'rgba(20,16,10,0.35)'; g2.fillRect(0, 0, c2.width, c2.height);
       g2.fillStyle = OUT;
-      g2.fillRect(10, 12, 3, 2); g2.fillRect(6, 17, 2, 2); g2.fillRect(15, 19, 2, 2);
+      g2.fillRect(c2.width / 2 - 3, c2.height / 2 - 4, 4, 3);
+      g2.fillRect(c2.width / 2 + 4, c2.height / 2 + 2, 3, 2);
+      g2.fillRect(c2.width / 2 - 9, c2.height / 2 + 4, 2, 2);
     }
-    g2.fillStyle = 'rgba(0,0,0,0.22)'; g2.fillRect(18, 26, 6, 3);
     return c2;
   }
   const gateN = [gateFrame(false, false, false), gateFrame(false, true, false),
@@ -1942,9 +2004,7 @@
   const gcam = mkCanvas(64, 48);
   const gg = gcam.getContext('2d');
   gg.fillStyle = PAL.cameoBg; gg.fillRect(0, 0, 64, 48);
-  gg.drawImage(wallFrame(10, false), 0, 6, 24, 32);
-  gg.drawImage(gateFrame(false, false, false), 20, 6, 24, 32);
-  gg.drawImage(wallFrame(10, false), 40, 6, 24, 32);
+  gg.drawImage(gateFrame(false, false, false), 2, 5, 60, 27);
   gg.fillStyle = 'rgba(0,0,0,0.5)'; gg.fillRect(0, 36, 64, 8);
   gg.font = '7px monospace'; gg.textAlign = 'center'; gg.textBaseline = 'middle';
   gg.fillStyle = PAL.uiText; gg.fillText('Wall Gate', 32, 40, 62);

@@ -93,7 +93,7 @@ so bandwidth is tiny. Notes:
 | Alt+1..9 (or Ctrl+1..9) | Assign control group — Alt is the reliable one; browsers steal Ctrl+1..8 for tab switching |
 | 1..9 | Recall group (double-tap to center camera, Shift adds the group to the selection) |
 | Tab-bar chips 1-5 | Click to recall that group (twice centers); right-click to assign the current selection |
-| Click the selected factory again | Make it the primary factory for its kind (same as `P`) |
+| Click the selected factory again | Make it the primary factory for its kind (same as `P`) — a gold PRIMARY tag marks it; works for the Barracks, vehicle factory and Helipad |
 | `H` | Center on Construction Yard |
 | `S` / `G` | Stop / guard |
 | `T` | Select same type on screen |
@@ -230,9 +230,12 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 - **Vehicle repairs** — click your Repair Facility with vehicles selected
   and they roll over and park; a wrench blinks while the pad patches them
   up at the same credits-per-point rate building repairs cost
-- **Original soundtrack** — eight synthesized tracks in the dark mid-90s RTS
-  style, sequenced live with WebAudio (each mission opens on a different
-  one); toggle with Music: ON/OFF in the options menu
+- **Original soundtrack** — twelve synthesized tracks in the dark mid-90s
+  RTS style, sequenced live with WebAudio — and each faction fights to its
+  own score: the Coalition marches to the original eight, while the Serpent
+  Order plays a four-track liturgy of its own (slower pulses, phrygian
+  darkness, processional drums). Toggle with Music: ON/OFF in the options
+  menu
 - **A graded, luminous look** — the whole battlefield sits under a cinematic
   colour grade and vignette that fuse the procedural sprites into one lit
   scene, with a whisper of film grain to kill banding. Bright things
@@ -276,9 +279,11 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   Tank is visibly bigger than the rest and fires twin cannon shots.
 - **Defenses** — Guard Tower, Advanced Guard Tower, Gun Turret, SAM Site, and
   the Beam Spire with its charge-up laser; concrete walls place in
-  drag-runs, auto-connect, and block movement. **Wall Gates** slot into a
-  wall run and lower automatically for your own units while staying shut
-  to the enemy — seal your base without boxing your army in
+  drag-runs, auto-connect, and block movement. **Wall Gates** are proper
+  3-cell gatehouses that slot into a wall run — place one right on top of
+  existing wall segments and they make way; the gate orients itself to the
+  run, lowers automatically for your own units, and stays shut to the
+  enemy — seal your base without boxing your army in
 - **Superweapons** — the UDC Orbital Lance (Advanced Comm. Center) and the Serpent Order's nuclear
   strike (Serpent Temple)
 - **Combat details** — warhead vs. armor tables, turret rotation, homing
@@ -309,10 +314,12 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   connects the two bases
 - **Fog of war** — permanent-reveal black shroud, jagged edges, and a radar
   minimap that shows the actual painted world in miniature with live,
-  smoothly-moving unit blips. Explored ground outside your current sight
-  greys out on the minimap and a soft rim traces the live-sight region —
-  the ring inside which enemy blips can appear (they need line-of-sight
-  from your own forces, not just explored ground)
+  smoothly-moving unit blips. Explored ground remembers TERRAIN and
+  BUILDINGS, not troop movements: enemy units are visible — on the map and
+  the minimap alike — only inside your live line-of-sight. The minimap greys
+  ground outside your current sight and a soft rim traces the live-sight
+  region. And when the enemy's last building falls, every surviving enemy
+  unit is revealed — the endgame is a hunt, not a shroud-crawl
 - **Blue chrysalite** — the most contested midfield spawns rare blue
   crystal worth **double** at the refinery; mined-out blue ground regrows
   ordinary green, so the prize doesn't last forever

@@ -77,7 +77,7 @@ define **exactly** the globals listed and may freely call any global listed for 
 | sprites_infantry.js | fills `SPRITES.infantry[key][side]` for every infantry type, and their `SPRITES.cameo[key]` |
 | sprites_buildings.js | fills `SPRITES.buildings[key][side]` for every building, and their `SPRITES.cameo[key]`, plus `SPRITES.cameo.ion` / `SPRITES.cameo.nuke` |
 | audio.js | `AUDIO` (`init, play, eva, ack, setEnabled, enabled, setVoiceEnabled, voiceEnabled, tickCredits`) |
-| music.js | `MUSIC` (`start, stop, setEnabled, enabled` — original procedural soundtrack, eight tracks; the session's FIRST battle opens on T1, the original theme, later starts re-roll; rotates after two loops) |
+| music.js | `MUSIC` (`start(side), stop, setEnabled, enabled` — original procedural soundtrack, twelve tracks in faction playlists: Coalition T1–T8, Serpent Order S1–S4 ritual tracks; the session's first battle opens on the faction theme, later starts re-roll; rotates after two loops) |
 | missions.js | `MISSIONS` (campaign definitions: seed, credits, AI knobs, objective, per-side briefings), `MissionProgress` (localStorage `hw_progress` unlock tracking) |
 | map.js | `MAPGEN` (`generate(game, seed, opts?)` — `opts.holdout` centers the human start inside a three-gated rock fortress ring with thin chrysalite inside and rich fields beyond) |
 | path.js | `findPath(unit, destCx, destCy, opts?) -> [{cx,cy},...]` |
@@ -243,7 +243,9 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   vehicles, hpad for aircraft, afld for Serpent Order vehicles: a cargo plane effect flies across and
   the vehicle appears at the airstrip), EVA `unitReady`, walk to rally point (building
   `rally`, set by clicking a factory then left-clicking ground... keep: rally = 2 cells south
-  of factory).
+  of factory). Aircraft prefer the PRIMARY helipad when it is unclaimed, then any free
+  pad. The human player's primary factory of each kind wears a gold PRIMARY tag
+  (render-only, `_drawBuilding`); set with `P` or by clicking the selected factory again.
 - Left-click an in-progress icon → toggle hold (EVA `onHold` / `building`); right-click →
   cancel, refund `spent` (EVA `cancelled`).
 - Icon click with unmet prereqs/never → buzz. Icon layout order comes from
@@ -281,13 +283,20 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_autoAcquire` — they NEVER start fights and nobody auto-guns them. The 'damaged'
   handler makes a shot villager return fire on a reachable attacker (guardAnchor leash
   keeps them home); unreachable attackers (aircraft) still trigger the old panic-flee.
-- **Wall Gate** (`gate: true` in DATA.buildings; wall family, $250, 1×1, instant place,
-  single-per-drag): passable ONLY to the owner's finished-gate ground units. Three layers:
-  `isPassable` allows owner+finished; A* `cellState` returns a near-free GATE state
-  (+15 step); `_stepAlongPath` transits the cell WITHOUT claiming occ — the gate keeps its
-  own occ id the whole time, so enemy pathing never sees a hole. Render picks
-  closed/open × horizontal/vertical frames (orientation from adjacent walls, opens when an
-  owner ground unit is within 1.7 cells — cosmetic only); walls auto-connect into its posts.
+- **Wall Gate** (`gate: true` in DATA.buildings; wall family, $250, instant place, one
+  per click): a 3-CELL gatehouse. Placement centers on the clicked cell; orientation
+  follows the wall run around it (`Production.gateOrient/gateFootprint` — walls N/S ⇒
+  vertical) and the instance gets `b.w/b.h` of 3×1 or 1×3 (DATA stays 1×1; footprint and
+  occ come from the instance). It may be placed ON TOP of the player's own plain wall
+  segments — `canPlaceGate` accepts them and `_placeGate` removes them before the gate
+  lands (`placeWallLine` routes gate placement, so MP/replay commands stay `(type,cx,cy)`
+  and both clients derive the same orientation from sim state). Passable ONLY to the
+  owner's ground units, on all three cells: `isPassable` allows owner+finished; A*
+  `cellState` returns a near-free GATE state (+15 step); `_stepAlongPath` transits WITHOUT
+  claiming occ — the gate keeps its own occ id, so enemy pathing never sees a hole.
+  Render picks closed/open × horizontal/vertical frames from the instance footprint
+  (opens when an owner ground unit is within 2.4 cells — cosmetic only); walls
+  auto-connect into its end piers; the placement ghost previews the oriented 3-cell span.
 - **Attack-move** (`orderAttackMove(u, cx, cy)`, state `amove`, `u._amove={cx,cy}`): sweep
   toward the cell, auto-acquiring every 8 ticks; acquisition sets `targetId`/`state='attack'`
   DIRECTLY (not via orderAttack) so `_amove` survives, and when the target dies the unit
@@ -349,9 +358,18 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 
 ### Fog of war
 - Black shroud, permanently revealed (no re-shroud, like TD). `game.shroud` bytes: 0 hidden,
-  1 explored. Reveal circles of `sight` radius around human units/buildings each few ticks.
+  1 explored. Reveal circles of `sight` radius around human units/buildings each few ticks;
+  `game.visible` is the LIVE line-of-sight mask, recomputed by Fog every 5 ticks.
   AI sees everything. Hidden cells: draw black; cells adjacent to hidden get jagged dark
-  edge overlay (`SPRITES.shroudEdge`). Radar: three layers — the painted terrain
+  edge overlay (`SPRITES.shroudEdge`).
+- **Units live under true fog** (`_unitSeen`, render-only): non-human-side units (enemy,
+  civilian, fleshling) draw in the viewport ONLY where `g.visible === 1` — explored-but-
+  dark ground remembers terrain and buildings, not troop movements. Buildings keep the
+  classic explored-visibility. The replay spectator (`seeAll`) bypasses the gate.
+- **Endgame reveal** (`revealAll`, recomputed per frame, SP only — never when `NET.active`):
+  once the AI owns zero non-wall buildings, its surviving units draw everywhere and show
+  on radar — complements hunt mode; no shroud-crawl for the last stragglers.
+- Radar: three layers — the painted terrain
   downscaled once per map (`minimapBase`), shroud+tiberium refreshed every 8 ticks, and
   entity blips drawn EVERY frame from live world coordinates (enemy blips gated on
   current line-of-sight, cloaked units hidden). Radar shows only explored. Enemies/tib in hidden

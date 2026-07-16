@@ -95,7 +95,7 @@ DATA.buildings = {
   hpad: { name: 'Helipad', cost: 1500, hp: 400, w: 2, h: 2, armor: 'wood', sight: 3, power: 0, drain: 10, side: null, prereq: ['proc'], factory: 'air', freeUnitAir: true },
   fix:  { name: 'Repair Facility', cost: 1200, hp: 400, w: 3, h: 3, armor: 'wood', sight: 3, power: 0, drain: 30, side: null, prereq: ['weap', 'afld'], prereqAny: true, repairPad: true },
   brik: { name: 'Concrete Wall', cost: 100, hp: 300, w: 1, h: 1, armor: 'concrete', sight: 1, power: 0, drain: 0, side: null, prereq: [], defense: true, wall: true },
-  gate: { name: 'Wall Gate', cost: 250, hp: 350, w: 1, h: 1, armor: 'concrete', sight: 1, power: 0, drain: 0, side: null, prereq: [], defense: true, wall: true, gate: true },
+  gate: { name: 'Wall Gate', cost: 250, hp: 600, w: 1, h: 1, armor: 'concrete', sight: 1, power: 0, drain: 0, side: null, prereq: [], defense: true, wall: true, gate: true }, // placed as a 3-cell span (w/h set at placement)
   gtwr: { name: 'Guard Tower', cost: 500, hp: 400, w: 1, h: 1, armor: 'wood', sight: 4, power: 0, drain: 10, side: 'gdi', prereq: ['pyle'], weapon: 'gtwrMg', defense: true, threat: 0.4 },
   atwr: { name: 'Adv. Guard Tower', cost: 1000, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 60, side: 'gdi', prereq: ['hq'], weapon: 'atwrMissile', needsPower: true, defense: true, threat: 0.9 },
   gun:  { name: 'Gun Turret', cost: 600, hp: 400, w: 1, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 20, side: 'nod', prereq: ['hand'], weapon: 'gunTurret', turret: true, defense: true, threat: 0.5 },
@@ -165,7 +165,7 @@ DATA.blurb = {
   hpad: 'Builds and rearms one aircraft',
   fix: 'Repairs vehicles parked on its pad',
   brik: 'Blocks movement and absorbs fire',
-  gate: 'Wall segment that opens for your units only',
+  gate: 'A 3-cell gate that opens for your units only - place it over a wall run',
   gtwr: 'Anti-infantry machine-gun tower',
   atwr: 'Missile tower - strikes ground and air',
   gun: 'Anti-armor cannon turret',

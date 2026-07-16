@@ -516,7 +516,7 @@ const Main = (function () {
       : mission ? 'OP ' + mission.n + ': ' + mission.title
       : 'SKIRMISH — ' + ((mySkirmish && mySkirmish.skirmish) || 'NORMAL');
     window.game = game;
-    MUSIC.start();
+    MUSIC.start(side);   // faction playlist: the Serpent Order has its own score
     MAPGEN.generate(game, game.seed, mission && mission.holdout ? { holdout: true } : undefined);
     Fog.init(game);
 
