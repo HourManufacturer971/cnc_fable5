@@ -1883,7 +1883,9 @@
     const cx = 12, cy = 14; // wall center on the cell (top-face coords)
     // arms first so the post overlaps them
     if (mask & 1) seg(g, 8, 0, 8, cy - 4, false);           // north arm
-    if (mask & 4) seg(g, 8, cy, 8, 18 - cy + 4 - H, false); // south arm
+    // south arm must reach the canvas bottom (32) so consecutive cells in a
+    // N-S run meet — seg's total height is h + H face rows
+    if (mask & 4) seg(g, 8, cy, 8, 32 - cy - H, false);
     if (mask & 8) seg(g, 0, cy - 4, cx, 6, false);          // west arm
     if (mask & 2) seg(g, cx, cy - 4, 12, 6, false);         // east arm
     // center post: slightly taller block
@@ -1950,81 +1952,91 @@
   g.fillStyle = PAL.uiGold; g.fillRect(0, 88, 128, 8);
   SPRITES.cameo.brik = cam;
 
-  // ---- wall gate: a 3-cell powered gatehouse. Frames indexed
+  // ---- wall gate: a 3-cell security checkpoint. Frames indexed
   // [closedH, openH, closedV, openV]; render picks the orientation from the
   // instance footprint and opens it when the owner's units approach.
-  function gatePost(g2, x, y, w) {
-    // a chunky gatehouse pier, taller than the wall it anchors
-    w = w || 10;
-    g2.fillStyle = OUT; g2.fillRect(x - 1, y - 1, w + 2, 26);
-    g2.fillStyle = TOP_L; g2.fillRect(x, y, w, 7);
-    g2.fillStyle = TOP; g2.fillRect(x, y + 4, w, 3);
-    g2.fillStyle = FACE; g2.fillRect(x, y + 7, w, 14);
-    g2.fillStyle = FACE_D; g2.fillRect(x, y + 19, w, 2);
-    g2.fillStyle = '#d8d8ca'; g2.fillRect(x, y, w, 1);
-    g2.fillStyle = '#3c3c34'; g2.fillRect(x + (w >> 1) - 3, y + 9, 6, 3);   // vision slit
-    g2.fillStyle = '#c8a83c'; g2.fillRect(x + (w >> 1) - 1, y + 10, 2, 1);  // status lamp
+  //
+  // Design rule: ALL THREE cells are traversable, so the structure lives at
+  // the span's outer BOUNDARY edges only — two slim housings that the hazard
+  // curtain retracts into. Open = three visually clear paved squares (units
+  // drive through without clipping any artwork); closed = a striped curtain
+  // stretched between the housings. Lamps read the state: green open, red
+  // closed.
+
+  // one low curtain housing hugging a boundary edge; lamps face the roadway
+  function gateBox(g2, x, y, w, h, open) {
+    g2.fillStyle = OUT; g2.fillRect(x - 1, y - 1, w + 2, h + 2);
+    g2.fillStyle = TOP_L; g2.fillRect(x, y, w, 2);                 // lit cap
+    g2.fillStyle = TOP; g2.fillRect(x, y + 2, w, Math.max(1, ((h / 2) | 0) - 1));
+    g2.fillStyle = FACE; g2.fillRect(x, y + (h / 2 | 0) + 1, w, h - (h / 2 | 0) - 1);
+    g2.fillStyle = FACE_D; g2.fillRect(x, y + h - 1, w, 1);
+    g2.fillStyle = open ? '#3fbf46' : '#d03428';                   // status lamp
+    g2.fillRect(x + (w >> 1) - 1, y + (h >> 1) - 1, 2, 2);
   }
+
+  // shared paving: a flat crossing plate — ground detail, never "structure"
+  function gateRoad(g2, x, y, w, h, dashesVert) {
+    g2.fillStyle = 'rgba(0,0,0,0.26)'; g2.fillRect(x, y, w, h);
+    g2.fillStyle = 'rgba(255,255,255,0.07)';
+    g2.fillRect(x, y, dashesVert ? 1 : w, dashesVert ? h : 1);     // lit near curb
+    g2.fillStyle = 'rgba(0,0,0,0.30)';
+    g2.fillRect(dashesVert ? x + w - 1 : x, dashesVert ? y : y + h - 1,
+      dashesVert ? 1 : w, dashesVert ? h : 1);                     // far curb
+    g2.fillStyle = 'rgba(232,224,200,0.14)';                       // lane ticks
+    if (dashesVert) {                                              // traffic E-W
+      for (let dy = y + 6; dy < y + h - 5; dy += 12) g2.fillRect(x + (w >> 1) - 4, dy, 8, 1);
+    } else {                                                       // traffic N-S
+      for (let dx = x + 8; dx < x + w - 6; dx += 12) g2.fillRect(dx, y + (h >> 1), 1, 6);
+    }
+  }
+
   function gateFrame(vert, open, damaged) {
     const c2 = vert ? mkCanvas(24, 80) : mkCanvas(72, 32);
     const g2 = c2.getContext('2d');
     if (!vert) {
-      // recessed roadway across the whole span
-      g2.fillStyle = 'rgba(0,0,0,0.30)'; g2.fillRect(4, 17, 64, 6);
-      g2.fillStyle = 'rgba(255,255,255,0.06)'; g2.fillRect(4, 17, 64, 1);
+      // ---- horizontal span (3 wide, traffic crosses north-south) ----
+      gateRoad(g2, 1, 9, 70, 14, false);
       if (open) {
-        // the barrier halves retract flush against the piers — WIDE mouth
-        for (const bx of [11, 55]) {
-          g2.fillStyle = OUT; g2.fillRect(bx, 10, 7, 12);
-          g2.fillStyle = '#6e6e64'; g2.fillRect(bx + 1, 11, 5, 3);
-          g2.fillStyle = '#54544c'; g2.fillRect(bx + 1, 14, 5, 7);
-          g2.fillStyle = '#c8a83c'; g2.fillRect(bx + 1, 14, 1, 7);
-        }
+        // curtain fully swallowed by the housings; yellow tips peek out
+        g2.fillStyle = '#c8a83c'; g2.fillRect(7, 13, 2, 6); g2.fillRect(63, 13, 2, 6);
       } else {
-        // one long armored barrier: lit top face, chevroned south face
-        g2.fillStyle = OUT; g2.fillRect(9, 9, 54, 13);
-        g2.fillStyle = '#76766c'; g2.fillRect(10, 10, 52, 4);
-        g2.fillStyle = '#8a8a7e'; g2.fillRect(10, 10, 52, 1);
-        for (let i = 0; i < 13; i++) {
+        // striped curtain stretched between the housings + south shadow
+        g2.fillStyle = OUT; g2.fillRect(6, 10, 60, 12);
+        g2.fillStyle = '#8a8a7e'; g2.fillRect(7, 11, 58, 2);       // lit top rail
+        for (let i = 0; i < 14; i++) {
           g2.fillStyle = i & 1 ? '#c8a83c' : '#2c2c26';
-          g2.fillRect(10 + i * 4, 14, 4, 7);
+          g2.fillRect(7 + i * 4, 13, 4, 7);
         }
-        g2.fillStyle = '#1c1c16'; g2.fillRect(35, 10, 2, 11);   // center seam
+        g2.fillStyle = '#1c1c16'; g2.fillRect(35, 11, 2, 10);      // meeting seam
+        g2.fillStyle = 'rgba(0,0,0,0.25)'; g2.fillRect(7, 22, 58, 3);
       }
-      gatePost(g2, 1, 4);
-      gatePost(g2, 60, 4);
-      g2.fillStyle = 'rgba(0,0,0,0.22)'; g2.fillRect(64, 26, 8, 4);
+      // slim housings on the outer E/W boundary edges — in a run the
+      // adjoining wall posts overlap them, so the end cells stay clear
+      gateBox(g2, 1, 8, 5, 17, open);
+      gateBox(g2, 66, 8, 5, 17, open);
     } else {
-      // vertical span: piers top and bottom, roadway running north-south.
-      // Everything is WIDER than the horizontal gate's parts — in the 3/4
-      // view a north-south structure shows its whole flank, and the old
-      // slim arm read as a fence post
-      g2.fillStyle = 'rgba(0,0,0,0.30)'; g2.fillRect(6, 8, 12, 64);
-      g2.fillStyle = 'rgba(255,255,255,0.06)'; g2.fillRect(6, 8, 1, 64);
+      // ---- vertical span (3 tall, traffic crosses east-west) ----
+      gateRoad(g2, 3, 9, 18, 69, true);
       if (open) {
-        // halves hug the piers — a long clear roadway between them
-        for (const by of [13, 58]) {
-          g2.fillStyle = OUT; g2.fillRect(5, by, 14, 8);
-          g2.fillStyle = '#6e6e64'; g2.fillRect(6, by + 1, 12, 3);
-          g2.fillStyle = '#54544c'; g2.fillRect(6, by + 4, 12, 3);
-          g2.fillStyle = '#c8a83c'; g2.fillRect(6, by + 4, 12, 1);
-        }
+        g2.fillStyle = '#c8a83c'; g2.fillRect(8, 9, 8, 2); g2.fillRect(8, 71, 8, 2);
       } else {
-        // full-width armored barrier with a lit west edge + shaded east face
-        g2.fillStyle = OUT; g2.fillRect(4, 12, 16, 55);
-        g2.fillStyle = '#76766c'; g2.fillRect(5, 13, 14, 3);
-        g2.fillStyle = '#8a8a7e'; g2.fillRect(5, 13, 14, 1);
-        for (let i = 0; i < 12; i++) {
+        // curtain: lit west rail, striped bands, shaded east edge
+        g2.fillStyle = OUT; g2.fillRect(5, 9, 14, 64);
+        g2.fillStyle = '#8a8a7e'; g2.fillRect(6, 10, 2, 62);       // lit west rail
+        for (let i = 0; i < 15; i++) {
           g2.fillStyle = i & 1 ? '#c8a83c' : '#2c2c26';
-          g2.fillRect(5, 16 + i * 4, 12, 4);
+          g2.fillRect(8, 10 + i * 4, 8, 4);
         }
-        g2.fillStyle = '#8a8a7e'; g2.fillRect(5, 16, 1, 48);    // lit west edge
-        g2.fillStyle = '#3c3c34'; g2.fillRect(17, 16, 2, 48);   // shaded east face
-        g2.fillStyle = '#1c1c16'; g2.fillRect(5, 38, 14, 2);    // center seam
+        g2.fillStyle = '#3c3c34'; g2.fillRect(16, 10, 2, 62);      // shaded east
+        g2.fillStyle = '#1c1c16'; g2.fillRect(6, 40, 12, 2);       // meeting seam
+        g2.fillStyle = 'rgba(0,0,0,0.25)'; g2.fillRect(19, 11, 2, 62);
       }
-      gatePost(g2, 4, 2, 16);
-      gatePost(g2, 4, 56, 16);
-      g2.fillStyle = 'rgba(0,0,0,0.22)'; g2.fillRect(20, 74, 4, 4);
+      // housings on the outer N/S boundary edges: the north one lives
+      // ENTIRELY in the sprite's rise rows (zero cell obstruction), the
+      // south one is a slim threshold the adjoining wall post overlaps —
+      // all three paved squares stay clear for the units driving through
+      gateBox(g2, 1, 0, 22, 8, open);
+      gateBox(g2, 1, 74, 22, 5, open);
     }
     if (damaged) {
       g2.fillStyle = 'rgba(20,16,10,0.35)'; g2.fillRect(0, 0, c2.width, c2.height);

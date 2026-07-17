@@ -307,8 +307,16 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   claiming occ — the gate keeps its own occ id, so enemy pathing never sees a hole.
   Render picks closed/open × horizontal/vertical frames from the instance footprint
   (opens when an owner ground unit is within 1.5 cells — cosmetic only, with a servo
-  clunk SFX on state changes near the camera, tracked render-locally in `_gateWas`);
-  walls auto-connect into its end piers; the placement ghost previews the oriented span.
+  clunk SFX on state changes near the camera, tracked render-locally in `_gateWas`).
+  **Art rule — the passage stays clear**: all three cells are traversable, so the
+  structure lives at the span's outer BOUNDARY edges only — two slim curtain housings
+  (the vertical gate's north housing sits entirely in the sprite's rise rows, its south
+  one is a thin threshold the adjoining wall post overlaps) with red/green status lamps.
+  The cells themselves carry only flat paving (curbs + lane ticks along the traffic
+  direction). Closed = a hazard-striped curtain stretched between the housings; open =
+  the curtain fully retracted (yellow tips peeking out), leaving three visually
+  unobstructed squares so units never clip gate artwork while driving through. Walls
+  auto-connect into the housings; the placement ghost previews the oriented span.
 - **Attack-move** (`orderAttackMove(u, cx, cy)`, state `amove`, `u._amove={cx,cy}`): sweep
   toward the cell, auto-acquiring every 8 ticks; acquisition sets `targetId`/`state='attack'`
   DIRECTLY (not via orderAttack) so `_amove` survives, and when the target dies the unit

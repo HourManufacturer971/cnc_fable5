@@ -578,17 +578,18 @@ const Render = (function () {
         Y(b.cy * C.CELL) + (b.h * C.CELL * Z - wr.height * sca(wr)) / 2);
     }
     // PRIMARY tag: the factory new units will come out of (own side only);
-    // worn at the building's BASE so it reads as a stencil on the apron
+    // a slim stencil laid exactly over the footing-brick course — the last
+    // rows of the sprite at the footprint's bottom edge
     if (b.owner === g.humanSide && g.human && g.human.primary) {
       const kind = DATA.buildings[b.type].factory;
       if (kind && g.human.primary[kind] === b.id) {
-        ctx.font = 'bold 11px monospace';
+        ctx.font = 'bold 10px monospace';
         const tag = 'PRIMARY';
         const tw2 = ctx.measureText(tag).width;
         const tx2 = x + (DW - tw2) / 2;
-        const ty2 = Y(b.cy * C.CELL) + b.h * C.CELL * Z - 15;
-        ctx.fillStyle = 'rgba(8,10,6,0.75)';
-        ctx.fillRect(tx2 - 4, ty2 - 2, tw2 + 8, 14);
+        const ty2 = Y(b.cy * C.CELL) + b.h * C.CELL * Z - 13;
+        ctx.fillStyle = 'rgba(8,10,6,0.70)';
+        ctx.fillRect(tx2 - 4, ty2 - 1, tw2 + 8, 13);
         ctx.fillStyle = PAL.uiGold;
         ctx.textBaseline = 'top';
         ctx.fillText(tag, tx2, ty2);
