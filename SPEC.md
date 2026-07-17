@@ -90,7 +90,7 @@ define **exactly** the globals listed and may freely call any global listed for 
 | production.js | `Production` (`tick, tryStart, toggleHold, cancel, items, canPlace, place, sell, toggleRepair, computePower, categoryOf, prereqOk, superReady, launchSuper, setPrimary`) |
 | ai.js | `AI` (`init, tick, _peek` — `_peek` is a read-only debug/test hook) |
 | input.js | `Input` (`init, tick, mouse, cursorKind, mode, modeArg`) |
-| render.js | `Render` (`init, frame, worldFromScreen, hitTest`) |
+| render.js | `Render` (`init, frame, resize, worldFromScreen, hitTest, cycleView, radarOn, viewPlayer`) |
 | net.js | `NET` (P2P lockstep: `host, acceptAnswer, join, testLocal, close, pump, ready, applyTick, postTick, stalledMs, initExplored, checksum, execReplay, requestRematch`, flags `active/applying/inSim/side/desynced/PROTO/rematchOffered`, `onRematch` callback) |
 | replay.js | `REPLAY` (`arm, logCmd, finish, hasLast, exportLast, exportLive, resumeData, watchLast, watchData, applyPending, stop`, flags `recording/playing` — see "Replays") |
 | main.js | `Main` (`boot, startGame, startReplay, endGame`), starts loop, menu DOM wiring |
@@ -971,6 +971,18 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   reuses the replay's `seeAll`, `NET._rec` swallows live orders (look, don't touch),
   `AUDIO.eva` goes quiet, hunt/reveal aids stay off. Spectate battles still record,
   so they can be saved, resumed and replayed like any skirmish.
+- **Observer seat** (spectate AND replay, i.e. whenever `seeAll`): the radar minimap
+  is always on — `_drawSidebar` shows it on `p.radar || seeAll` and `Render.radarOn()`
+  gates the radar-drag jump the same way, no Comm Center required. A tab-bar chip
+  (`◀ SIDE NAME ▶` in the side's `OWNER_COLOR`, `hitTest` zone `view-cycle`) and the
+  V key (Shift+V backwards; works even paused) cycle which commander's HUD is on
+  display: render.js keeps a module-level `viewSide` (+ `viewGame` staleness guard)
+  and `_viewP(g)` swaps the player behind the build strips, credits/storage ticker,
+  power bar, radar logo and strip scrolling (`Render.viewPlayer()` in input.js).
+  Strictly render/input-only: the sim still reads `g.humanSide`/`g.human` (fog,
+  harvester auto-seek), so seat-hopping through a replay reproduces the exact live
+  checksum — viewtest47 asserts this, plus the chip/radar behavior and that live
+  non-spectate games are unchanged (`cycleView` refuses when `seeAll` is off).
 - **Large map**: `C.MAP_W/H` set per game in `startGame` (88 for Large, else 64 —
   missions/MP always classic); `findPath` refits its scratch arrays on size change
   and the terrain cache keys on seed + size. Minimap/camera/fog scale through C.

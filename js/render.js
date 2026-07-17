@@ -30,6 +30,39 @@ const Render = (function () {
   // Recomputed per frame; SP only (in MP g.ai is the remote human).
   let revealAll = false;
 
+  // observer seat (spectate / replay): which commander's HUD — production
+  // strips, credits, power, radar identity — is on display. Render-only:
+  // the sim keeps reading g.humanSide/g.human, so swapping seats can never
+  // desync a replay.
+  let viewSide = null;      // null = follow g.humanSide
+  let viewGame = null;      // the game viewSide belongs to (stale across restarts)
+  let viewChip = null;      // tab-bar seat chip rects, set each frame while swappable
+
+  function _viewSideOf(g) {
+    if (viewGame !== g || !seeAll || !viewSide) return g.humanSide;
+    return g.sides && g.sides.includes(viewSide) ? viewSide : g.humanSide;
+  }
+
+  function _viewP(g) {
+    return g.players[_viewSideOf(g)] || g.human;
+  }
+
+  function cycleView(dir) {
+    const g = game;
+    if (!g || !seeAll || !g.sides || g.sides.length < 2) return false;
+    const i = g.sides.indexOf(_viewSideOf(g));
+    viewGame = g;
+    viewSide = g.sides[(i + (dir < 0 ? -1 : 1) + g.sides.length) % g.sides.length];
+    creditsShown = Math.floor(_viewP(g).credits);   // snap the ticker, no churn
+    return true;
+  }
+
+  // the live radar picture: the viewed commander's powered Comm Center, or
+  // unconditionally while spectating/replaying (the whole point of watching)
+  function radarOn() {
+    return !!game && (seeAll || _viewP(game).radar);
+  }
+
   function _computeRevealAll(g) {
     if (!g.ai || (typeof NET !== 'undefined' && NET.active)) return false;
     if (g.sides && g.sides.length > 2) return false;   // classic 1v1 rule only
@@ -166,6 +199,9 @@ const Render = (function () {
       }
       if (game && _idleHarvCount(game) > 0 &&
           x >= C.VIEW_PW - 360 && x < C.VIEW_PW - 236) return { zone: 'idle-harv' };
+      if (game && viewChip && x >= viewChip.x && x < viewChip.x + viewChip.w) {
+        return { zone: 'view-cycle', dir: x < viewChip.mid ? -1 : 1 };
+      }
       return { zone: 'tab' };
     }
     if (x < C.VIEW_PW) return { zone: 'viewport' };
@@ -178,7 +214,8 @@ const Render = (function () {
       return { zone: 'sidebar' };
     }
     if (game && game.human) {
-      const it = Production.items(game.human);
+      const vp = _viewP(game);
+      const it = Production.items(vp);
       for (const strip of ['b', 'u']) {
         const sx = strip === 'b' ? C.STRIP_BX : C.STRIP_UX;
         if (x < sx || x >= sx + C.CAMEO_PW) continue;
@@ -191,7 +228,7 @@ const Render = (function () {
         for (let i = 0; i < C.STRIP_VISIBLE; i++) {
           const iy = C.STRIP_Y + i * C.STRIP_SPACING;
           if (y >= iy && y < iy + C.CAMEO_PH) {
-            const item = list[game.human.scroll[strip] + i];
+            const item = list[vp.scroll[strip] + i];
             if (item) return { zone: 'icon', strip, key: item.key, state: item.state, super: !!item.super, count: item.count || 0 };
           }
         }
@@ -1630,8 +1667,9 @@ const Render = (function () {
       }
     }
 
-    // credits ticker
-    const target = Math.floor(g.human.credits);
+    // credits ticker (the viewed commander's treasury while spectating)
+    const vp = _viewP(g);
+    const target = Math.floor(vp.credits);
     if (creditsShown !== target) {
       const diff = target - creditsShown;
       const step = Math.max(1, Math.abs(diff) / 12 | 0);
@@ -1649,12 +1687,12 @@ const Render = (function () {
       ctx.fillText('IDLE HARV: ' + idleHarv, C.VIEW_PW - 356, 8);
     }
 
-    const full = g.human.storage > 0 && g.human.credits >= g.human.storage - 1;
+    const full = vp.storage > 0 && vp.credits >= vp.storage - 1;
     ctx.fillStyle = full ? PAL.uiRed : PAL.uiGold;
     ctx.fillText('$ ' + creditsShown, C.VIEW_PW - 220, 8);
-    if (g.human.storage > 0) {   // "/0" before the first refinery is just noise
+    if (vp.storage > 0) {   // "/0" before the first refinery is just noise
       ctx.fillStyle = full ? PAL.uiRed : '#8a836e';
-      ctx.fillText('/' + Math.floor(g.human.storage), C.VIEW_PW - 220 + ctx.measureText('$ ' + creditsShown).width + 6, 8);
+      ctx.fillText('/' + Math.floor(vp.storage), C.VIEW_PW - 220 + ctx.measureText('$ ' + creditsShown).width + 6, 8);
     }
 
     // mission timer + side
@@ -1663,13 +1701,32 @@ const Render = (function () {
     const ss = String(secs % 60).padStart(2, '0');
     ctx.fillStyle = PAL.uiText;
     ctx.fillText(mm + ':' + ss, C.SIDEBAR_X + 220, 8);
-    ctx.fillText(C.SIDE_NAME[g.humanSide] || g.humanSide.toUpperCase(), C.SIDEBAR_X + 16, 8);
+    const vs = _viewSideOf(g);
+    viewChip = null;
+    if (seeAll && g.sides && g.sides.length >= 2) {
+      // observer seat chip: ◀ NAME ▶ — click an arrow (or press V) to swap
+      // which commander's sidebar, credits and radar are on display
+      const name = C.SIDE_NAME[vs] || vs.toUpperCase();
+      ctx.font = '14px monospace';
+      const aw = 20, nw = ctx.measureText(name).width + 10;
+      const x0 = C.SIDEBAR_X + 8;
+      _bevel(x0, 3, aw + nw + aw, C.TAB_H - 6, false);
+      ctx.fillStyle = PAL.uiGold;
+      ctx.fillText('◀', x0 + 5, 10);
+      ctx.fillText('▶', x0 + aw + nw + 2, 10);
+      ctx.fillStyle = OWNER_COLOR[vs] || PAL.uiText;
+      ctx.fillText(name, x0 + aw + 5, 10);
+      ctx.font = '16px monospace';
+      viewChip = { x: x0, w: aw + nw + aw, mid: x0 + (aw + nw + aw) / 2 };
+    } else {
+      ctx.fillText(C.SIDE_NAME[g.humanSide] || g.humanSide.toUpperCase(), C.SIDEBAR_X + 16, 8);
+    }
   }
 
   // ---- sidebar -------------------------------------------------------------------------------
 
   function _drawSidebar(g) {
-    const p = g.human;
+    const p = _viewP(g);
     ctx.fillStyle = PAL.uiMetal;
     ctx.fillRect(C.SIDEBAR_X, C.TAB_H, C.SIDEBAR_W, C.SCREEN_H - C.TAB_H);
     // lit seam where the sidebar meets the battlefield (a warm gold hairline
@@ -1703,7 +1760,9 @@ const Render = (function () {
     ctx.strokeStyle = 'rgba(224,184,64,0.35)';
     ctx.lineWidth = 1;
     ctx.strokeRect(rx + 0.5, C.RADAR_Y + 0.5, rw - 1, C.RADAR_H - 1);
-    if (p.radar) {
+    // spectators and replay watchers always get the radar — watching the
+    // battle unfold IS the game there, no Comm Center required
+    if (p.radar || seeAll) {
       if (g.tick - minimapTick >= 8 || minimapTick > g.tick) { _updateMinimap(g); minimapTick = g.tick; }
       ctx.drawImage(minimap, C.MM_X, C.MM_Y);
       _drawRadarBlips(g);
@@ -1715,7 +1774,7 @@ const Render = (function () {
         C.VIEW_W / (C.MAP_W * C.CELL) * C.MM_S,
         C.VIEW_H / (C.MAP_H * C.CELL) * C.MM_S);
     } else {
-      const logo = SPRITES.logo[g.humanSide];
+      const logo = SPRITES.logo[baseSide(_viewSideOf(g))];
       if (logo) {
         const lw = logo.width * 2, lh = logo.height * 2;
         ctx.drawImage(logo, C.RADAR_X + (C.RADAR_W - lw) / 2 + 4,
@@ -1778,7 +1837,7 @@ const Render = (function () {
             ctx.fillText(t, sx + 46, iy + 41);
           }
           if (item.state === 'charging') {
-            const p2 = g.human.super;
+            const p2 = p.super;
             const s = Math.ceil(p2.timer / C.TPS);
             const t = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
             ctx.fillStyle = '#fff';
@@ -1959,6 +2018,22 @@ const Render = (function () {
     ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, 23);
     ctx.fillStyle = '#f0c8b8';
     ctx.fillText(s, bx + 11, by + 13);
+    ctx.textBaseline = 'alphabetic';
+  }
+
+  // first half-minute of a watched battle: point out the seat-swap control
+  function _drawViewHint(g) {
+    if (!seeAll || !g.sides || g.sides.length < 2) return;
+    if (g._ffTarget || g.tick > 450) return;
+    ctx.font = '13px monospace';
+    ctx.textBaseline = 'middle';
+    const s = 'V or ◀ ▶ — swap commander view';
+    const bw = ctx.measureText(s).width + 20;
+    const bx = C.VIEW_PW / 2 - bw / 2, by = C.TAB_H + 38;
+    ctx.fillStyle = 'rgba(12,14,10,0.72)';
+    ctx.fillRect(bx, by, bw, 22);
+    ctx.fillStyle = '#c8d8b8';
+    ctx.fillText(s, bx + 10, by + 12);
     ctx.textBaseline = 'alphabetic';
   }
 
@@ -2220,6 +2295,7 @@ const Render = (function () {
     _drawObjective(g);
     _drawNetStall(g);
     _drawReplayBadge(g);
+    _drawViewHint(g);
     _drawEvaBanner();
     _drawF1Tip(g);
     _drawIconTooltip(g);
@@ -2230,5 +2306,6 @@ const Render = (function () {
     shownTick = g.tick;
   }
 
-  return { init, frame, resize, worldFromScreen, hitTest };
+  return { init, frame, resize, worldFromScreen, hitTest, cycleView, radarOn,
+    viewPlayer: () => (typeof game !== 'undefined' && game ? _viewP(game) : null) };
 })();

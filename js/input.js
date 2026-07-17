@@ -74,7 +74,7 @@ const Input = (function () {
             wallLine = [wallDrag];
           }
         }
-        if (hit.zone === 'radar' && game.human.radar) { radarDrag = true; _radarJump(); }
+        if (hit.zone === 'radar' && Render.radarOn()) { radarDrag = true; _radarJump(); }
       } else if (ev.button === 2) {
         // right-drag grabs the map — windowed browsers make edge scrolling
         // clumsy (the cursor slides out of the window); a released button
@@ -281,7 +281,7 @@ const Input = (function () {
             tGest.wallDrag = true;
           }
         }
-        if (hit.zone === 'radar' && game.human.radar) {
+        if (hit.zone === 'radar' && Render.radarOn()) {
           radarDrag = true;
           tGest.radar = true;
           _radarJump();
@@ -463,6 +463,13 @@ const Input = (function () {
         ev.preventDefault();   // F1 must not open the browser's help
         return;
       }
+      // seat swap works even paused — it's render-only, and observers pause
+      // exactly to inspect a frozen moment from every commander's side
+      if ((ev.key === 'v' || ev.key === 'V') && game.status === 'playing' &&
+          Render.cycleView(ev.shiftKey ? -1 : 1)) {
+        AUDIO.play('click');
+        return;
+      }
       if (game.paused || game.status !== 'playing') return;
       _hotkeys(ev);
     });
@@ -508,13 +515,16 @@ const Input = (function () {
   }
 
   function _scrollStrip(strip, dir) {
-    const it = Production.items(game.human);
+    // the strips show the OBSERVED commander while spectating/replaying, so
+    // scroll that player's offsets (cosmetic state, excluded from checksums)
+    const p = Render.viewPlayer() || game.human;
+    const it = Production.items(p);
     const list = strip === 'b' ? it.buildings : it.units;
-    const cur = game.human.scroll[strip];
+    const cur = p.scroll[strip];
     const max = Math.max(0, list.length - C.STRIP_VISIBLE);
     const next = clamp(cur + dir, 0, max);
     if (next !== cur) {
-      game.human.scroll[strip] = next;
+      p.scroll[strip] = next;
       AUDIO.play('click');
     }
   }
@@ -620,6 +630,10 @@ const Input = (function () {
     }
     if (hit.zone === 'tab-group') { _recallGroup(hit.n, shift); return; }
     if (hit.zone === 'idle-harv') { _cycleIdleHarv(); return; }
+    if (hit.zone === 'view-cycle') {
+      if (Render.cycleView(hit.dir)) AUDIO.play('click');
+      return;
+    }
     if (hit.zone === 'arrow') { _scrollStrip(hit.strip, hit.dir); return; }
     if (hit.zone === 'btn') {
       if (hit.which === 'repair') { _setMode(mode === 'repair' ? 'normal' : 'repair'); AUDIO.play('click'); }

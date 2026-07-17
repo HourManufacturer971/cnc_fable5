@@ -229,6 +229,11 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   file, or load one from the main menu and watch any battle re-simulate
   move for move. Playback is a spectator's view: the whole map renders
   unfogged, both sides visible, cloaked ambushers included
+- **The observer's booth** — watching an AI battle or a replay, the radar
+  minimap is always on (no Comm Center needed) and you can hop between
+  commanders' seats — press **V** or click the ◀ ▶ chip in the top bar —
+  to see each army's build queues, treasury and power from their side of
+  the war
 - **Save & resume** — pause any single-player battle and hit *Save Battle*;
   the main menu then offers *Resume Battle*, which re-simulates your
   recording at fast-forward (a progress bar counts it up) and hands the
