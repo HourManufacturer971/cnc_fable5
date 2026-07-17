@@ -12,9 +12,10 @@ or publisher.
 
 | | |
 |---|---|
-| ![Title screen](promo/01_title.png) | ![A thriving UDC base](promo/02_udc_base.png) |
-| ![A Serpent Order base](promo/03_serpent_base.png) | ![Armored battle](promo/04_battle.png) |
-| ![Nuclear strike](promo/05_nuke.png) | ![Orbital lance strike](promo/06_lance.png) |
+| ![Title screen](promo/01_title.jpg) | ![A thriving UDC base](promo/02_udc_base.jpg) |
+| ![A Serpent Order war camp](promo/03_serpent_base.jpg) | ![Armored battle](promo/04_battle.jpg) |
+| ![Nuclear strike](promo/05_nuke.jpg) | ![The orbital lance striking a Serpent temple](promo/06_lance.jpg) |
+| ![An armored column rolling through a checkpoint gate](promo/07_checkpoint.jpg) | ![Harvesting blue chrysalite on the frontier](promo/08_frontier.jpg) |
 
 ## Running it
 
