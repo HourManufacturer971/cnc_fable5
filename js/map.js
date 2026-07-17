@@ -555,15 +555,33 @@ const MAPGEN = (function () {
     g.terrain.fill(T_GRASS);
     g.tib.fill(0);
 
-    // --- start positions: human SW-ish, AI NE-ish, jitter ±3 -----------------
-    // (holdout scenario: the human holds the CENTER of the map instead)
+    // --- start positions: fractional anchors scale to any map size -----------
+    // slot 0 = the human's SW corner, slot 1 = the classic NE opponent, slots
+    // 2/3 = NW/SE for the extra multi-AI combatants. Holdout: human CENTER.
     const jit = () => ((rng() * 7) | 0) - 3;
+    const FRAC = [[0.19, 0.78], [0.81, 0.19], [0.19, 0.19], [0.81, 0.78]];
+    const mkStart = k => ({
+      cx: clamp(Math.round(W * FRAC[k][0]) + jit(), 4, W - 5),
+      cy: clamp(Math.round(H * FRAC[k][1]) + jit(), 4, H - 5),
+    });
     const hs = opts.holdout
-      ? { cx: 32 + ((rng() * 5) | 0) - 2, cy: 32 + ((rng() * 5) | 0) - 2 }
-      : { cx: 12 + jit(), cy: 50 + jit() };
-    const as = { cx: 52 + jit(), cy: 12 + jit() };
+      ? { cx: (W >> 1) + ((rng() * 5) | 0) - 2, cy: (H >> 1) + ((rng() * 5) | 0) - 2 }
+      : mkStart(0);
+    const as = mkStart(1);
     g.startPos = { human: hs, ai: as };
     const starts = [hs, as];
+    // side-keyed entries: the human's side at slot 0, the rest of g.sides
+    // (canonical order) fill the remaining corners
+    const sides = (g.sides || ['gdi', 'nod']).slice();
+    g.startPos[g.humanSide || 'gdi'] = hs;
+    let slot = 1;
+    for (const s of sides) {
+      if (s === (g.humanSide || 'gdi')) continue;
+      const pos = slot === 1 ? as : mkStart(slot);
+      g.startPos[s] = pos;
+      if (slot >= 2) starts.push(pos);
+      slot++;
+    }
 
     // --- the landform everything else reads ------------------------------------
     const elev = buildElevation(hseed);
@@ -659,10 +677,13 @@ const MAPGEN = (function () {
     // --- ragged rocky rim ---------------------------------------------------------
     borderFringe(g, rng);
 
-    // --- constraints: buildable start zones + guaranteed corridor --------------
-    clearZone(g, hs.cx, hs.cy, 12);
-    clearZone(g, as.cx, as.cy, 12);
-    carveCorridor(g, hs, as, 1); // 3 cells wide
+    // --- constraints: buildable start zones + guaranteed corridors -------------
+    for (const st of starts) clearZone(g, st.cx, st.cy, 12);
+    for (let i = 0; i < starts.length; i++) {
+      for (let j = i + 1; j < starts.length; j++) {
+        carveCorridor(g, starts[i], starts[j], 1); // 3 cells wide
+      }
+    }
 
     // holdout: ring the player's plateau in rock, leaving three gated passes
     // (one facing the enemy — the carved corridor threads through it)
@@ -712,7 +733,12 @@ const MAPGEN = (function () {
       // so your harvesters work the safe side of your base.
       for (let si = 0; si < starts.length; si++) {
         const st = starts[si];
-        const foe = starts[1 - si];
+        let foe = null, foeD = Infinity;
+        for (let sj = 0; sj < starts.length; sj++) {
+          if (sj === si) continue;
+          const d2 = distC(st.cx, st.cy, starts[sj].cx, starts[sj].cy);
+          if (d2 < foeD) { foeD = d2; foe = starts[sj]; }
+        }
         let dx = st.cx - foe.cx, dy = st.cy - foe.cy;
         const len = Math.sqrt(dx * dx + dy * dy) || 1;
         dx /= len; dy /= len;
@@ -730,10 +756,12 @@ const MAPGEN = (function () {
     for (let i = 0; i < mids; i++) {
       let bestC = null;
       for (let a = 0; a < 40; a++) {
-        const mx = 32 + ((rng() * 25) | 0) - 12;
-        const my = 32 + ((rng() * 25) | 0) - 12;
-        let ok = distC(mx, my, hs.cx, hs.cy) >= 15 &&
-                 distC(mx, my, as.cx, as.cy) >= 15;
+        const mx = (W >> 1) + ((rng() * 25) | 0) - 12;
+        const my = (H >> 1) + ((rng() * 25) | 0) - 12;
+        let ok = true;
+        for (const st of starts) {
+          if (distC(mx, my, st.cx, st.cy) < 15) { ok = false; break; }
+        }
         for (const fc of fieldCenters) {
           if (distC(mx, my, fc.x, fc.y) < 10) { ok = false; break; }
         }
@@ -741,7 +769,7 @@ const MAPGEN = (function () {
         const e = elev[cellIdx(mx, my)];
         if (!bestC || e < bestC.e) bestC = { x: mx, y: my, e };
       }
-      if (!bestC) bestC = { x: 32, y: 32, e: 0 };
+      if (!bestC) bestC = { x: W >> 1, y: H >> 1, e: 0 };
       fieldCenters.push(bestC);
       const count = 50 + ((rng() * 31) | 0); // 50..80
       // the first (most contested) midfield is BLUE chrysalite — worth double
@@ -750,8 +778,12 @@ const MAPGEN = (function () {
     }
 
     // guaranteed tiberium-free route between the bases (mirrors the always-
-    // passable corridor carved above)
-    clearTibCorridor(g, hs, as, 2);
+    // passable corridors carved above)
+    for (let i = 0; i < starts.length; i++) {
+      for (let j = i + 1; j < starts.length; j++) {
+        clearTibCorridor(g, starts[i], starts[j], 2);
+      }
+    }
 
     // --- scrub exact start cells ±2: passable terrain, no tiberium --------------
     for (const st of starts) {
@@ -767,9 +799,12 @@ const MAPGEN = (function () {
     }
 
     // --- validate connectivity; widen the corridor if something snuck in --------
-    if (!connected(g, hs, as)) {
-      carveCorridor(g, hs, as, 2); // 5 wide
-      if (!connected(g, hs, as)) carveCorridor(g, hs, as, 3); // 7 wide, cannot fail
+    for (const st of starts) {
+      if (st === hs) continue;
+      if (!connected(g, hs, st)) {
+        carveCorridor(g, hs, st, 2); // 5 wide
+        if (!connected(g, hs, st)) carveCorridor(g, hs, st, 3); // 7 wide, cannot fail
+      }
     }
 
     // --- final sweep: a blossom heart placed after the reach mask can seal a
@@ -800,7 +835,11 @@ const MAPGEN = (function () {
       const bx = g.decor.bridge ? g.decor.bridge[(g.decor.bridge.length / 2) | 0] : null;
       for (let a = 0; a < 90; a++) {
         const vx = 4 + ((rng() * (W - 16)) | 0), vy = 4 + ((rng() * (H - 15)) | 0);
-        if (distC(vx + 4, vy + 3, hs.cx, hs.cy) < 18 || distC(vx + 4, vy + 3, as.cx, as.cy) < 18) continue;
+        let nearBase = false;
+        for (const st of starts) {
+          if (distC(vx + 4, vy + 3, st.cx, st.cy) < 18) { nearBase = true; break; }
+        }
+        if (nearBase) continue;
         let ok = true;
         for (let dy = 0; dy < 7 && ok; dy++) {
           for (let dx = 0; dx < 8; dx++) {
@@ -810,7 +849,7 @@ const MAPGEN = (function () {
           }
         }
         if (!ok) continue;
-        const score = bx ? -distC(vx + 4, vy + 3, bx.cx, bx.cy) : -Math.abs(vx - 32) - Math.abs(vy - 32);
+        const score = bx ? -distC(vx + 4, vy + 3, bx.cx, bx.cy) : -Math.abs(vx - (W >> 1)) - Math.abs(vy - (H >> 1));
         if (score > bestScore) { bestScore = score; best = { vx, vy }; }
       }
       if (best) {
@@ -867,7 +906,11 @@ const MAPGEN = (function () {
         let best = null, bestScore = Infinity;
         for (let a = 0; a < 120; a++) {
           const dx = 4 + ((rng() * (W - 10)) | 0), dy = 4 + ((rng() * (H - 10)) | 0);
-          if (distC(dx + 1, dy + 1, hs.cx, hs.cy) < 18 || distC(dx + 1, dy + 1, as.cx, as.cy) < 18) continue;
+          let depotNearBase = false;
+          for (const st of starts) {
+            if (distC(dx + 1, dy + 1, st.cx, st.cy) < 18) { depotNearBase = true; break; }
+          }
+          if (depotNearBase) continue;
           if (g.decor.village) {
             const v = g.decor.village.houses[0];
             if (distC(dx, dy, v.cx + 4, v.cy + 3) < 8) continue;

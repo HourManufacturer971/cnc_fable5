@@ -4,16 +4,31 @@
 // at a penalty (sim resolves live collisions); buildings and bad terrain block.
 
 const findPath = (function () {
-  const N = C.MAP_W * C.MAP_H;
-  const gCost = new Float64Array(N);
-  const fCost = new Float64Array(N);
-  const from = new Int32Array(N);
-  const state = new Int32Array(N);   // generation-tagged: gen*2 = open, gen*2+1 = closed
+  let N = C.MAP_W * C.MAP_H;
+  let gCost = new Float64Array(N);
+  let fCost = new Float64Array(N);
+  let from = new Int32Array(N);
+  let state = new Int32Array(N);   // generation-tagged: gen*2 = open, gen*2+1 = closed
   let gen = 0;
 
   // binary min-heap of cell indices keyed by fCost
-  const heap = new Int32Array(N);
+  let heap = new Int32Array(N);
   let heapLen = 0;
+
+  // the LARGE-map skirmish option resizes C.MAP_W/H per game — refit the
+  // scratch arrays when the grid they were sized for changes
+  function _fit() {
+    const n = C.MAP_W * C.MAP_H;
+    if (n === N) return;
+    N = n;
+    gCost = new Float64Array(N);
+    fCost = new Float64Array(N);
+    from = new Int32Array(N);
+    state = new Int32Array(N);
+    heap = new Int32Array(N);
+    gen = 0;
+    heapLen = 0;
+  }
 
   function heapPush(i) {
     let c = heapLen++;
@@ -64,6 +79,7 @@ const findPath = (function () {
 
   // findPath(unit, destCx, destCy, opts?) -> [{cx,cy},...] excluding start; [] if none
   return function findPath(unit, destCx, destCy, opts) {
+    _fit();
     opts = opts || {};
     const maxNodes = opts.maxNodes || 4000;
     const range = opts.range || 0;

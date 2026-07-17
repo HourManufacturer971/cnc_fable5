@@ -891,15 +891,43 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   Restart mission, Abort mission, a `#seedLine` "Map seed N" footer for sharing);
   score screen (+ Rematch in MP). The main menu shows Resume Battle when a compatible
   `hw_save` exists. Esc toggles.
-- **Skirmish setup** (`#skOpts`, skirmish only — missions/MP ignore it): starting funds
-  3000/5000/8000/12000 (applies to BOTH war chests, then the EASY/HARD preset still
-  overrides the AI's), crates ON/OFF (`game._noCrates` gates only the random-drop roll
+- **Skirmish setup** (`#skOpts`, skirmish only — missions/MP ignore it): COMBATANTS
+  (`You vs AI` / `You vs 2 AI` / `You vs 3 AI` free-for-alls, or `Watch 2-4 AI`
+  spectator battles), MAP (Classic 64×64 / Large 88×88), starting funds
+  3000/5000/8000/12000 (applies to EVERY war chest, then the EASY/HARD preset still
+  overrides the AIs'), crates ON/OFF (`game._noCrates` gates only the random-drop roll
   in `_tickCrates`; pickup/expiry sweeps and mission `crates:` events still run),
   superweapons ON/OFF (`game._noSupers` → `Production.prereqOk` refuses any building
   with `superweapon:`, hiding it from the sidebar and the AI's build plan — the AI's
   defense cap then stays at the pre-tech 4), and a numeric seed field (blank = random)
   for refighting a shared battlefield. Choices persist in `hw_sk` (seed excluded);
   all of it rides `opts.sk` into flags + the REPLAY meta so replays/saves reconstruct.
+- **Multi-AI combat model**: `SIDE_ORDER = ['gdi','nod','gd2','nd2']` (core.js);
+  `g.sides` lists the combat sides in play in canonical order and EVERY sim loop over
+  players iterates it (production ticks, depot/repair-pad sweeps, checksum) — classic
+  1v1 games run the identical old sequence. `baseSide(s)` maps the extra slots to the
+  faction whose DATA (build lists, side-locked items, superweapon key, free helipad
+  aircraft, crate tank) and sprites they use. Slots 3/4 wear lazily generated
+  recolors (`SPRITES.ensureSideArt`, end of sprites_buildings.js): exact team-ramp
+  remap (UDC AZURE = steel blue; SERPENT VERDANT = green accents) plus, for VERDANT,
+  an olive tilt on the base faction's many auxiliary greys. Combat hostility was
+  already owner-inequality — FFA needs no rule changes. `AI` keeps one state per AI
+  side (`ST[side]`), initialized in `g.sides` order (deterministic rng), each picking
+  ONE current enemy (nearest living side by start position, re-picked on elimination)
+  that replaces the old hard-wired `g.human` in threat bearings, wave targets and
+  superweapon aim. `MAPGEN` places up to 4 starts at fractional corner anchors
+  (SW/NE/NW/SE), gives each a home crystal field offset away from its nearest rival,
+  and carves passable + tiberium-free corridors between every pair; `g.startPos` is
+  side-keyed with the legacy `.human`/`.ai` aliases intact for missions. Win check:
+  FFA is last-force-standing (playing: you must outlive all; spectate: ends when ≤1
+  side lives, verdict names the winner via `g._winnerSide`). Missions/MP stay 2-side.
+- **Spectator mode** (`g._spectate`): the viewed side is itself an AI army; render
+  reuses the replay's `seeAll`, `NET._rec` swallows live orders (look, don't touch),
+  `AUDIO.eva` goes quiet, hunt/reveal aids stay off. Spectate battles still record,
+  so they can be saved, resumed and replayed like any skirmish.
+- **Large map**: `C.MAP_W/H` set per game in `startGame` (88 for Large, else 64 —
+  missions/MP always classic); `findPath` refits its scratch arrays on size change
+  and the terrain cache keys on seed + size. Minimap/camera/fog scale through C.
 - **Volume sliders** (`volSfx/volMusic/volVoice`, 0–100, 50 = designed level, persisted
   as `hw_vol_*`): value/50 multiplies `AUDIO` MASTER_GAIN (0.35), the MUSIC master
   (0.15), and a dedicated `voxBus` gain the synthesized voice routes through (it
@@ -965,5 +993,6 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 ## Non-goals
 
 FMV, naval, multiplayer beyond 1v1. Keep the door open but do not build. (Campaign
-missions, 1v1 multiplayer, walls, veterancy, difficulty levels, and mid-mission
-save/load have since graduated out of this list and are specified above.)
+missions, 1v1 multiplayer, walls, veterancy, difficulty levels, mid-mission
+save/load, and multi-AI skirmish up to 4 sides have since graduated out of this
+list and are specified above.)

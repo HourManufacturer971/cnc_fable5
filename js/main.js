@@ -206,15 +206,19 @@ const Main = (function () {
         if (s.c) $('skCredits').value = s.c;
         if (s.cr !== undefined) $('skCrates').value = s.cr ? '1' : '0';
         if (s.sw !== undefined) $('skSupers').value = s.sw ? '1' : '0';
+        if (s.p) $('skPlayers').value = s.p;
+        if (s.m) $('skMap').value = s.m;
       }
     } catch (e) {}
-    for (const id of ['skCredits', 'skCrates', 'skSupers']) {
+    for (const id of ['skCredits', 'skCrates', 'skSupers', 'skPlayers', 'skMap']) {
       $(id).addEventListener('change', () => {
         try {
           localStorage.setItem('hw_sk', JSON.stringify({
             c: $('skCredits').value,
             cr: $('skCrates').value === '1',
             sw: $('skSupers').value === '1',
+            p: $('skPlayers').value,
+            m: $('skMap').value,
           }));
         } catch (e) {}
       });
@@ -535,9 +539,18 @@ const Main = (function () {
       credits: +$('skCredits').value || undefined,
       crates: $('skCrates').value === '1',
       supers: $('skSupers').value === '1',
+      players: $('skPlayers').value,          // '1v1'|'1v2'|'1v3'|'w2'|'w3'|'w4'
+      big: $('skMap').value === 'big',
       seed: /^\d+$/.test(seedRaw) ? (+seedRaw >>> 0) : undefined,
     };
   }
+
+  // combatants code -> {total sides, spectate}
+  const SK_PLAYERS = {
+    '1v1': { n: 2, spectate: false }, '1v2': { n: 3, spectate: false },
+    '1v3': { n: 4, spectate: false },
+    w2: { n: 2, spectate: true }, w3: { n: 3, spectate: true }, w4: { n: 4, spectate: true },
+  };
 
   function _showMissions(side) {
     mySide = side;
@@ -632,13 +645,21 @@ const Main = (function () {
     $('mplobby').classList.add('hidden');
 
     const mission = myMission;
-    // skirmish setup options (credits/crates/superweapons/seed) — sim-relevant,
-    // so they ride the replay meta and reconstruct on watch/resume
+    // skirmish setup options (credits/crates/superweapons/combatants/map size/
+    // seed) — sim-relevant, so they ride the replay meta and reconstruct on
+    // watch/resume
     const sk = (!opts.mp && !mission && opts.sk) ? opts.sk : null;
     const seed = opts.seed !== undefined ? opts.seed
       : mission ? mission.seed
       : (sk && sk.seed !== undefined) ? sk.seed : undefined;
-    game = makeGame({ side, seed });
+    // map size is per-game state carried in C: LARGE only via skirmish setup,
+    // every other path (missions, MP, menu battles) plays the classic 64
+    C.MAP_W = C.MAP_H = (sk && sk.big) ? 88 : 64;
+    const pcfg = (sk && SK_PLAYERS[sk.players]) || SK_PLAYERS['1v1'];
+    const sides = SIDE_ORDER.slice(0, pcfg.n);
+    game = makeGame({ side, seed, sides, spectate: pcfg.spectate });
+    // extra combat slots wear recolored faction art — built lazily, once
+    if (SPRITES.ensureSideArt) for (const s of sides) SPRITES.ensureSideArt(s);
     // ai.js reads its difficulty knobs off game.mission — a skirmish
     // difficulty preset rides the same channel (it has no objective/n, so
     // the HUD chip and campaign unlock logic ignore it)
@@ -647,15 +668,18 @@ const Main = (function () {
       if (mission.credits !== undefined) game.human.credits = mission.credits;
     }
     if (sk) {
-      if (sk.credits) { game.human.credits = sk.credits; game.ai.credits = sk.credits; }
+      if (sk.credits) for (const s of game.sides) game.players[s].credits = sk.credits;
       if (sk.crates === false) game._noCrates = true;
       if (sk.supers === false) game._noSupers = true;
     }
     const aiCr = (mission && mission.aiCredits) || (mySkirmish && mySkirmish.aiCredits);
-    if (aiCr !== undefined && aiCr !== null) game.ai.credits = aiCr;
+    if (aiCr !== undefined && aiCr !== null) {
+      for (const s of game.sides) if (game.players[s].isAI) game.players[s].credits = aiCr;
+    }
     // battle-intro title card (render-only; each client labels its own view)
     game.introLabel = opts.mp ? 'MULTIPLAYER BATTLE'
       : mission ? 'OP ' + mission.n + ': ' + mission.title
+      : game._spectate ? 'BATTLE SIMULATION — ' + game.sides.length + ' ARMIES'
       : 'SKIRMISH — ' + ((mySkirmish && mySkirmish.skirmish) || 'NORMAL');
     window.game = game;
     MUSIC.start(side);   // faction playlist: the Serpent Order has its own score
@@ -673,16 +697,24 @@ const Main = (function () {
       _spawnEscort(game, 'gdi', hp, true);
       _spawnEscort(game, 'nod', ap, true);
     } else {
-      // human: MCV + escort (missions may bring their own force instead)
-      if (!mission || !mission.noHumanSpawn) _spawnEscort(game, side, hp, true);
-      // AI: pre-deployed conyard + power plant + escort
-      const fact = makeBuilding('fact', aiSide, ap.cx - 1, ap.cy - 1);
-      fact.buildProgress = 1;
-      addBuilding(fact);
-      const nukeB = makeBuilding('nuke', aiSide, ap.cx - 1, ap.cy + 2);
-      nukeB.buildProgress = 1;
-      addBuilding(nukeB);
-      _spawnEscort(game, aiSide, { cx: ap.cx + 2, cy: ap.cy }, false);
+      // human: MCV + escort (missions may bring their own force instead;
+      // spectate fields no human force at all)
+      if (!game._spectate && (!mission || !mission.noHumanSpawn)) {
+        _spawnEscort(game, side, hp, true);
+      }
+      // every AI combatant: pre-deployed conyard + power plant + escort,
+      // spawned in canonical g.sides order (deterministic entity ids)
+      for (const s of game.sides) {
+        if (s === side && !game._spectate) continue;
+        const sp = game.startPos[s] || ap;
+        const fact = makeBuilding('fact', s, sp.cx - 1, sp.cy - 1);
+        fact.buildProgress = 1;
+        addBuilding(fact);
+        const nukeB = makeBuilding('nuke', s, sp.cx - 1, sp.cy + 2);
+        nukeB.buildProgress = 1;
+        addBuilding(nukeB);
+        _spawnEscort(game, s, { cx: sp.cx + 2, cy: sp.cy }, false);
+      }
     }
 
     // neutral hamlet with its villagers (from map generation, if it found room)
@@ -713,8 +745,7 @@ const Main = (function () {
       mission.setup(game, { hs: hp, as: ap, side, aiSide });
     }
 
-    Production.computePower(game.human);
-    Production.computePower(game.ai);
+    for (const s of game.sides) Production.computePower(game.players[s]);
     AI.init(game);   // in MP this is a symmetric no-op consumer of game.rng
     Input.init(canvas, game);
     Fog.update(game);
@@ -733,7 +764,8 @@ const Main = (function () {
         side,
         mission: mission && mission.n ? mission.n : null,
         skirmish: mySkirmish && mySkirmish.skirmish ? mySkirmish.skirmish : null,
-        sk: sk ? { credits: sk.credits, crates: sk.crates, supers: sk.supers } : null,
+        sk: sk ? { credits: sk.credits, crates: sk.crates, supers: sk.supers,
+                   players: sk.players, big: sk.big } : null,
       });
     }
     game.startTime = Date.now();
@@ -765,8 +797,7 @@ const Main = (function () {
           Input.tick(game);
           NET.inSim = true;
           try {
-            Production.tick(game, game.players.gdi);
-            Production.tick(game, game.players.nod);
+            for (const s of game.sides) Production.tick(game, game.players[s]);
             Sim.tick(game);
             AI.tick(game);
             if (MISSIONS.tick) MISSIONS.tick(game);
@@ -813,8 +844,7 @@ const Main = (function () {
         try {
           // fixed side order (not human-first): both multiplayer clients
           // must mint entity ids in the same sequence
-          Production.tick(game, game.players.gdi);
-          Production.tick(game, game.players.nod);
+          for (const s of game.sides) Production.tick(game, game.players[s]);
           Sim.tick(game);
           if (!NET.active) AI.tick(game);
           // mission script: deterministic (tick + sim state + game.rng), so
@@ -840,6 +870,21 @@ const Main = (function () {
         const b = g.buildings.get(id);
         return b && !DATA.buildings[b.type].wall; // walls alone don't keep you in the game
       });
+    // multi-AI skirmish: free-for-all, last force standing. Spectate ends
+    // when one AI remains (or none); playing, you must outlive them all.
+    if (g._spectate || g.sides.length > 2) {
+      const living = g.sides.filter(s => alive(g.players[s]));
+      if (g._spectate) {
+        if (living.length <= 1) {
+          g._winnerSide = living[0] || null;
+          return endGame(true);
+        }
+        return;
+      }
+      if (!living.includes(g.humanSide)) return endGame(false);
+      if (living.length === 1) return endGame(true);
+      return;
+    }
     const humanAlive = alive(g.human), aiAlive = alive(g.ai);
     if (!humanAlive) return endGame(false);
     if (!aiAlive) return endGame(true);    // wiping the enemy wins ANY mission
@@ -959,8 +1004,15 @@ const Main = (function () {
         rows.push(['Op record' + (newBest ? ' — NEW BEST' : ''), bm + ':' + bs + ' · ' + best.s]);
       }
       const title = $('scoreTitle');
-      title.textContent = won ? 'MISSION ACCOMPLISHED' : 'MISSION FAILED';
-      title.style.color = won ? '#e0b840' : '#e05038';
+      if (g._spectate) {
+        title.textContent = g._winnerSide
+          ? C.SIDE_NAME[g._winnerSide] + ' TAKES THE FIELD'
+          : 'MUTUAL ANNIHILATION';
+        title.style.color = '#e0b840';
+      } else {
+        title.textContent = won ? 'MISSION ACCOMPLISHED' : 'MISSION FAILED';
+        title.style.color = won ? '#e0b840' : '#e05038';
+      }
       $('scoreLines').innerHTML = rows.map(r =>
         `<div class="row"><span>${r[0]}</span><span class="val">${r[1]}</span></div>`).join('');
       // replay controls only when there is a finished recording to show

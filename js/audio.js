@@ -721,6 +721,9 @@ const AUDIO = (function () {
   }
 
   function eva(key) {
+    // AI-vs-AI spectate: the announcer would narrate a fight that isn't the
+    // player's — banner spam for every skirmish between the bots. Quiet her.
+    if (typeof game !== 'undefined' && game && game._spectate) return;
     const text = (typeof DATA !== 'undefined' && DATA && DATA.eva) ? DATA.eva[key] : null;
     if (!text) return;
     evaText(text);

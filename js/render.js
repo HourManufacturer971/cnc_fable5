@@ -31,6 +31,7 @@ const Render = (function () {
 
   function _computeRevealAll(g) {
     if (!g.ai || (typeof NET !== 'undefined' && NET.active)) return false;
+    if (g.sides && g.sides.length > 2) return false;   // classic 1v1 rule only
     for (const id of g.ai.buildingIds) {
       const b = g.buildings.get(id);
       if (b && !DATA.buildings[b.type].wall) return false;
@@ -242,7 +243,7 @@ const Render = (function () {
   //   entity blips  — drawn straight to the frame EVERY frame from live
   //                   world coordinates, so movement is real-time and smooth
 
-  const OWNER_COLOR = { gdi: '#ffd23c', nod: '#ff2418', mut: '#4ce03c', civ: '#e8e6da' };
+  const OWNER_COLOR = { gdi: '#ffd23c', nod: '#ff2418', gd2: '#4c8ce0', nd2: '#46c94e', mut: '#4ce03c', civ: '#e8e6da' };
   const MMC = C.MM_S / C.MAP_W;   // minimap px per cell
   let minimapBase = null;
 
@@ -310,6 +311,7 @@ const Render = (function () {
     // never against a human opponent: in MP g.ai is the remote player and
     // revealing their last hidden buildings through shroud would be a fog cheat
     if (typeof NET !== 'undefined' && NET.active) return 0;
+    if (g.sides && g.sides.length > 2) return 0;   // classic 1v1 aid only
     let bld = 0;
     for (const b of g.buildings.values()) {
       if (b.owner === g.ai.side && !DATA.buildings[b.type].wall) {
@@ -1103,7 +1105,8 @@ const Render = (function () {
   // ---- viewport ------------------------------------------------------------------------------
 
   function _drawViewport(g) {
-    if (!terrainCache || terrainCacheSeed !== g.seed) _buildTerrainCache(g);
+    if (!terrainCache || terrainCacheSeed !== g.seed ||
+        terrainCache.width !== C.MAP_W * C.CELL * Z) _buildTerrainCache(g);
 
     if (g.shake > 0 && g.tick !== shownTick) {
       shakeX = ((Math.random() * 2 - 1) * Math.min(6, g.shake / 3)) | 0;
@@ -2186,7 +2189,7 @@ const Render = (function () {
       _menuBackdrop();
       return;
     }
-    seeAll = typeof REPLAY !== 'undefined' && REPLAY.playing;
+    seeAll = (typeof REPLAY !== 'undefined' && REPLAY.playing) || !!g._spectate;
     revealAll = _computeRevealAll(g);
     _drawViewport(g);
     _drawTabBar(g);

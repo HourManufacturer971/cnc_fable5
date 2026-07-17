@@ -1376,7 +1376,7 @@ function _tickGarrisonFire(b) {
 // worth holding from the first minute (harvest income still respects caps)
 function _tickDepots(g) {
   if (g.tick % 150 !== 0) return;
-  for (const side of ['gdi', 'nod']) {
+  for (const side of g.sides) {
     const p = g.players[side];
     for (const id of p.buildingIds) {
       const b = g.buildings.get(id);
@@ -1475,7 +1475,7 @@ function _crateEffect(g, c, u) {
     }
   } else if (roll < 0.95) {
     // a mothballed tank, if there's room beside the crate
-    const key = u.owner === 'gdi' ? 'mtnk' : 'ltnk';
+    const key = baseSide(u.owner) === 'gdi' ? 'mtnk' : 'ltnk';
     let placed = false;
     for (let r = 1; r <= 2 && !placed; r++) {
       for (let dy = -r; dy <= r && !placed; dy++) {
@@ -1519,7 +1519,7 @@ function _onRepairPad(g, u) {
 // heal 2 hp/tick at the same credits-per-hp rate buildings pay. One patient
 // per pad per tick, scanned in deterministic row-major order.
 function _tickRepairPads(g) {
-  for (const side of ['gdi', 'nod']) {
+  for (const side of g.sides) {
     const p = g.players[side];
     for (const id of p.buildingIds) {
       const b = g.buildings.get(id);
@@ -1556,7 +1556,7 @@ function _tickCrates(g) {
       const o = g.occ[cellIdx(c.cx, c.cy)];
       if (!o) continue;
       const u = g.units.get(o);
-      if (!u || u._dead || (u.owner !== 'gdi' && u.owner !== 'nod')) continue;
+      if (!u || u._dead || !g.sides.includes(u.owner)) continue;
       crates.splice(i, 1);
       _crateEffect(g, c, u);
     }
@@ -1659,7 +1659,7 @@ function killEntity(ent, attacker) {
   // villagers). Promotion feedback is per-client cosmetic.
   if (attacker && attacker.kind === 'unit' && !attacker._dead &&
       attacker.owner !== ent.owner && ent.owner !== 'civ' &&
-      (attacker.owner === 'gdi' || attacker.owner === 'nod')) {
+      g.sides.includes(attacker.owner)) {
     const before = vetLevel(attacker);
     attacker.kills = (attacker.kills || 0) + 1;
     if (vetLevel(attacker) > before && attacker.owner === g.humanSide) {

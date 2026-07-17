@@ -450,7 +450,7 @@ const NET = (function () {
     for (const b of g.buildings.values()) {
       mix(b.id); mix(Math.round(b.hp)); mix(Math.round(b.buildProgress * 64));
     }
-    for (const s of ['gdi', 'nod']) {
+    for (const s of g.sides) {
       const p = g.players[s];
       mix(Math.round(p.credits * 16)); mix(p.super.timer | 0);
     }
@@ -555,6 +555,7 @@ const NET = (function () {
     if (active || inSim || applying) return false;
     if (typeof REPLAY === 'undefined' || typeof game === 'undefined' || !game) return false;
     if (REPLAY.playing) return true;
+    if (game._spectate) return true;   // AI-vs-AI: look, don't touch
     if (REPLAY.recording) REPLAY.logCmd(c);
     return false;
   }

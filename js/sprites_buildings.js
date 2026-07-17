@@ -2192,3 +2192,109 @@
     SPRITES.buildings[key] = { civ: entry, gdi: entry, nod: entry };
   }
 })();
+
+// ==== EXTRA COMBAT SIDES: recolored faction art ==================================
+// The multi-AI skirmish fields up to four armies. Slots 3 and 4 ('gd2'/'nd2')
+// play by their base faction's rules and art, with the TEAM COLORS remapped so
+// the four forces read apart at a glance: UDC AZURE swaps the desert gold for
+// steel blue, SERPENT VERDANT swaps the crimson accents (and cools the greys)
+// toward toxin green. Generated lazily on the first game that needs them —
+// classic 1v1 pays nothing.
+(function () {
+  if (typeof SPRITES === 'undefined' || typeof document === 'undefined') return;
+
+  const REMAP = {
+    gd2: {
+      '#c8a84c': '#6088c0', '#8a7230': '#40608e', '#e8d088': '#9cbce4', '#5c4c20': '#2a3c5e',
+    },
+    nd2: {
+      '#8a8a94': '#84946e', '#54545e': '#4e5e40', '#b8b8c2': '#b2c298', '#36363e': '#323e26',
+      '#b02818': '#1e8c2e', '#e05038': '#46c94e',
+    },
+  };
+  // Serpent art leans on many auxiliary gunmetal greys beyond the 4-color
+  // ramp — VERDANT also tilts every near-grey pixel toward olive so the two
+  // serpent armies never read as the same force
+  const GREY_TILT = { nd2: [-6, 9, -12] };
+
+  function _lut(map) {
+    const out = new Map();
+    for (const [from, to] of Object.entries(map)) {
+      const f = parseInt(from.slice(1), 16);
+      const t = parseInt(to.slice(1), 16);
+      out.set(f, [(t >> 16) & 255, (t >> 8) & 255, t & 255]);
+    }
+    return out;
+  }
+
+  function _recolorCanvas(src, lut, tilt) {
+    const c = document.createElement('canvas');
+    c.width = src.width; c.height = src.height;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(src, 0, 0);
+    const img = ctx.getImageData(0, 0, c.width, c.height);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] === 0) continue;
+      const r = d[i], gg = d[i + 1], bb = d[i + 2];
+      const m = lut.get((r << 16) | (gg << 8) | bb);
+      if (m) { d[i] = m[0]; d[i + 1] = m[1]; d[i + 2] = m[2]; continue; }
+      if (tilt) {
+        const mx = Math.max(r, gg, bb), mn = Math.min(r, gg, bb);
+        if (mx - mn < 14 && mx > 40 && mx < 210) {   // a mid-tone grey
+          d[i] = Math.max(0, Math.min(255, r + tilt[0]));
+          d[i + 1] = Math.max(0, Math.min(255, gg + tilt[1]));
+          d[i + 2] = Math.max(0, Math.min(255, bb + tilt[2]));
+        }
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return c;
+  }
+
+  // deep-walk a sprite entry ({normal:[canvas..], turret:[..], yOff, ...}),
+  // cloning canvases through the color remap and passing scalars through
+  function _recolorEntry(v, lut, seen, tilt) {
+    if (v === null || typeof v !== 'object') return v;
+    if (seen.has(v)) return seen.get(v);
+    let out;
+    if (typeof HTMLCanvasElement !== 'undefined' && v instanceof HTMLCanvasElement) {
+      out = _recolorCanvas(v, lut, tilt);
+    } else if (Array.isArray(v)) {
+      out = [];
+      seen.set(v, out);
+      for (const e of v) out.push(_recolorEntry(e, lut, seen, tilt));
+      return out;
+    } else {
+      out = {};
+      seen.set(v, out);
+      for (const k of Object.keys(v)) out[k] = _recolorEntry(v[k], lut, seen, tilt);
+      return out;
+    }
+    seen.set(v, out);
+    return out;
+  }
+
+  SPRITES.ensureSideArt = function (side) {
+    const base = baseSide(side);
+    if (side === base || !REMAP[side]) return;
+    const lut = _lut(REMAP[side]);
+    const tilt = GREY_TILT[side] || null;
+    const seen = new Map();
+    for (const col of [SPRITES.units, SPRITES.infantry, SPRITES.buildings]) {
+      if (!col) continue;
+      for (const key of Object.keys(col)) {
+        const entry = col[key];
+        if (!entry || entry[side] || !entry[base]) continue;
+        // faction-neutral art (walls, gates, houses share one entry across
+        // sides) needs no recolor — alias it instead of cloning
+        if (entry.gdi && entry.gdi === entry.nod) {
+          entry[side] = entry[base];
+        } else {
+          entry[side] = _recolorEntry(entry[base], lut, seen, tilt);
+        }
+      }
+    }
+  };
+})();

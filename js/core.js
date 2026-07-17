@@ -40,7 +40,7 @@ const C = {
   SCROLL_SPEED: 12,        // WORLD px per frame while scrolling
   // display names for the internal side keys (the keys themselves are legacy
   // identifiers baked into save-free game state; only the labels are shown)
-  SIDE_NAME: { gdi: 'UDC', nod: 'SERPENT' },
+  SIDE_NAME: { gdi: 'UDC', nod: 'SERPENT', gd2: 'UDC AZURE', nd2: 'SERPENT VERDANT' },
 };
 
 // Widen the fixed 16:10 layout to a device's real aspect (phones in landscape
@@ -234,6 +234,13 @@ const EV = {
 
 // ---- state factories -------------------------------------------------------
 
+// combat sides in canonical order. Slots 3 and 4 (multi-AI skirmish) reuse
+// the two factions' rules and art with remapped team colors; baseSide()
+// resolves any side to the faction whose DATA (build lists, side-locked
+// items) and sprites it plays with.
+const SIDE_ORDER = ['gdi', 'nod', 'gd2', 'nd2'];
+function baseSide(s) { return s === 'gd2' ? 'gdi' : s === 'nd2' ? 'nod' : s; }
+
 function makePlayer(side, isAI) {
   return {
     side, isAI,
@@ -277,6 +284,10 @@ function makeGame(opts) {
     // production, hostile to everyone, never checked for win/lose.
     // civ is the neutral village: bystanders no one auto-targets.
     players: { gdi: makePlayer('gdi', false), nod: makePlayer('nod', true), mut: makePlayer('mut', true), civ: makePlayer('civ', true) },
+    // COMBAT sides in play, canonical order (determinism: every sim loop
+    // over players iterates this). 1v1 default; multi-AI skirmish adds
+    // gd2/nd2 slots.
+    sides: (opts && opts.sides) ? opts.sides.slice() : ['gdi', 'nod'],
     humanSide: (opts && opts.side) || 'gdi',
     human: null, ai: null,
     camera: { x: 0, y: 0 },
@@ -292,9 +303,17 @@ function makeGame(opts) {
     evaCooldowns: {},
     startTime: 0, // wall ms, set by main
   };
+  // extra combat slots get their own player objects
+  for (const s of g.sides) {
+    if (!g.players[s]) g.players[s] = makePlayer(s, true);
+  }
+  g._spectate = !!(opts && opts.spectate);
   g.human = g.players[g.humanSide];
+  // primary enemy alias — missions and 1v1 logic lean on it; in multi-AI
+  // games it is simply the first hostile side
   g.ai = g.players[enemyOf(g.humanSide)];
-  g.ai.isAI = true; g.human.isAI = false;
+  for (const s of g.sides) g.players[s].isAI = true;
+  g.human.isAI = g._spectate;   // spectate: the viewed side fights itself
   return g;
 }
 

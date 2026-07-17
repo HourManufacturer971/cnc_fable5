@@ -235,10 +235,15 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   controls back at the exact moment you left — same units, same credits,
   same fog. A resumed battle keeps recording, so you can save again or
   watch the whole thing later
-- **Skirmish setup** — dial a skirmish in before you launch: starting funds
-  (3000–12000), crates on/off, superweapons on/off, and a battlefield seed
-  you can type in to refight a favorite map — the pause menu shows the
+- **Skirmish setup** — dial a skirmish in before you launch: combatants
+  (classic duel, free-for-alls against 2 or 3 AIs, or sit back and **watch
+  2–4 AI armies fight each other**), map size (classic or large), starting
+  funds (3000–12000), crates on/off, superweapons on/off, and a battlefield
+  seed you can type in to refight a favorite map — the pause menu shows the
   current seed so you can share it
+- **Four armies on one field** — the extra combatants fly recolored
+  faction banners: UDC Azure in steel blue and the Serpent Verdant in
+  toxin green, so a four-way brawl reads at a glance
 - **Campaign records** — each operation remembers your fastest win and best
   score, shown on the operations list and stamped NEW BEST on the tally
 - **Multiplayer rematch** — the connection stays up at the score screen:

@@ -8,23 +8,56 @@
 // point before launching, on a sustained 2.5-4 minute cadence that scales up.
 
 const AI = (function () {
-  let S = null;
+  let ST = null;   // per-AI-side state, keyed by side (multi-AI skirmish)
 
   // mission difficulty knobs (missions.js): cadence multiplier + wave-size cap
   function _calm(g) { return (g.mission && g.mission.aiCalm) || 1; }
   function _waveCap(g) { return (g.mission && g.mission.aiWaveCap) || 9; }
 
   function init(g) {
-    S = {
-      wave: 0,
-      // first strike ~3-4 min at calm 1, scaled by the mission's cadence
-      nextWaveAt: Math.round((2700 + ((g.rng() * 900) | 0)) * _calm(g)),
-      staging: null,        // {ids:[], target:id, launchAt, cell:{cx,cy}}
-      approachAng: 0,       // this wave's attack bearing offset (radians)
-      savingFor: null,      // building key the treasury is reserved for
-      brokeSince: -1,
-      builtHpad: false,
-    };
+    // one state per AI-driven combat side, created in g.sides order so the
+    // rng draws stay deterministic (and identical to the old 1v1 sequence)
+    ST = {};
+    for (const side of g.sides) {
+      if (!g.players[side].isAI) continue;
+      ST[side] = {
+        wave: 0,
+        // first strike ~3-4 min at calm 1, scaled by the mission's cadence
+        nextWaveAt: Math.round((2700 + ((g.rng() * 900) | 0)) * _calm(g)),
+        staging: null,        // {ids:[], target:id, launchAt, cell:{cx,cy}}
+        approachAng: 0,       // this wave's attack bearing offset (radians)
+        savingFor: null,      // building key the treasury is reserved for
+        brokeSince: -1,
+        builtHpad: false,
+        enemy: null,          // current target side (re-picked on elimination)
+      };
+    }
+  }
+
+  // ---- enemy selection (FFA) -------------------------------------------------
+  function _sideAlive(g, s) {
+    const pp = g.players[s];
+    return pp.unitIds.length > 0 || pp.buildingIds.some(id => {
+      const b = g.buildings.get(id);
+      return b && !DATA.buildings[b.type].wall;
+    });
+  }
+
+  // each AI fights ONE enemy at a time: the nearest living side by start
+  // position, kept until eliminated (deterministic — sim state only)
+  function _pickEnemy(g, side, st) {
+    if (st.enemy && st.enemy !== side && g.sides.includes(st.enemy) &&
+        _sideAlive(g, st.enemy)) return st.enemy;
+    const my = g.startPos[side] || g.startPos.ai;
+    let best = null, bestD = Infinity;
+    for (const s of g.sides) {
+      if (s === side || !_sideAlive(g, s)) continue;
+      const sp = g.startPos[s] || g.startPos.human;
+      const d = (sp.cx - my.cx) ** 2 + (sp.cy - my.cy) ** 2;
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    st.enemy = best;
+    return best;
   }
 
   // ---- helpers -----------------------------------------------------------------
@@ -71,19 +104,20 @@ const AI = (function () {
     return out;
   }
 
-  // unit vector from the AI base toward the human base
-  function _threatDir(g, p) {
+  // unit vector from this AI's base toward its current enemy's base
+  function _threatDir(g, p, st) {
     const cyd = _conyard(g, p);
-    const from = cyd ? { cx: cyd.cx + 1, cy: cyd.cy + 1 } : g.startPos.ai;
-    const to = g.startPos.human;
+    const from = cyd ? { cx: cyd.cx + 1, cy: cyd.cy + 1 }
+      : (g.startPos[p.side] || g.startPos.ai);
+    const to = (st && st.enemy && g.startPos[st.enemy]) || g.startPos.human;
     const dx = to.cx - from.cx, dy = to.cy - from.cy;
     const len = Math.max(1, Math.sqrt(dx * dx + dy * dy));
     return { x: dx / len, y: dy / len, from };
   }
 
   // direction toward the richest nearby tiberium
-  function _tibDir(g, p) {
-    const t = _threatDir(g, p);
+  function _tibDir(g, p, st) {
+    const t = _threatDir(g, p, st);
     let sx = 0, sy = 0, n = 0;
     for (let i = 0; i < g.tib.length; i++) {
       if (g.tib[i] <= 0) continue;
@@ -132,12 +166,12 @@ const AI = (function () {
   }
 
   // pick the best cell for `key` around the conyard, by role
-  function _findSpot(g, p, key) {
+  function _findSpot(g, p, st, key) {
     const cyd = _conyard(g, p);
     if (!cyd) return null;
     const role = ROLE[key] || 'core';
-    const threat = _threatDir(g, p);
-    const tib = _tibDir(g, p);
+    const threat = _threatDir(g, p, st);
+    const tib = _tibDir(g, p, st);
     const defs = role === 'defense' ? _defenseSpots(g, p) : null;
     const d = DATA.buildings[key];
     const acx = cyd.cx + 1, acy = cyd.cy + 1;
@@ -181,13 +215,13 @@ const AI = (function () {
   };
 
   // Strict-priority build goals. The first applicable goal either starts
-  // (credits above its bar) or becomes the SAVINGS TARGET (S.savingFor): the
+  // (credits above its bar) or becomes the SAVINGS TARGET (st.savingFor): the
   // unit lines then stop draining credits until it is funded. Without this
   // the three unit lines pin the treasury near zero forever and the base
   // stops developing after the opening build-out.
-  function _nextBuilding(g, p) {
-    S.savingFor = null;
-    const side = p.side;
+  function _nextBuilding(g, p, st) {
+    st.savingFor = null;
+    const side = baseSide(p.side);
     const inf = side === 'gdi' ? 'pyle' : 'hand';
     const veh = side === 'gdi' ? 'weap' : 'afld';
     const projectedPower = p.power.out - p.power.drain;
@@ -197,13 +231,13 @@ const AI = (function () {
       // (storage 1000) must still be able to fund a 1000+ goal
       bar = Math.min(bar, Math.max(300, p.storage - 200));
       if (p.credits > bar) return key;
-      S.savingFor = key;
+      st.savingFor = key;
       return null;
     };
 
     // a key that failed placement recently is skipped so the goals below it
     // still run — retried when its no-spot cooldown expires
-    const blocked = key => S.noSpot && S.noSpot[key] > g.tick;
+    const blocked = key => st.noSpot && st.noSpot[key] > g.tick;
 
     if (projectedPower < 30) {
       if (Production.prereqOk(p, 'nuk2') && p.credits > 800 && !blocked('nuk2')) return 'nuk2';
@@ -224,7 +258,7 @@ const AI = (function () {
     // nuke/lance out of the build order forever (it used to).
     const tech = side === 'gdi' ? 'eye' : 'tmpl';
     const techDone = _planned(g, p, tech) >= 1;
-    const defWant = Math.min(2 + Math.floor(S.wave / 2) + Math.floor(g.tick / 4500), 9);
+    const defWant = Math.min(2 + Math.floor(st.wave / 2) + Math.floor(g.tick / 4500), 9);
     const defHave = _defenseSpots(g, p).length +
       (p.queues.building && ROLE[p.queues.building.key] === 'defense' ? 1 : 0) +
       (p.ready.building && ROLE[p.ready.building] === 'defense' ? 1 : 0);
@@ -235,7 +269,7 @@ const AI = (function () {
 
     if (side === 'gdi' && _planned(g, p, 'fix') < 1 &&
         Production.prereqOk(p, 'fix') && !blocked('fix')) return pick('fix', 1500);
-    if (!S.builtHpad && Production.prereqOk(p, 'hpad') && !blocked('hpad')) return pick('hpad', 2000);
+    if (!st.builtHpad && Production.prereqOk(p, 'hpad') && !blocked('hpad')) return pick('hpad', 2000);
     // late-game economy keeps pace with the growing army bill
     if (_planned(g, p, 'proc') < 3 && g.tick > 5000 && !blocked('proc')) return pick('proc', 1500);
     if (!techDone && Production.prereqOk(p, tech) && g.tick > 6000 && !blocked(tech)) return pick(tech, 2200);
@@ -265,7 +299,7 @@ const AI = (function () {
       if (procs > 0 && harvs < Math.min(6, procs * 2 + 1) && p.credits > 900 &&
           Production.prereqOk(p, 'harv')) return 'harv';
     }
-    const opts = WEIGHTS[p.side].filter(([k]) => DATA.units[k].factory === kind && Production.prereqOk(p, k));
+    const opts = WEIGHTS[baseSide(p.side)].filter(([k]) => DATA.units[k].factory === kind && Production.prereqOk(p, k));
     if (!opts.length) return null;
     let total = 0;
     for (const [, w] of opts) total += w;
@@ -279,10 +313,10 @@ const AI = (function () {
 
   // ---- targeting ---------------------------------------------------------------------
 
-  function _denseHumanTarget(g) {
+  function _denseEnemyTarget(g, ep) {
     let best = null, bestScore = -1;
     const hb = [];
-    for (const id of g.human.buildingIds) {
+    for (const id of ep.buildingIds) {
       const b = g.buildings.get(id);
       if (b && !DATA.buildings[b.type].wall) hb.push(b);
     }
@@ -296,16 +330,16 @@ const AI = (function () {
     return best;
   }
 
-  function _nearestHumanTarget(g, from) {
+  function _nearestEnemyTarget(g, ep, from) {
     let best = null, bestD = Infinity;
-    for (const id of g.human.buildingIds) {
+    for (const id of ep.buildingIds) {
       const b = g.buildings.get(id);
       if (!b || DATA.buildings[b.type].wall) continue;
       const d = dist(from.x, from.y, (b.cx + b.w / 2) * C.CELL, (b.cy + b.h / 2) * C.CELL);
       if (d < bestD) { bestD = d; best = b; }
     }
     if (!best) {
-      for (const id of g.human.unitIds) {
+      for (const id of ep.unitIds) {
         const u = g.units.get(id);
         if (!u) continue;
         const d = dist(from.x, from.y, u.x, u.y);
@@ -323,12 +357,12 @@ const AI = (function () {
   // marching down the same lane every time
   const APPROACHES = [0, -0.55, 0.55, -1.1, 1.1, -1.7, 1.7];
 
-  function _stageCell(g, p) {
-    const t = _threatDir(g, p);
-    const hs = g.startPos.human;
+  function _stageCell(g, p, st) {
+    const t = _threatDir(g, p, st);
+    const hs = (st.enemy && g.startPos[st.enemy]) || g.startPos.human;
     // rotate the (target -> us) bearing by this wave's approach angle and
     // stage 13-18 cells out from the target on that bearing
-    const back = Math.atan2(t.from.cy - hs.cy, t.from.cx - hs.cx) + (S.approachAng || 0);
+    const back = Math.atan2(t.from.cy - hs.cy, t.from.cx - hs.cx) + (st.approachAng || 0);
     for (let r = 13; r <= 18; r++) {
       const cx = Math.round(hs.cx + Math.cos(back) * r);
       const cy = Math.round(hs.cy + Math.sin(back) * r);
@@ -353,29 +387,30 @@ const AI = (function () {
     return t.from;
   }
 
-  function _waves(g, p) {
+  function _waves(g, p, st, ep) {
     const cyd = _conyard(g, p);
-    const baseX = cyd ? (cyd.cx + 1) * C.CELL : cellCenterX(g.startPos.ai.cx);
-    const baseY = cyd ? (cyd.cy + 1) * C.CELL : cellCenterY(g.startPos.ai.cy);
+    const home = g.startPos[p.side] || g.startPos.ai;
+    const baseX = cyd ? (cyd.cx + 1) * C.CELL : cellCenterX(home.cx);
+    const baseY = cyd ? (cyd.cy + 1) * C.CELL : cellCenterY(home.cy);
 
-    if (S.staging) {
-      const alive = S.staging.ids.map(id => g.units.get(id)).filter(Boolean);
-      if (!alive.length) { S.staging = null; return; }
-      const sc = S.staging.cell;
+    if (st.staging) {
+      const alive = st.staging.ids.map(id => g.units.get(id)).filter(Boolean);
+      if (!alive.length) { st.staging = null; return; }
+      const sc = st.staging.cell;
       const near = alive.filter(u =>
         dist(u.x, u.y, cellCenterX(sc.cx), cellCenterY(sc.cy)) < 6 * C.CELL).length;
 
-      if (S.staging.phase === 'gather') {
+      if (st.staging.phase === 'gather') {
         // gathered: don't attack yet — advance AS A GROUP to a forward point
         // just outside the enemy base, so the strike lands together instead
         // of trickling in over a minute of travel (the old dribble problem)
-        if (near >= alive.length * 0.7 || g.tick >= S.staging.launchAt) {
-          let target = getEnt(S.staging.target);
-          if (!target || target._dead) target = _nearestHumanTarget(g, { x: baseX, y: baseY });
-          if (!target) { S.staging = null; return; }
-          S.staging.target = target.id;
-          const hs = g.startPos.human;
-          const back = Math.atan2(baseY / C.CELL - hs.cy, baseX / C.CELL - hs.cx) + S.approachAng;
+        if (near >= alive.length * 0.7 || g.tick >= st.staging.launchAt) {
+          let target = getEnt(st.staging.target);
+          if (!target || target._dead) target = _nearestEnemyTarget(g, ep, { x: baseX, y: baseY });
+          if (!target) { st.staging = null; return; }
+          st.staging.target = target.id;
+          const hs = (st.enemy && g.startPos[st.enemy]) || g.startPos.human;
+          const back = Math.atan2(baseY / C.CELL - hs.cy, baseX / C.CELL - hs.cx) + st.approachAng;
           let fwd = null;
           for (let r = 7; r <= 11 && !fwd; r++) {
             const cx = Math.round(worldToCell(_entXSafe(target)) + Math.cos(back) * r);
@@ -395,9 +430,9 @@ const AI = (function () {
             orderMove(u, clamp(fwd.cx + dx, 0, C.MAP_W - 1), clamp(fwd.cy + dy, 0, C.MAP_H - 1));
             i++;
           }
-          S.staging.phase = 'strike';
-          S.staging.cell = fwd;
-          S.staging.launchAt = g.tick + 380;
+          st.staging.phase = 'strike';
+          st.staging.cell = fwd;
+          st.staging.launchAt = g.tick + 380;
         }
         return;
       }
@@ -406,27 +441,27 @@ const AI = (function () {
       // the leash runs out), everyone sweeps in as an ATTACK-MOVE onto the
       // target — the wave fights through whatever stands in the way instead
       // of tunnel-visioning one building while turrets shoot it in the back
-      if (near >= alive.length * 0.6 || g.tick >= S.staging.launchAt) {
-        let target = getEnt(S.staging.target);
-        if (!target || target._dead) target = _nearestHumanTarget(g, { x: baseX, y: baseY });
+      if (near >= alive.length * 0.6 || g.tick >= st.staging.launchAt) {
+        let target = getEnt(st.staging.target);
+        if (!target || target._dead) target = _nearestEnemyTarget(g, ep, { x: baseX, y: baseY });
         if (target) {
           const tcx = worldToCell(_entXSafe(target)), tcy = worldToCell(_entYSafe(target));
           for (const u of alive) orderAttackMove(u, tcx, tcy);
         }
-        S.staging = null;
+        st.staging = null;
         // 2-3.2 min between launches at calm 1
-        S.nextWaveAt = g.tick + Math.round((1800 + ((g.rng() * 1100) | 0)) * _calm(g));
+        st.nextWaveAt = g.tick + Math.round((1800 + ((g.rng() * 1100) | 0)) * _calm(g));
       }
       return;
     }
 
-    if (g.tick < S.nextWaveAt) return;
+    if (g.tick < st.nextWaveAt) return;
     // gather the strike force: everything idle beyond a small home garrison
     const idle = _military(g, p).filter(u => u.state === 'idle' && !DATA.units[u.type].air);
     const garrison = 2;
-    const need = Math.min(3 + S.wave, _waveCap(g));
+    const need = Math.min(3 + st.wave, _waveCap(g));
     if (idle.length - garrison < need) {
-      S.nextWaveAt = g.tick + 300; // keep producing, check again shortly
+      st.nextWaveAt = g.tick + 300; // keep producing, check again shortly
       return;
     }
     // garrison keeps the units closest to home. Missions with an explicit
@@ -440,17 +475,17 @@ const AI = (function () {
     const force = idle.slice(0, launch);
     // pick this wave's approach: the first strikes come in near-frontal, the
     // repertoire widens to full flanking sweeps as the war grinds on
-    S.approachAng = APPROACHES[(g.rng() * Math.min(APPROACHES.length, 3 + S.wave)) | 0];
-    const cell = _stageCell(g, p);
+    st.approachAng = APPROACHES[(g.rng() * Math.min(APPROACHES.length, 3 + st.wave)) | 0];
+    const cell = _stageCell(g, p, st);
     let i = 0;
     for (const u of force) {
       const dx = (i % 3) - 1, dy = ((i / 3) | 0) % 3 - 1;
       orderMove(u, clamp(cell.cx + dx, 0, C.MAP_W - 1), clamp(cell.cy + dy, 0, C.MAP_H - 1));
       i++;
     }
-    const target = _nearestHumanTarget(g, { x: baseX, y: baseY });
-    S.wave++;
-    S.staging = {
+    const target = _nearestEnemyTarget(g, ep, { x: baseX, y: baseY });
+    st.wave++;
+    st.staging = {
       ids: force.map(u => u.id),
       target: target ? target.id : 0,
       cell,
@@ -469,29 +504,46 @@ const AI = (function () {
   // ---- main tick -------------------------------------------------------------------------
 
   function tick(g) {
-    if (!S) init(g);
-    const p = g.ai;
+    if (!ST) init(g);
+    // every AI-driven side takes its turn, in canonical g.sides order —
+    // in classic 1v1 that is exactly the old single opponent
+    for (const side of g.sides) {
+      const st = ST[side];
+      if (!st) continue;
+      const p = g.players[side];
+      if (!p.isAI) continue;
+      _tickOne(g, p, st);
+    }
+  }
+
+  function _tickOne(g, p, st) {
+    const enemySide = _pickEnemy(g, p.side, st);
+    if (!enemySide) return;
+    const ep = g.players[enemySide];
 
     // defense reaction: intercept intruders near the base (every 15 ticks)
     if (g.tick % 15 === 3) {
       let intruder = null;
-      for (const id of g.human.unitIds) {
-        const u = g.units.get(id);
-        if (!u || u.cloaked) continue;
-        for (const bid of p.buildingIds) {
-          const b = g.buildings.get(bid);
-          if (b && !DATA.buildings[b.type].wall &&
-              dist(u.x, u.y, (b.cx + b.w / 2) * C.CELL, (b.cy + b.h / 2) * C.CELL) < 10 * C.CELL) {
-            intruder = u;
-            break;
+      outer:
+      for (const s of g.sides) {
+        if (s === p.side) continue;
+        for (const id of g.players[s].unitIds) {
+          const u = g.units.get(id);
+          if (!u || u.cloaked) continue;
+          for (const bid of p.buildingIds) {
+            const b = g.buildings.get(bid);
+            if (b && !DATA.buildings[b.type].wall &&
+                dist(u.x, u.y, (b.cx + b.w / 2) * C.CELL, (b.cy + b.h / 2) * C.CELL) < 10 * C.CELL) {
+              intruder = u;
+              break outer;
+            }
           }
         }
-        if (intruder) break;
       }
       if (intruder) {
         for (const u of _military(g, p)) {
           // staging units break off to defend home too
-          if ((u.state === 'idle' || (S.staging && S.staging.ids.includes(u.id))) &&
+          if ((u.state === 'idle' || (st.staging && st.staging.ids.includes(u.id))) &&
               dist(u.x, u.y, intruder.x, intruder.y) < 20 * C.CELL) {
             orderAttack(u, intruder);
           }
@@ -509,30 +561,30 @@ const AI = (function () {
     // infantry forever and drag the endgame out.
     if (p.credits < 100 && _unitCount(g, p, 'harv') === 0 &&
         (_conyard(g, p) || Production.prereqOk(p, 'harv'))) {
-      if (S.brokeSince < 0) S.brokeSince = g.tick;
-      else if (g.tick - S.brokeSince > 900) { p.credits += 2000; S.brokeSince = -1; }
-    } else S.brokeSince = -1;
+      if (st.brokeSince < 0) st.brokeSince = g.tick;
+      else if (g.tick - st.brokeSince > 900) { p.credits += 2000; st.brokeSince = -1; }
+    } else st.brokeSince = -1;
 
     const conyard = _conyard(g, p);
 
     // place any ready building by role
     if (p.ready.building && conyard) {
       const key = p.ready.building;
-      const spot = _findSpot(g, p, key);
+      const spot = _findSpot(g, p, st, key);
       if (spot && Production.place(g, p, key, spot.cx, spot.cy)) {
-        if (key === 'hpad') S.builtHpad = true;
+        if (key === 'hpad') st.builtHpad = true;
       } else if (!spot) {
         // no legal spot: refund AND remember — without the cooldown the
         // planner re-picks the same key next tick and the build->cancel
         // livelock freezes every goal below it (tech was the worst case)
         Production.cancel(p, key);
-        (S.noSpot || (S.noSpot = {}))[key] = g.tick + 1500;
+        (st.noSpot || (st.noSpot = {}))[key] = g.tick + 1500;
       }
     }
 
     // start the next building
     if (conyard && !p.queues.building && !p.ready.building) {
-      const want = _nextBuilding(g, p);
+      const want = _nextBuilding(g, p, st);
       if (want) Production.tryStart(p, want);
     }
 
@@ -540,41 +592,46 @@ const AI = (function () {
     // While the planner is saving toward a building, hold NEW unit starts so
     // the treasury can actually climb; harvesters are exempt (an eco stall
     // would defeat the whole point of saving).
-    if (p.queues.building || p.ready.building) S.savingFor = null;
+    if (p.queues.building || p.ready.building) st.savingFor = null;
     const armyFloor = _military(g, p).length < 9;   // never save yourself defenseless
     for (const kind of ['infantry', 'vehicle', 'air']) {
       if (p.queues[kind] || p.credits <= 400) continue;
       const want = _pickUnit(g, p, kind);
       if (!want) continue;
-      if (S.savingFor && want !== 'harv' && !armyFloor) continue;
+      if (st.savingFor && want !== 'harv' && !armyFloor) continue;
       Production.tryStart(p, want);
     }
 
-    // superweapon at the densest human cluster
+    // superweapon at the current enemy's densest cluster
     if (Production.superReady(p)) {
-      const t = _denseHumanTarget(g);
+      const t = _denseEnemyTarget(g, ep);
       if (t) Production.launchSuper(g, p, t.cx + ((t.w / 2) | 0), t.cy + ((t.h / 2) | 0));
     }
 
-    _waves(g, p);
+    _waves(g, p, st, ep);
 
     // sustain the push: idle attackers deep in the field re-acquire
     if (g.tick % 90 === 37) {
-      const cydX = conyard ? (conyard.cx + 1) * C.CELL : cellCenterX(g.startPos.ai.cx);
-      const cydY = conyard ? (conyard.cy + 1) * C.CELL : cellCenterY(g.startPos.ai.cy);
+      const home = g.startPos[p.side] || g.startPos.ai;
+      const cydX = conyard ? (conyard.cx + 1) * C.CELL : cellCenterX(home.cx);
+      const cydY = conyard ? (conyard.cy + 1) * C.CELL : cellCenterY(home.cy);
       for (const u of _military(g, p)) {
         if (u.state !== 'idle' || DATA.units[u.type].air) continue;
-        if (S.staging && S.staging.ids.includes(u.id)) continue;
+        if (st.staging && st.staging.ids.includes(u.id)) continue;
         if (dist(u.x, u.y, cydX, cydY) > 16 * C.CELL) {
-          const t = _nearestHumanTarget(g, u);
+          const t = _nearestEnemyTarget(g, ep, u);
           if (t) orderAttack(u, t);
         }
       }
     }
   }
 
-  // debug/test hook: read-only peek at the wave machine's internal state
-  function _peek() { return S; }
+  // debug/test hook: read-only peek at a wave machine's internal state.
+  // No arg = the classic single opponent (primary enemy of the human).
+  function _peek(side) {
+    if (!ST) return null;
+    return ST[side || (typeof game !== 'undefined' && game ? enemyOf(game.humanSide) : 'nod')] || null;
+  }
 
   return { init, tick, _peek };
 })();

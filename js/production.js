@@ -52,7 +52,7 @@ const Production = (function () {
   function prereqOk(player, key) {
     const d = DATA.buildings[key] || DATA.units[key];
     if (!d) return false;
-    if (d.side && d.side !== player.side) return false;
+    if (d.side && d.side !== baseSide(player.side)) return false;
     // skirmish option: superweapon buildings removed from the game entirely
     if (d.superweapon && game && game._noSupers) return false;
     const prereq = d.prereq || [];
@@ -76,7 +76,7 @@ const Production = (function () {
   }
 
   function items(player) {
-    const list = DATA.buildList[player.side];
+    const list = DATA.buildList[baseSide(player.side)];
     const lowPower = _lowPower(player);
     const out = { buildings: [], units: [] };
     for (const strip of ['buildings', 'units']) {
@@ -261,7 +261,7 @@ const Production = (function () {
   }
 
   function _visibleSet(player) {
-    const list = DATA.buildList[player.side];
+    const list = DATA.buildList[baseSide(player.side)];
     const s = [];
     for (const key of list.buildings.concat(list.units)) {
       if (prereqOk(player, key)) s.push(key);
@@ -653,7 +653,7 @@ const Production = (function () {
     // superweapon charge — more Adv. Comm. Centers / Temples of Nod charge
     // the orbital lance / nuke proportionally faster (capped so it can't be
     // instant-fired by spamming the tech building)
-    const superKey = player.side === 'gdi' ? 'eye' : 'tmpl';
+    const superKey = baseSide(player.side) === 'gdi' ? 'eye' : 'tmpl';
     const superCount = _countFinished(player, superKey);
     if (superCount > 0) {
       const key = DATA.buildings[superKey].superweapon;
@@ -693,7 +693,7 @@ const Production = (function () {
     // a new helipad ships with its aircraft (the classic bundle — the pad
     // price includes the first airframe)
     if (d.freeUnitAir) {
-      const key = player.side === 'gdi' ? 'orca' : 'heli';
+      const key = baseSide(player.side) === 'gdi' ? 'orca' : 'heli';
       const u = makeUnit(key, player.side, b.cx, b.cy);
       u.x = (b.cx + b.w / 2) * C.CELL;
       u.y = (b.cy + b.h / 2) * C.CELL;
