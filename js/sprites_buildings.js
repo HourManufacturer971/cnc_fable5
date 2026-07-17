@@ -1904,6 +1904,21 @@
   const entry = { normal, damaged: damagedArr, yOff: 4, wallMask: true };
   SPRITES.buildings.brik = { gdi: entry, nod: entry, mut: entry };
 
+  // corner stubs toward diagonal-only neighbors: two stepped chunks from the
+  // post toward the cell corner, drawn UNDER the frame so hand-placed
+  // diagonal runs read as a connected zig-zag instead of scattered posts.
+  // Order matches render's mask bits: [NE, SE, SW, NW].
+  function stubFrame(which) {
+    const c = mkCanvas(24, 32);
+    const g = c.getContext('2d');
+    if (which === 0) { seg(g, 14, 6, 7, 5, false); seg(g, 18, 1, 6, 5, false); }
+    if (which === 1) { seg(g, 14, 16, 7, 5, false); seg(g, 18, 20, 6, 5, false); }
+    if (which === 2) { seg(g, 3, 16, 7, 5, false); seg(g, 0, 20, 6, 5, false); }
+    if (which === 3) { seg(g, 3, 6, 7, 5, false); seg(g, 0, 1, 6, 5, false); }
+    return c;
+  }
+  SPRITES.wallStub = [stubFrame(0), stubFrame(1), stubFrame(2), stubFrame(3)];
+
   // cameo: a short wall run
   const cam = mkCanvas(64, 48);
   const g = cam.getContext('2d');

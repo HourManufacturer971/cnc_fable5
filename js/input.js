@@ -12,6 +12,7 @@ const Input = (function () {
   let wallDrag = null;   // start cell of a wall drag
   let wallLine = null;   // preview cells while dragging
   let radarDrag = false;
+  let rPan = null;       // right-button map pan {cx, cy, camX, camY, moved}
   let lastClick = { t: 0, id: 0 };
   let lastGroupTap = { t: 0, n: -1 };
   const keys = {};
@@ -74,8 +75,35 @@ const Input = (function () {
           }
         }
         if (hit.zone === 'radar' && game.human.radar) { radarDrag = true; _radarJump(); }
+      } else if (ev.button === 2) {
+        // right-drag grabs the map — windowed browsers make edge scrolling
+        // clumsy (the cursor slides out of the window); a released button
+        // that never moved is still the classic right-click
+        if (game && !game.paused && game.status === 'playing' &&
+            Render.hitTest(p.x, p.y).zone === 'viewport') {
+          rPan = { cx: ev.clientX, cy: ev.clientY,
+                   camX: game.camera.x, camY: game.camera.y, moved: false };
+        }
       }
       ev.preventDefault();
+    });
+
+    // the pan tracks the button anywhere on the page — releasing or dragging
+    // outside the canvas must not strand it
+    window.addEventListener('mousemove', ev => {
+      if (!rPan || !game) return;
+      const r = canvas.getBoundingClientRect();
+      const s = C.SCREEN_W / r.width / C.ZOOM;   // client px -> WORLD px
+      const dx = ev.clientX - rPan.cx, dy = ev.clientY - rPan.cy;
+      if (!rPan.moved && Math.abs(dx) + Math.abs(dy) < 5) return;
+      rPan.moved = true;
+      game.camera.x = clamp(rPan.camX - dx * s, 0, C.MAP_W * C.CELL - C.VIEW_W);
+      game.camera.y = clamp(rPan.camY - dy * s, 0, C.MAP_H * C.CELL - C.VIEW_H);
+    });
+    window.addEventListener('mouseup', ev => {
+      if (ev.button !== 2 || !rPan) return;
+      if (!rPan.moved) _rightClick();
+      rPan = null;
     });
 
     canvas.addEventListener('mouseup', ev => {
@@ -106,7 +134,9 @@ const Input = (function () {
         dragStart = null;
         _leftClick(p.x, p.y, ev.shiftKey, ev.ctrlKey);
       } else if (ev.button === 2) {
-        _rightClick();
+        // with a pan gesture live, the window-level mouseup decides whether
+        // this was a drag (swallow) or a genuine right-click
+        if (!rPan) _rightClick();
       }
       ev.preventDefault();
     });
@@ -449,18 +479,23 @@ const Input = (function () {
     wallLine = null;
   }
 
-  // wall run: straight line from start toward end along the dominant axis.
+  // wall run: from start toward end. Straight drags give a straight line;
+  // angled drags rasterize as an orthogonal STAIRCASE (never diagonal jumps),
+  // so every cell shares an edge with the next — the auto-connect sprites
+  // join up and units can't slip between corner-touching posts.
   // Gates place one at a time — a drag must not sweep out a $250-a-cell run.
   function _wallCells(a, b) {
     if (modeArg && DATA.buildings[modeArg] && DATA.buildings[modeArg].gate) return [a];
-    const cells = [];
-    const dx = b.cx - a.cx, dy = b.cy - a.cy;
-    if (Math.abs(dx) >= Math.abs(dy)) {
-      const n = clamp(Math.abs(dx), 0, 13), s = Math.sign(dx) || 1;
-      for (let i = 0; i <= n; i++) cells.push({ cx: a.cx + i * s, cy: a.cy });
-    } else {
-      const n = clamp(Math.abs(dy), 0, 13), s = Math.sign(dy) || 1;
-      for (let i = 0; i <= n; i++) cells.push({ cx: a.cx, cy: a.cy + i * s });
+    const cells = [{ cx: a.cx, cy: a.cy }];
+    let x = a.cx, y = a.cy;
+    let err = 0;
+    const dx = Math.abs(b.cx - a.cx), dy = Math.abs(b.cy - a.cy);
+    const sx2 = Math.sign(b.cx - a.cx), sy2 = Math.sign(b.cy - a.cy);
+    while ((x !== b.cx || y !== b.cy) && cells.length <= 13) {
+      // step along whichever axis is furthest behind its ideal line
+      if (x !== b.cx && (y === b.cy || err <= 0)) { x += sx2; err += dy; }
+      else { y += sy2; err -= dx; }
+      cells.push({ cx: x, cy: y });
     }
     return cells;
   }

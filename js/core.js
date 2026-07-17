@@ -36,7 +36,7 @@ const C = {
   REPAIR_COST: 0.3,        // fraction of cost/maxHp paid per hp repaired
   SELL_REFUND: 0.5,
   SUPER_TICKS: { ion: 5400, nuke: 6300 },
-  EDGE_SCROLL: 16,         // SCREEN px border that triggers edge scrolling
+  EDGE_SCROLL: 28,         // SCREEN px border that triggers edge scrolling
   SCROLL_SPEED: 12,        // WORLD px per frame while scrolling
   // display names for the internal side keys (the keys themselves are legacy
   // identifiers baked into save-free game state; only the labels are shown)

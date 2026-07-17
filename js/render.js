@@ -516,6 +516,16 @@ const Render = (function () {
       if (isWall(b.cx, b.cy + 1)) m |= 4;
       if (isWall(b.cx - 1, b.cy)) m |= 8;
       frame = frames[m % frames.length];
+      // diagonal-only neighbors (no shared orthogonal wall to route through)
+      // get a corner stub UNDER the frame, so odd angles still join up
+      if (SPRITES.wallStub) {
+        const stubs = [];
+        if (isWall(b.cx + 1, b.cy - 1) && !(m & 3)) stubs.push(0);   // NE
+        if (isWall(b.cx + 1, b.cy + 1) && !(m & 6)) stubs.push(1);   // SE
+        if (isWall(b.cx - 1, b.cy + 1) && !(m & 12)) stubs.push(2);  // SW
+        if (isWall(b.cx - 1, b.cy - 1) && !(m & 9)) stubs.push(3);   // NW
+        for (const d of stubs) drawSpr(SPRITES.wallStub[d], x, y);
+      }
     } else {
       frame = frames[((g.tick >> 3) + b.id) % frames.length];
     }
@@ -567,7 +577,8 @@ const Render = (function () {
       drawSpr(wr, x + (b.w * C.CELL * Z - wr.width * sca(wr)) / 2,
         Y(b.cy * C.CELL) + (b.h * C.CELL * Z - wr.height * sca(wr)) / 2);
     }
-    // PRIMARY tag: the factory new units will come out of (own side only)
+    // PRIMARY tag: the factory new units will come out of (own side only);
+    // worn at the building's BASE so it reads as a stencil on the apron
     if (b.owner === g.humanSide && g.human && g.human.primary) {
       const kind = DATA.buildings[b.type].factory;
       if (kind && g.human.primary[kind] === b.id) {
@@ -575,7 +586,7 @@ const Render = (function () {
         const tag = 'PRIMARY';
         const tw2 = ctx.measureText(tag).width;
         const tx2 = x + (DW - tw2) / 2;
-        const ty2 = Y(b.cy * C.CELL) - 14;
+        const ty2 = Y(b.cy * C.CELL) + b.h * C.CELL * Z - 15;
         ctx.fillStyle = 'rgba(8,10,6,0.75)';
         ctx.fillRect(tx2 - 4, ty2 - 2, tw2 + 8, 14);
         ctx.fillStyle = PAL.uiGold;
@@ -738,8 +749,32 @@ const Render = (function () {
         const x = X(e.x) - sw / 2, y = Y(e.y) - sh / 2;
         const life = e.ttl ? e.tick / e.ttl : 0;
         ctx.globalAlpha = life > 0.75 ? (1 - life) / 0.25 : 1;
+        // charred bed as jittered row strips — an eroded stain with a ragged
+        // silhouette, not the building's perfect rectangle
         ctx.fillStyle = 'rgba(14,12,9,0.5)';
-        ctx.fillRect(x + 3, y + 5, sw - 6, sh - 8);
+        const ROWS = 3 + (e.h || 2) * 2;
+        const rh = (sh - 6) / ROWS;
+        for (let r = 0; r < ROWS; r++) {
+          // end rows pinch harder so the corners round off
+          const pinch = (r === 0 || r === ROWS - 1) ? 7 : 0;
+          const li = pinch + _gl(e.x | 0, r, 51) * 13 - 3;
+          const ri = pinch + _gl(e.y | 0, r, 52) * 13 - 3;
+          ctx.fillRect(x + 3 + li, y + 3 + r * rh, Math.max(6, sw - 6 - li - ri), rh + 1.5);
+        }
+        // outlying soot daubs blur the edge into the ground
+        for (let i = 0; i < 5; i++) {
+          const along = _gl(e.x | 0, i, 53), side = _gl(e.y | 0, i, 54);
+          const dsz = 5 + side * 7;
+          const horiz = i & 1;
+          ctx.fillStyle = 'rgba(14,12,9,0.30)';
+          if (horiz) {
+            ctx.fillRect(x + 4 + along * (sw - 12),
+              (side > 0.5 ? y - dsz * 0.4 : y + sh - dsz * 0.6), dsz, dsz * 0.6);
+          } else {
+            ctx.fillRect((side > 0.5 ? x - dsz * 0.4 : x + sw - dsz * 0.6),
+              y + 4 + along * (sh - 12), dsz * 0.6, dsz);
+          }
+        }
         for (let i = 0; i < 3 + (e.w || 2) * 2; i++) {           // broken slabs
           const hx = _gl(e.x | 0, e.y | 0, i * 3 + 1);
           const hy = _gl(e.y | 0, e.x | 0, i * 3 + 2);
@@ -1279,13 +1314,20 @@ const Render = (function () {
     // air units on top
     for (const u of units) if (DATA.units[u.type].air && _unitSeen(g, u)) _drawUnit(g, u, X, Y);
 
-    // shroud (skipped entirely for the replay spectator)
+    // shroud (skipped entirely for the replay spectator). Cells merge into
+    // horizontal RUNS drawn with a half-pixel bleed: on fractional
+    // device-pixel scales, abutting per-cell rects antialias into hairline
+    // seams — a faint grid glowing inside the black
     if (!seeAll) {
     ctx.fillStyle = '#000';
     for (let cy = c0y; cy <= c1y; cy++) {
       for (let cx = c0x; cx <= c1x; cx++) {
         if (g.shroud[cellIdx(cx, cy)] === 1) continue;
-        ctx.fillRect(X(cx * C.CELL), Y(cy * C.CELL), cs, cs);
+        let cx2 = cx;
+        while (cx2 + 1 <= c1x && g.shroud[cellIdx(cx2 + 1, cy)] !== 1) cx2++;
+        ctx.fillRect(X(cx * C.CELL) - 0.5, Y(cy * C.CELL) - 0.5,
+          (cx2 - cx + 1) * cs + 1, cs + 1);
+        cx = cx2;
       }
     }
     if (SPRITES.shroudEdge && SPRITES.shroudEdge.length === 8) {
