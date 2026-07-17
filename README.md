@@ -256,6 +256,14 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 - **Four armies on one field** — the extra combatants fly recolored
   faction banners: UDC Azure in steel blue and the Serpent Amethyst in
   royal violet, so a four-way brawl reads at a glance
+- **A frontier worth fighting for** — Large maps scale their riches with
+  their size: crystal fields scattered across the whole interior (plus a
+  second blue pocket hidden in the wilds), deeper home fields, a second
+  outlying hamlet, up to four supply depots, more ponds, groves and
+  boulder outcrops — and the radar draws it all at the right scale
+- **Armies, not patrols** — the AI masses its attacks: fresh units join a
+  gathering wave instead of loitering at home, skirmish waves run bigger,
+  and buildings hit by superweapons get repaired when the treasury allows
 - **Campaign records** — each operation remembers your fastest win and best
   score, shown on the operations list and stamped NEW BEST on the tally
 - **Multiplayer rematch** — the connection stays up at the score screen:

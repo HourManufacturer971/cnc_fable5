@@ -458,7 +458,8 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   8 AVALANCHE (annihilate a fully pre-built fortress; reinforcement/supply drip).
 - AI difficulty knobs read from `game.mission` by ai.js: `aiCalm` multiplies wave-cadence
   delays (first strike + between waves), `aiWaveCap` caps units per strike wave.
-  Skirmish (`game.mission` null) keeps the exact original cadence.
+  Campaign ops without an explicit `aiWaveCap` keep the classic 9; open skirmish
+  defaults to 11 (`_waveCap`) so late strikes mass like offensives.
 - Render draws a small objective status chip at the top-left of the viewport
   (`TREASURY n / m`, `HOLD OUT mm:ss`, `ECONOMY TARGETS LEFT: n`, `CAPTURE THE X —
   INTACT`, `DELIVER THE TRANSPORT — n CELLS TO THE BEACON`, or the annihilate line);
@@ -508,7 +509,8 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_handshake()` — the host rolls a FRESH seed and the match relaunches over the
   same connection, sides kept, no new code exchange. `NET.onRematch('remote'|'gone')`
   drives the button labels ("opponent is ready" / hide when the peer leaves);
-  `_peerGone` outside a live game only tears down + notifies. PROTO = 4.
+  `_peerGone` outside a live game only tears down + notifies. PROTO = 6 (bumped for
+  sim-visible changes: mapgen area scaling, superweapon auto-repair, wave massing).
 - **Determinism rules all future sim changes must respect**: sim randomness
   only via `game.rng`; sim behavior must never read `g.shroud`/`g.visible`,
   `g.humanSide`, or `p.isAI` (for fog filtering use `_exploredFor(g, side)` —
@@ -741,7 +743,14 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   forward point 7-11 cells out, then strike together (60% closed up or +380 ticks) — no
   dribbling in. The strike is an ATTACK-MOVE sweep onto the target cell, so the wave
   fights through whatever it meets instead of tunnel-visioning one building while
-  turrets shoot it in the back.
+  turrets shoot it in the back. While a wave GATHERS, freshly built idle units (all but
+  the 2 closest to home, cap 16 ids) JOIN the muster each cadence — the launched wave
+  is the whole production run, not the batch that was idle when the timer fired.
+  Wave floor `4+wave` (elite `5+wave*2`), capped by `_waveCap`.
+- **Building repair** (sim, all owners incl. AI): hostile OR unattributed damage
+  (superweapon splash passes `attacker=null`) flips `repairing` on any finished
+  building whose owner holds >100 credits — the AI patches up after a nuke/ion
+  strike instead of bleeding out; a broke AI leaves the wreck alone.
   Defend: units near base intercept intruders. If AI has no conyard but has money+weap →
   build mcv? (skip — too fancy; just keep fighting).
 - AI places buildings on a spiral search around its conyard obeying `Production.canPlace`.
@@ -893,7 +902,16 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   the thresholds).
 
 ### Map generation (`map.js`)
-- 64×64. Deterministic from seed via `mulberry` (features additionally use seeded hash
+- 64×64 classic or 88×88 Large. Discrete feature counts (ponds, tree clumps/singles,
+  boulder outcrops, mid-map fields, hamlets, depots, concurrent crates) scale with the
+  `area` factor `(W*H)/4096` so a Large map's far country stays busy: ~4-6 midfields
+  spread across the WHOLE interior (only the first is pinned near the centre; each
+  heart must be open+reachable and is scored by surrounding open ground, or the field
+  shrivels to a speck beside a pond), a second blue pocket (`i===3`), 1.2× home fields
+  and 1.25× midfields, a second outlying hamlet (houses/civs appended to
+  `g.decor.village`), and up to 4 supply depots (extra anchors at the 0.3/0.7
+  quadrant marks).
+- Deterministic from seed via `mulberry` (features additionally use seeded hash
   noise — NEVER `Math.random`/`game.rng`). Geography grows from a hidden ELEVATION field
   (`buildElevation`: 4-octave fbm + a gentle climb toward the rim) that every feature
   reads, so the landscape is internally consistent:

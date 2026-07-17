@@ -283,7 +283,9 @@ const Render = (function () {
   //                   world coordinates, so movement is real-time and smooth
 
   const OWNER_COLOR = { gdi: '#ffd23c', nod: '#ff2418', gd2: '#4c8ce0', nd2: '#b46ae8', mut: '#4ce03c', civ: '#e8e6da' };
-  const MMC = C.MM_S / C.MAP_W;   // minimap px per cell
+  // minimap px per cell — computed at each use: C.MAP_W changes per game
+  // (64 classic, 88 large), and a load-time constant would draw every blip
+  // and fog cell at the classic scale on top of a large-map terrain base
   let minimapBase = null;
 
   function _buildMinimapBase() {
@@ -295,6 +297,7 @@ const Render = (function () {
   }
 
   function _updateMinimap(g) {
+    const MMC = C.MM_S / C.MAP_W;
     const mc = minimap.getContext('2d');
     if (minimapBase) mc.drawImage(minimapBase, 0, 0);
     else { mc.fillStyle = '#000'; mc.fillRect(0, 0, C.MM_S, C.MM_S); }
@@ -372,6 +375,7 @@ const Render = (function () {
 
   // live blips, drawn every frame directly onto the composed frame
   function _drawRadarBlips(g) {
+    const MMC = C.MM_S / C.MAP_W;
     const hunt = _huntCount(g) > 0;
     for (const b of g.buildings.values()) {
       if (!seeAll && !hunt && g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;

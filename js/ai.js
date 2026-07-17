@@ -10,9 +10,15 @@
 const AI = (function () {
   let ST = null;   // per-AI-side state, keyed by side (multi-AI skirmish)
 
-  // mission difficulty knobs (missions.js): cadence multiplier + wave-size cap
+  // mission difficulty knobs (missions.js): cadence multiplier + wave-size cap.
+  // Campaign ops keep the classic 9 unless they say otherwise; open skirmish
+  // masses higher so late-game strikes feel like offensives, not patrols.
   function _calm(g) { return (g.mission && g.mission.aiCalm) || 1; }
-  function _waveCap(g) { return (g.mission && g.mission.aiWaveCap) || 9; }
+  function _waveCap(g) {
+    if (g.mission && g.mission.aiWaveCap) return g.mission.aiWaveCap;
+    if (g.mission && g.mission.n) return 9;
+    return 11;
+  }
   // elite = top difficulty: crate runs, depot capture, garrisons, expansion,
   // sharper economy, bigger coordinated waves, unit micro
   function _elite(g) { return !!(g.mission && g.mission.aiElite); }
@@ -463,6 +469,24 @@ const AI = (function () {
     const baseY = cyd ? (cyd.cy + 1) * C.CELL : cellCenterY(home.cy);
 
     if (st.staging) {
+      // reinforcements pour into the muster while it gathers: the wave that
+      // finally launches is the whole production run, not just the batch
+      // that happened to be idle when the timer fired (the dribble problem)
+      if (st.staging.phase === 'gather' && st.staging.ids.length < 16) {
+        const sc0 = st.staging.cell;
+        const joiners = _military(g, p).filter(u =>
+          u.state === 'idle' && !DATA.units[u.type].air && !st.staging.ids.includes(u.id));
+        // the two closest to home stay behind as the garrison
+        joiners.sort((a, b) =>
+          dist(b.x, b.y, baseX, baseY) - dist(a.x, a.y, baseX, baseY));
+        for (const u of joiners.slice(0, Math.max(0, joiners.length - 2))) {
+          if (st.staging.ids.length >= 16) break;
+          st.staging.ids.push(u.id);
+          const k = st.staging.ids.length;
+          orderMove(u, clamp(sc0.cx + (k % 3) - 1, 0, C.MAP_W - 1),
+            clamp(sc0.cy + (((k / 3) | 0) % 3) - 1, 0, C.MAP_H - 1));
+        }
+      }
       const alive = st.staging.ids.map(id => g.units.get(id)).filter(Boolean);
       if (!alive.length) { st.staging = null; return; }
       const sc = st.staging.cell;
@@ -531,7 +555,7 @@ const AI = (function () {
     // elite masses HARDER before moving out: fewer, far heavier hammers
     const need = _elite(g)
       ? Math.min(5 + st.wave * 2, Math.max(_waveCap(g), 12))
-      : Math.min(3 + st.wave, _waveCap(g));
+      : Math.min(4 + st.wave, _waveCap(g));
     if (idle.length - garrison < need) {
       st.nextWaveAt = g.tick + 300; // keep producing, check again shortly
       return;

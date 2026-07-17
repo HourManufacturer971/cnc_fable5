@@ -1,5 +1,6 @@
 'use strict';
-// map.js — deterministic 64x64 skirmish map generation.
+// map.js — deterministic skirmish map generation (64x64 classic, 88x88 large;
+// discrete feature counts scale with map area so big maps stay busy).
 // Defines exactly one global: MAPGEN. See SPEC.md "Map generation".
 //
 // MAPGEN.generate(game, seed):
@@ -641,6 +642,11 @@ const MAPGEN = (function () {
     g.terrain.fill(T_GRASS);
     g.tib.fill(0);
 
+    // area factor: 1.0 on the classic 64x64, ~1.9 on Large 88x88. Everything
+    // counted (ponds, groves, fields, hamlets, depots) multiplies by this so
+    // the far country of a big map is as lively as a classic one.
+    const area = (W * H) / 4096;
+
     // --- start positions: fractional anchors scale to any map size -----------
     // slot 0 = the human's SW corner, slot 1 = the classic NE opponent, slots
     // 2/3 = NW/SE for the extra multi-AI combatants. Holdout: human CENTER.
@@ -695,7 +701,7 @@ const MAPGEN = (function () {
           crossings.push({ cx: mid.cx, cy: mid.cy });
         }
       }
-      const want = (hasRiver ? 1 : 3) + ((rng() * 2) | 0);
+      const want = Math.round(((hasRiver ? 1 : 3) + ((rng() * 2) | 0)) * area);
       const cands = [];
       for (let cy = 4; cy < H - 4; cy++) {
         for (let cx = 4; cx < W - 4; cx++) {
@@ -738,16 +744,22 @@ const MAPGEN = (function () {
       woods(g, elev, wd, vals[(vals.length / 2) | 0], hseed);
     }
     // a few free-standing clumps and lone trees for texture
-    const clumps = 3 + ((rng() * 3) | 0); // 3..5
+    const clumps = Math.round((3 + ((rng() * 3) | 0)) * area); // 3..5 classic
     for (let i = 0; i < clumps; i++) {
       const p = pickCenter(rng, starts, 14);
       treeClump(g, rng, p.x, p.y);
     }
-    const singles = 6 + ((rng() * 5) | 0); // 6..10
+    const singles = Math.round((6 + ((rng() * 5) | 0)) * area); // 6..10 classic
     for (let i = 0; i < singles; i++) {
       const p = pickCenter(rng, starts, 12);
       const idx = cellIdx(p.x, p.y);
       if (g.terrain[idx] === T_GRASS || g.terrain[idx] === T_DIRT) g.terrain[idx] = T_TREE;
+    }
+    // free-standing boulder outcrops: hard cover breaking up the open field
+    const crops = Math.round((1 + ((rng() * 2) | 0)) * area);
+    for (let i = 0; i < crops; i++) {
+      const p = pickCenter(rng, starts, 16);
+      blob(g, rng, p.x, p.y, 1.7 + rng() * 1.4, T_ROCK);
     }
 
     // gallery woods must never seal the crossings: fell the trees at the
@@ -834,36 +846,61 @@ const MAPGEN = (function () {
         const off = 7 + rng() * 2; // 7..9
         const fx = clamp(Math.round(st.cx + dx * off), 2, W - 3);
         const fy = clamp(Math.round(st.cy + dy * off), 2, H - 3);
-        const count = 130 + ((rng() * 41) | 0); // 130..170 — the opening field carries the early game
+        // 130..170 classic — the opening field carries the early game; on a
+        // large map the next field is a longer trek, so home pockets run deeper
+        const count = Math.round((130 + ((rng() * 41) | 0)) * (area > 1.5 ? 1.2 : 1));
         placeField(g, rng, fx, fy, count, starts, reach);
       }
     }
-    // 2-3 medium fields around mid-map, spread apart — chrysalite pools in
-    // the valley floors, so of the valid spots we take the lowest-lying one
+    // Medium fields beyond the home pockets, spread apart — chrysalite pools
+    // in the valley floors, so of the valid spots we take the lowest-lying
+    // one. The FIRST stays the classic contested prize near the map centre;
+    // the rest scatter across the whole interior so the far country is worth
+    // harvesting (and expanding toward) on any map size.
     const fieldCenters = [];
-    const mids = 2 + ((rng() * 2) | 0); // 2..3
+    const mids = Math.round((2 + ((rng() * 2) | 0)) * area); // 2..3 classic, 4..6 large
     for (let i = 0; i < mids; i++) {
       let bestC = null;
       for (let a = 0; a < 40; a++) {
-        const mx = (W >> 1) + ((rng() * 25) | 0) - 12;
-        const my = (H >> 1) + ((rng() * 25) | 0) - 12;
+        const mx = i === 0 ? (W >> 1) + ((rng() * 25) | 0) - 12 : 6 + ((rng() * (W - 12)) | 0);
+        const my = i === 0 ? (H >> 1) + ((rng() * 25) | 0) - 12 : 6 + ((rng() * (H - 12)) | 0);
+        // the field's heart must be open, reachable ground — a heart in a
+        // pond or forest pocket gives placeField no cells and the "field"
+        // shrivels to a speck
+        const ti = cellIdx(mx, my);
+        if ((g.terrain[ti] !== T_GRASS && g.terrain[ti] !== T_DIRT) || !reach[ti]) continue;
         let ok = true;
         for (const st of starts) {
           if (distC(mx, my, st.cx, st.cy) < 15) { ok = false; break; }
         }
         for (const fc of fieldCenters) {
-          if (distC(mx, my, fc.x, fc.y) < 10) { ok = false; break; }
+          if (distC(mx, my, fc.x, fc.y) < 12) { ok = false; break; }
         }
         if (!ok) continue;
-        const e = elev[cellIdx(mx, my)];
-        if (!bestC || e < bestC.e) bestC = { x: mx, y: my, e };
+        // room to grow: prize open flats around the heart so the field can
+        // spread to full size; low ground breaks ties (chrysalite pools)
+        let openN = 0;
+        for (let dy = -5; dy <= 5; dy++) {
+          for (let dx = -5; dx <= 5; dx++) {
+            const x2 = mx + dx, y2 = my + dy;
+            if (x2 < 1 || y2 < 1 || x2 >= W - 1 || y2 >= H - 1) continue;
+            const i2 = cellIdx(x2, y2);
+            const t2 = g.terrain[i2];
+            if ((t2 === T_GRASS || t2 === T_DIRT) && reach[i2]) openN++;
+          }
+        }
+        const score = openN - elev[ti] * 8;
+        if (!bestC || score > bestC.score) bestC = { x: mx, y: my, score };
       }
-      if (!bestC) bestC = { x: W >> 1, y: H >> 1, e: 0 };
+      if (!bestC) bestC = { x: W >> 1, y: H >> 1, score: 0 };
       fieldCenters.push(bestC);
-      const count = 50 + ((rng() * 31) | 0); // 50..80
+      // 50..80 classic; large maps grow each field a quarter richer — the
+      // longer haul across a big map has to pay for itself
+      const count = Math.round((50 + ((rng() * 31) | 0)) * (area > 1.5 ? 1.25 : 1));
       // the first (most contested) midfield is BLUE chrysalite — worth double
-      // at the refinery, a prize worth fighting over in the map's middle
-      placeField(g, rng, bestC.x, bestC.y, count, starts, reach, i === 0);
+      // at the refinery; big maps hide a second blue pocket out in the wilds
+      placeField(g, rng, bestC.x, bestC.y, count, starts, reach,
+        i === 0 || (area > 1.5 && i === 3));
     }
 
     // guaranteed tiberium-free route between the bases (mirrors the always-
@@ -974,6 +1011,44 @@ const MAPGEN = (function () {
       }
     }
 
+    // --- second hamlet: big maps get an outlying farmstead far from the
+    // first village, so the frontier has garrisons and church crates too
+    if (area > 1.5 && g.decor.village) {
+      const v0 = g.decor.village.houses[0];
+      let best = null, bestScore = -Infinity;
+      for (let a = 0; a < 90; a++) {
+        const vx = 4 + ((rng() * (W - 14)) | 0), vy = 4 + ((rng() * (H - 13)) | 0);
+        let bad = false;
+        for (const st of starts) {
+          if (distC(vx + 3, vy + 2, st.cx, st.cy) < 18) { bad = true; break; }
+        }
+        if (bad || distC(vx + 3, vy + 2, v0.cx + 4, v0.cy + 3) < 24) continue;
+        let ok = true;
+        for (let dy = 0; dy < 6 && ok; dy++) {
+          for (let dx = 0; dx < 7; dx++) {
+            const idx = cellIdx(vx + dx, vy + dy);
+            const t = g.terrain[idx];
+            if ((t !== T_GRASS && t !== T_DIRT) || g.tib[idx] > 0 || !reach2[idx]) { ok = false; break; }
+          }
+        }
+        if (!ok) continue;
+        const score = distC(vx + 3, vy + 2, v0.cx + 4, v0.cy + 3);   // spread out
+        if (score > bestScore) { bestScore = score; best = { vx, vy } };
+      }
+      if (best) {
+        const { vx, vy } = best;
+        g.decor.village.houses.push(
+          { type: 'vil2', cx: vx, cy: vy },
+          { type: 'vil3', cx: vx + 4, cy: vy },
+          { type: 'vil1', cx: vx + 2, cy: vy + 3 });
+        g.decor.village.civs.push(
+          { type: 'c2', cx: vx + 2, cy: vy + 2 },
+          { type: 'c1', cx: vx + 4, cy: vy + 3 });
+        // a farm lane wanders toward the heart of the map
+        road(g, vx + 3, vy + 2, (vx + 3 + (W >> 1)) >> 1, (vy + 2 + (H >> 1)) >> 1);
+      }
+    }
+
     // --- neutral supply depots: two prizes worth fighting over -------------------
     // Contested ground by construction: each wants to sit near the midfield
     // (or a river crossing), far from both bases, on clear reachable land.
@@ -989,9 +1064,15 @@ const MAPGEN = (function () {
           anchors.push({ cx: riv.fordX2, cy: Math.round(riv.yc[riv.fordX2]) });
         }
       } else {
-        anchors.push({ cx: 32, cy: 32 }, { cx: 32, cy: 32 });
+        anchors.push({ cx: W >> 1, cy: H >> 1 }, { cx: W >> 1, cy: H >> 1 });
       }
-      for (const anchor of anchors.slice(0, 2)) {
+      // big maps: two more depots anchored off-centre, so the frontier
+      // quadrants hold prizes of their own
+      if (area > 1.5) {
+        anchors.push({ cx: Math.round(W * 0.3), cy: Math.round(H * 0.68) });
+        anchors.push({ cx: Math.round(W * 0.7), cy: Math.round(H * 0.32) });
+      }
+      for (const anchor of anchors.slice(0, area > 1.5 ? 4 : 2)) {
         let best = null, bestScore = Infinity;
         for (let a = 0; a < 120; a++) {
           const dx = 4 + ((rng() * (W - 10)) | 0), dy = 4 + ((rng() * (H - 10)) | 0);

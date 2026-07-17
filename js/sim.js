@@ -1569,7 +1569,8 @@ function _tickCrates(g) {
   // skirmish option: no random drops (mission-scripted supply drops and the
   // pickup/expiry sweeps above still work)
   if (g._noCrates) return;
-  if (crates.length >= 2 || g.rng() > 0.4) return;
+  // large battlefields hold one more concurrent drop — same density feel
+  if (crates.length >= (C.MAP_W > 64 ? 3 : 2) || g.rng() > 0.4) return;
   for (let tries = 0; tries < 20; tries++) {
     const cx = 2 + ((g.rng() * (C.MAP_W - 4)) | 0);
     const cy = 2 + ((g.rng() * (C.MAP_H - 4)) | 0);
@@ -1744,9 +1745,13 @@ function killEntity(ent, attacker) {
 // return fire / flee when damaged; base-under-attack warning
 EV.on('damaged', function (target, attacker, dmg) {
   const g = game;
-  if (!g || !attacker || attacker.owner === target.owner) return;
+  if (!g) return;
+  // superweapon splash carries no attacker entity — those hits still count
+  // as hostile for building repair below, just not for unit retaliation
+  const hostile = attacker && attacker.owner !== target.owner;
+  if (!hostile && attacker) return;   // friendly fire: no alarms, no reactions
   if (target.kind === 'building') {
-    if (target.owner === g.humanSide) {
+    if (hostile && target.owner === g.humanSide) {
       // scale the alarm to real damage: a stray potshot shouldn't cry wolf.
       // The accumulator decays by going stale (reset after 20s of quiet).
       if (g.tick - (g._atkAt || -1e9) > 300) g._atkAcc = 0;
@@ -1761,13 +1766,16 @@ EV.on('damaged', function (target, attacker, dmg) {
       }
     }
     // auto-repair: damaged finished buildings start repairing on their own
-    // (costs credits per hp as usual; the repair toggle can still switch it off)
+    // (costs credits per hp as usual; the repair toggle can still switch it
+    // off). Fires for unattributed damage too — an ion bolt or nuke passes
+    // no attacker, and the AI especially must patch up after one lands.
     if (target.buildProgress >= 1 && !target.repairing && target.hp < target.maxHp &&
         g.players[target.owner].credits > 100) {
       target.repairing = true;
     }
     return;
   }
+  if (!attacker) return;   // unit reactions below need a real attacker
   const d = DATA.units[target.type];
   if (d.stealth) target.decloakTicks = Math.max(target.decloakTicks, 30);
   if (d.civilian) {
