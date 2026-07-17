@@ -13,6 +13,13 @@ const AI = (function () {
   // mission difficulty knobs (missions.js): cadence multiplier + wave-size cap
   function _calm(g) { return (g.mission && g.mission.aiCalm) || 1; }
   function _waveCap(g) { return (g.mission && g.mission.aiWaveCap) || 9; }
+  // elite = top difficulty: crate runs, depot capture, garrisons, expansion,
+  // sharper economy, bigger coordinated waves, unit micro
+  function _elite(g) { return !!(g.mission && g.mission.aiElite); }
+  function _cellDist(ax, ay, bx, by) {
+    const dx = ax - bx, dy = ay - by;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
 
   function init(g) {
     // one state per AI-driven combat side, created in g.sides order so the
@@ -30,6 +37,13 @@ const AI = (function () {
         brokeSince: -1,
         builtHpad: false,
         enemy: null,          // current target side (re-picked on elimination)
+        nextSellAt: 0,        // liquidation cooldown (bankrupt economy)
+        rushed: false,        // final all-in fired
+        wantEng: false,       // depot duty: next infantry slot goes to an engineer
+        wantMcv: false,       // expansion duty: next vehicle slot goes to the MCV
+        expandAt: 0,          // {cx,cy} the MCV is trekking toward
+        expanded: false,
+        defGuardAt: null,     // placement hint: guard THIS refinery next
       };
     }
   }
@@ -166,16 +180,29 @@ const AI = (function () {
   }
 
   // pick the best cell for `key` around the conyard, by role
+  // every finished conyard (elite AIs expand to a second one)
+  function _conyards(g, p) {
+    const out = [];
+    for (const id of p.buildingIds) {
+      const b = g.buildings.get(id);
+      if (b && b.type === 'fact' && b.buildProgress >= 1) out.push(b);
+    }
+    return out;
+  }
+
   function _findSpot(g, p, st, key) {
-    const cyd = _conyard(g, p);
-    if (!cyd) return null;
+    const yards = _conyards(g, p);
+    if (!yards.length) return null;
     const role = ROLE[key] || 'core';
+    // guard hint: a defense ordered for a specific refinery plants beside it
+    const hint = role === 'defense' && st.defGuardAt ? st.defGuardAt : null;
     const threat = _threatDir(g, p, st);
     const tib = _tibDir(g, p, st);
     const defs = role === 'defense' ? _defenseSpots(g, p) : null;
     const d = DATA.buildings[key];
-    const acx = cyd.cx + 1, acy = cyd.cy + 1;
     let best = null, bestScore = -Infinity;
+    for (const cyd of yards) {
+    const acx = hint ? hint.cx : cyd.cx + 1, acy = hint ? hint.cy : cyd.cy + 1;
 
     for (let dy = -10; dy <= 10; dy++) {
       for (let dx = -10; dx <= 10; dx++) {
@@ -201,8 +228,11 @@ const AI = (function () {
         } else { // core: middle of the base, mildly lateral
           score += -Math.abs(r - 4) - Math.abs(nx * threat.x + ny * threat.y) * 1.2;
         }
+        if (hint) score += 6 - Math.abs(r - 3) * 1.5;   // hug the flagged refinery
         if (score > bestScore) { bestScore = score; best = { cx, cy }; }
       }
+    }
+    if (hint) break;   // hint anchors the search; other yards are irrelevant
     }
     return best;
   }
@@ -248,6 +278,18 @@ const AI = (function () {
     if (_planned(g, p, inf) < 1 && !blocked(inf)) return inf;
     // vehicle factory before hq/defense: tanks matter more than walls
     if (_planned(g, p, veh) < 1 && !blocked(veh)) return pick(veh, 1200);
+    // ...but a base with NO guns at all is an invitation: the first two
+    // defenses jump the big-ticket savings queue (which can otherwise starve
+    // them out forever while combat losses churn the treasury)
+    {
+      const defNow = _defenseSpots(g, p).length +
+        (p.queues.building && ROLE[p.queues.building.key] === 'defense' ? 1 : 0) +
+        (p.ready.building && ROLE[p.ready.building] === 'defense' ? 1 : 0);
+      if (defNow < 2 && _planned(g, p, veh) >= 1) {
+        const want = DEF_PLAN[side][Math.min(defNow, DEF_PLAN[side].length - 1)];
+        if (Production.prereqOk(p, want) && !blocked(want)) return pick(want, 400);
+      }
+    }
     // second refinery EARLY — the whole midgame stalls on a one-proc economy
     if (_planned(g, p, 'proc') < 2 && !blocked('proc')) return pick('proc', 1000);
     if (_planned(g, p, 'hq') < 1 && !blocked('hq')) return pick('hq', 900);
@@ -266,18 +308,38 @@ const AI = (function () {
       const want = DEF_PLAN[side][Math.min(defHave, DEF_PLAN[side].length - 1)];
       if (Production.prereqOk(p, want) && !blocked(want)) return pick(want, 500);
     }
+    // elite: refineries are the economy's throat — each gets a close guard
+    if (_elite(g)) {
+      for (const id of p.buildingIds) {
+        const b = g.buildings.get(id);
+        if (!b || b.type !== 'proc' || b.buildProgress < 1) continue;
+        let guarded = false;
+        for (const did of p.buildingIds) {
+          const db = g.buildings.get(did);
+          if (db && DATA.buildings[db.type].defense &&
+              Math.abs(db.cx - b.cx) <= 6 && Math.abs(db.cy - b.cy) <= 6) { guarded = true; break; }
+        }
+        if (!guarded) {
+          const want = side === 'gdi' ? 'gtwr' : 'gun';
+          if (Production.prereqOk(p, want) && !blocked(want)) {
+            st.defGuardAt = { cx: b.cx + 1, cy: b.cy + 1 };
+            return pick(want, 600);
+          }
+        }
+      }
+    }
 
     if (side === 'gdi' && _planned(g, p, 'fix') < 1 &&
         Production.prereqOk(p, 'fix') && !blocked('fix')) return pick('fix', 1500);
     if (!st.builtHpad && Production.prereqOk(p, 'hpad') && !blocked('hpad')) return pick('hpad', 2000);
     // late-game economy keeps pace with the growing army bill
-    if (_planned(g, p, 'proc') < 3 && g.tick > 5000 && !blocked('proc')) return pick('proc', 1500);
+    if (_planned(g, p, 'proc') < 3 && g.tick > (_elite(g) ? 3800 : 5000) && !blocked('proc')) return pick('proc', 1500);
     if (!techDone && Production.prereqOk(p, tech) && g.tick > 6000 && !blocked(tech)) return pick(tech, 2200);
     if (defHave < defWant) {
       const want = DEF_PLAN[side][Math.min(defHave, DEF_PLAN[side].length - 1)];
       if (Production.prereqOk(p, want) && !blocked(want)) return pick(want, 500);
     }
-    if (_planned(g, p, 'proc') < 4 && g.tick > 12000 && !blocked('proc')) return pick('proc', 2500);
+    if (_planned(g, p, 'proc') < 4 && g.tick > (_elite(g) ? 8500 : 12000) && !blocked('proc')) return pick('proc', 2500);
     if (p.storage - p.credits < 400 && Production.prereqOk(p, 'silo') &&
         _planned(g, p, 'silo') < 4 && !blocked('silo')) return pick('silo', 500);
     return null;
@@ -290,13 +352,20 @@ const AI = (function () {
 
   // kind: 'infantry' | 'vehicle' | 'air' — each factory line picks only its
   // own unit types, so the three lines can run concurrently
-  function _pickUnit(g, p, kind) {
+  function _pickUnit(g, p, kind, st) {
+    // elite duties preempt the regular mix: the lines of a rich AI never sit
+    // empty, so the engineer/MCV would otherwise wait forever for a free slot
+    if (st && kind === 'infantry' && st.wantEng && p.credits > 600 &&
+        Production.prereqOk(p, 'e6')) return 'e6';
+    if (st && kind === 'vehicle' && st.wantMcv && p.credits > 1500 &&
+        Production.prereqOk(p, 'mcv')) return 'mcv';
     if (kind === 'vehicle') {
       // harvester fleet scales with the refineries (and replaces losses
       // eagerly — a starved AI stops doing anything interesting)
       const procs = _planned(g, p, 'proc');
       const harvs = _unitCount(g, p, 'harv');
-      if (procs > 0 && harvs < Math.min(6, procs * 2 + 1) && p.credits > 900 &&
+      const fleet = _elite(g) ? Math.min(8, procs * 2 + 2) : Math.min(6, procs * 2 + 1);
+      if (procs > 0 && harvs < fleet && p.credits > (_elite(g) ? 700 : 900) &&
           Production.prereqOk(p, 'harv')) return 'harv';
     }
     const opts = WEIGHTS[baseSide(p.side)].filter(([k]) => DATA.units[k].factory === kind && Production.prereqOk(p, k));
@@ -459,7 +528,10 @@ const AI = (function () {
     // gather the strike force: everything idle beyond a small home garrison
     const idle = _military(g, p).filter(u => u.state === 'idle' && !DATA.units[u.type].air);
     const garrison = 2;
-    const need = Math.min(3 + st.wave, _waveCap(g));
+    // elite masses HARDER before moving out: fewer, far heavier hammers
+    const need = _elite(g)
+      ? Math.min(5 + st.wave * 2, Math.max(_waveCap(g), 12))
+      : Math.min(3 + st.wave, _waveCap(g));
     if (idle.length - garrison < need) {
       st.nextWaveAt = g.tick + 300; // keep producing, check again shortly
       return;
@@ -498,6 +570,48 @@ const AI = (function () {
     }
   }
 
+  // what a bankrupt AI can bear to part with, most expendable first. The
+  // war machine survives: never the conyard, refinery, factories, or the
+  // last power plant.
+  const SALE_ORDER = ['silo', 'hpad', 'fix', 'eye', 'tmpl', 'hq', 'sam', 'gtwr', 'gun', 'atwr', 'obli', 'nuk2', 'nuke'];
+  function _pickSale(g, p) {
+    let power = 0;
+    for (const id of p.buildingIds) {
+      const b = g.buildings.get(id);
+      if (b && (b.type === 'nuke' || b.type === 'nuk2')) power++;
+    }
+    for (const type of SALE_ORDER) {
+      if ((type === 'nuke' || type === 'nuk2') && power <= 1) continue;
+      for (const id of p.buildingIds) {
+        const b = g.buildings.get(id);
+        if (b && b.type === type && b.buildProgress >= 1) return b;
+      }
+    }
+    return null;
+  }
+
+  function _finalRush(g, p, st, ep) {
+    if (st.rushed) return;
+    st.rushed = true;
+    // cash out every structure...
+    for (const id of p.buildingIds.slice()) {
+      const b = g.buildings.get(id);
+      if (b && !b._dead) Production.sell(g, p, b);
+    }
+    // ...and march everything that moves at the enemy
+    const tgt = _nearestEnemyTarget(g, ep, { x: p.side && g.startPos[p.side] ? cellCenterX(g.startPos[p.side].cx) : 0, y: p.side && g.startPos[p.side] ? cellCenterY(g.startPos[p.side].cy) : 0 });
+    if (!tgt) return;
+    const tcx = worldToCell(_entXSafe(tgt)), tcy = worldToCell(_entYSafe(tgt));
+    for (const id of p.unitIds.slice()) {
+      const u = g.units.get(id);
+      if (!u || u._dead) continue;
+      const d = DATA.units[u.type];
+      if (d.weapon) orderAttackMove(u, tcx, tcy);
+      else if (!d.air) orderMove(u, tcx, tcy);
+    }
+    st.staging = null;
+  }
+
   function _entXSafe(e) { return e.kind === 'unit' ? e.x : (e.cx + e.w / 2) * C.CELL; }
   function _entYSafe(e) { return e.kind === 'unit' ? e.y : (e.cy + e.h / 2) * C.CELL; }
 
@@ -520,6 +634,9 @@ const AI = (function () {
     const enemySide = _pickEnemy(g, p.side, st);
     if (!enemySide) return;
     const ep = g.players[enemySide];
+
+    // elite micro runs on its own fast clock — battles turn on seconds
+    if (_elite(g) && g.tick % 12 === 5) _microUnits(g, p, ep);
 
     // defense reaction: intercept intruders near the base (every 15 ticks)
     if (g.tick % 15 === 3) {
@@ -553,17 +670,31 @@ const AI = (function () {
 
     if (g.tick % 30 !== 7) return; // main cadence
 
-    // bailout if fully starved with no way back — but only while the AI can
-    // still actually restore an INCOME: a conyard rebuilds anything, and
-    // prereqOk('harv') means refinery + vehicle factory both stand so the
-    // money can buy a harvester. A bare surviving refinery (no factory, no
-    // conyard) has no path back to an economy — funding it would drip-feed
-    // infantry forever and drag the endgame out.
-    if (p.credits < 100 && _unitCount(g, p, 'harv') === 0 &&
-        (_conyard(g, p) || Production.prereqOk(p, 'harv'))) {
+    // bankrupt with no income: LIQUIDATE, honestly. While a way back to an
+    // economy exists (conyard, or refinery+factory for a fresh harvester),
+    // sell one expendable building at a time and let the refunds fund the
+    // war. When nothing can restore an income — or there is nothing left
+    // worth selling — sell EVERYTHING and throw the whole army at the
+    // enemy. No more quietly going docile in a corner.
+    if (p.credits < 150 && _unitCount(g, p, 'harv') === 0 && !st.rushed) {
       if (st.brokeSince < 0) st.brokeSince = g.tick;
-      else if (g.tick - st.brokeSince > 900) { p.credits += 2000; st.brokeSince = -1; }
-    } else st.brokeSince = -1;
+      const canRebuild = _conyard(g, p) || Production.prereqOk(p, 'harv');
+      if (g.tick - st.brokeSince > 450) {
+        if (canRebuild && g.tick >= st.nextSellAt) {
+          const sale = _pickSale(g, p);
+          if (sale) {
+            Production.sell(g, p, sale);
+            st.nextSellAt = g.tick + 240;
+          } else if (g.tick - st.brokeSince > 1200) {
+            _finalRush(g, p, st, ep);   // sold the sofa too — all in
+          }
+        } else if (!canRebuild) {
+          _finalRush(g, p, st, ep);
+        }
+      }
+    } else if (_unitCount(g, p, 'harv') > 0 || p.credits >= 150) {
+      st.brokeSince = -1;
+    }
 
     const conyard = _conyard(g, p);
 
@@ -573,7 +704,9 @@ const AI = (function () {
       const spot = _findSpot(g, p, st, key);
       if (spot && Production.place(g, p, key, spot.cx, spot.cy)) {
         if (key === 'hpad') st.builtHpad = true;
+        st.defGuardAt = null;
       } else if (!spot) {
+        st.defGuardAt = null;
         // no legal spot: refund AND remember — without the cooldown the
         // planner re-picks the same key next tick and the build->cancel
         // livelock freezes every goal below it (tech was the worst case)
@@ -596,9 +729,9 @@ const AI = (function () {
     const armyFloor = _military(g, p).length < 9;   // never save yourself defenseless
     for (const kind of ['infantry', 'vehicle', 'air']) {
       if (p.queues[kind] || p.credits <= 400) continue;
-      const want = _pickUnit(g, p, kind);
+      const want = _pickUnit(g, p, kind, st);
       if (!want) continue;
-      if (st.savingFor && want !== 'harv' && !armyFloor) continue;
+      if (st.savingFor && want !== 'harv' && want !== 'e6' && want !== 'mcv' && !armyFloor) continue;
       Production.tryStart(p, want);
     }
 
@@ -615,16 +748,191 @@ const AI = (function () {
       const home = g.startPos[p.side] || g.startPos.ai;
       const cydX = conyard ? (conyard.cx + 1) * C.CELL : cellCenterX(home.cx);
       const cydY = conyard ? (conyard.cy + 1) * C.CELL : cellCenterY(home.cy);
+      const deep = [];
       for (const u of _military(g, p)) {
         if (u.state !== 'idle' || DATA.units[u.type].air) continue;
         if (st.staging && st.staging.ids.includes(u.id)) continue;
-        if (dist(u.x, u.y, cydX, cydY) > 16 * C.CELL) {
+        if (dist(u.x, u.y, cydX, cydY) > 16 * C.CELL) deep.push(u);
+      }
+      // elite: lone survivors regroup and strike TOGETHER; a single tank
+      // trickling into a defended base is a free kill for the turrets
+      if (!_elite(g) || deep.length >= 4) {
+        for (const u of deep) {
           const t = _nearestEnemyTarget(g, ep, u);
           if (t) orderAttack(u, t);
         }
+      } else if (deep.length) {
+        for (const u of deep) orderMove(u, worldToCell(cydX), worldToCell(cydY));
+      }
+    }
+
+    if (_elite(g)) _eliteMoves(g, p, st, ep);
+  }
+
+  // ---- elite side-quests: crates, depots, garrisons, expansion ---------------
+
+  function _eliteMoves(g, p, st, ep) {
+    // crate runs: the nearest fast idle raider grabs loose salvage
+    if (g.crates && g.crates.length && g.tick % 150 === 7) {
+      for (const c of g.crates) {
+        let best = null, bestD = 26 * 26 * C.CELL * C.CELL;
+        for (const u of _military(g, p)) {
+          if (u.state !== 'idle' || DATA.units[u.type].air) continue;
+          if (DATA.units[u.type].speed < 2.4) continue;
+          const d = (u.x - cellCenterX(c.cx)) ** 2 + (u.y - cellCenterY(c.cy)) ** 2;
+          if (d < bestD) { bestD = d; best = u; }
+        }
+        if (best) orderMove(best, c.cx, c.cy);
+      }
+    }
+
+    // supply depots: keep an engineer alive and send it at the free money
+    if (g.tick % 120 === 37) {
+      let depot = null, depotD = Infinity;
+      const my = g.startPos[p.side] || g.startPos.ai;
+      for (const b of g.buildings.values()) {
+        if (b.type !== 'depo' || b.owner !== 'civ') continue;
+        const d = (b.cx - my.cx) ** 2 + (b.cy - my.cy) ** 2;
+        if (d < depotD) { depotD = d; depot = b; }
+      }
+      let eng = null;
+      for (const id of p.unitIds) {
+        const u = g.units.get(id);
+        if (u && DATA.units[u.type].engineer) { eng = u; break; }
+      }
+      if (depot) {
+        st.wantEng = !eng;
+        if (eng && eng.state === 'idle') orderEnter(eng, depot);
+      } else {
+        st.wantEng = false;
+      }
+    }
+
+    // garrisons: riflemen man the village houses on our side of the map.
+    // Hard-capped at TWO manned houses — garrison duty must never bleed the
+    // field army below wave strength (it did: no waves ever launched)
+    if (g.tick % 180 === 67 && _military(g, p).length >= 10) {
+      let owned = 0;
+      for (const b of g.buildings.values()) {
+        if (DATA.buildings[b.type].garrison && b.owner === p.side &&
+            (b.garrison || []).length) owned++;
+      }
+      if (owned < 2) {
+        const my = g.startPos[p.side] || g.startPos.ai;
+        for (const b of g.buildings.values()) {
+          const bd = DATA.buildings[b.type];
+          if (!bd.garrison || b.owner !== 'civ') continue;
+          if (_cellDist(b.cx, b.cy, my.cx, my.cy) > 24) continue;
+          let sent = 0;
+          for (const id of p.unitIds) {
+            if (sent >= 2) break;
+            const u = g.units.get(id);
+            if (!u || u.state !== 'idle') continue;
+            const ud = DATA.units[u.type];
+            if (!ud.infantry || !ud.weapon || ud.engineer) continue;
+            if (st.staging && st.staging.ids.includes(u.id)) continue;
+            if (orderEnter(u, b)) sent++;
+          }
+          if (sent) break;   // one house per sweep
+        }
+      }
+    }
+
+    // expansion: a second MCV plants a forward yard by the richest far field
+    if (!st.expanded && g.tick > 4200 && g.tick % 150 === 97) {
+      let mcv = null;
+      for (const id of p.unitIds) {
+        const u = g.units.get(id);
+        if (u && u.type === 'mcv') { mcv = u; break; }
+      }
+      const yards = _conyards(g, p);
+      if (mcv && st.expandAt) {
+        const d = dist(mcv.x, mcv.y, cellCenterX(st.expandAt.cx), cellCenterY(st.expandAt.cy));
+        if (d <= C.CELL * 2.5) {
+          if (orderDeploy(mcv)) st.expanded = true;
+          else orderMove(mcv, st.expandAt.cx + 1, st.expandAt.cy + 1);
+        } else if (mcv.state === 'idle') {
+          orderMove(mcv, st.expandAt.cx, st.expandAt.cy);
+        }
+      } else if (!mcv && yards.length === 1 && p.credits > 2500 &&
+                 Production.prereqOk(p, 'mcv')) {
+        // is there a field worth trekking to?
+        const spot = _richFarField(g, yards[0]);
+        if (spot) {
+          st.expandAt = spot;
+          st.wantMcv = true;      // the vehicle line's next slot builds it
+        }
+      } else if (mcv) {
+        st.wantMcv = false;
       }
     }
   }
+
+  // richest tiberium pocket further than 20 cells from the given yard
+  function _richFarField(g, cyd) {
+    let best = null, bestRich = 500;   // must be a REAL field to bother
+    for (let cy = 3; cy < C.MAP_H - 3; cy += 3) {
+      for (let cx = 3; cx < C.MAP_W - 3; cx += 3) {
+        if (_cellDist(cx, cy, cyd.cx, cyd.cy) < 20) continue;
+        let rich = 0;
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            if (inMap(cx + dx, cy + dy)) rich += g.tib[cellIdx(cx + dx, cy + dy)];
+          }
+        }
+        if (rich > bestRich) { bestRich = rich; best = { cx, cy }; }
+      }
+    }
+    return best;
+  }
+
+  // ---- elite micro: focus fire + wounded pullback ----------------------------
+
+  function _microUnits(g, p, ep) {
+    for (const u of _military(g, p)) {
+      const ud = DATA.units[u.type];
+      if (ud.air) continue;
+      const w = ud.weapon && DATA.weapons[ud.weapon];
+      if (!w) continue;
+      // wounded armor breaks off: GDI limps to the repair pad, everyone
+      // else falls back home out of the firefight
+      if (u.hp < u.maxHp * 0.3 && !ud.infantry && !u._fallback) {
+        u._fallback = true;
+        let pad = null;
+        for (const id of p.buildingIds) {
+          const b = g.buildings.get(id);
+          if (b && DATA.buildings[b.type].repairPad && b.buildProgress >= 1) { pad = b; break; }
+        }
+        const to = pad ? { cx: pad.cx + 1, cy: pad.cy + b0h(pad) } :
+          (g.startPos[p.side] || g.startPos.ai);
+        orderMove(u, to.cx, to.cy);
+        continue;
+      }
+      if (u._fallback && u.hp > u.maxHp * 0.7) u._fallback = false;
+      if (u._fallback) continue;
+      // focus fire: prefer the weakest enemy UNIT in range over buildings
+      // and over healthier targets — kills remove guns from the fight
+      if (u.state !== 'attack' && u.state !== 'idle') continue;
+      const cur = u.targetId ? getEnt(u.targetId) : null;
+      const range = (w.range + 0.4) * C.CELL;
+      let alt = null, altHp = Infinity;
+      for (const id of ep.unitIds) {
+        const e = g.units.get(id);
+        if (!e || e._dead) continue;
+        if (e.cloaked) continue;
+        const ed = DATA.units[e.type];
+        if (ed.air && !w.antiAir) continue;
+        if (dist(u.x, u.y, e.x, e.y) > range) continue;
+        if (e.hp < altHp) { altHp = e.hp; alt = e; }
+      }
+      if (alt && (!cur || cur.kind === 'building' ||
+          (cur.kind === 'unit' && alt.id !== cur.id && alt.hp < cur.hp * 0.55))) {
+        orderAttack(u, alt);
+      }
+    }
+  }
+
+  function b0h(b) { return b.h || DATA.buildings[b.type].h; }
 
   // debug/test hook: read-only peek at a wave machine's internal state.
   // No arg = the classic single opponent (primary enemy of the human).

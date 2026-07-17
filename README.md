@@ -235,6 +235,13 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   controls back at the exact moment you left — same units, same credits,
   same fog. A resumed battle keeps recording, so you can save again or
   watch the whole thing later
+- **A harder HARD** — the top-difficulty AI plays the whole map: it chases
+  crates, captures supply depots with engineers, garrisons village houses,
+  guards its refineries, expands to a second base by a rich crystal field,
+  masses proper attack waves instead of trickling units, and micro-manages
+  its army — focus-firing your weakest units and pulling wounded armor back
+  to the repair pad. And no AI goes quietly anymore: a bankrupt army sells
+  its buildings to fund one last push — then sells everything and rushes
 - **Skirmish setup** — dial a skirmish in before you launch: combatants
   (classic duel, free-for-alls against 2 or 3 AIs, or sit back and **watch
   2–4 AI armies fight each other**), map size (classic or large), starting

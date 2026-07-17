@@ -13,7 +13,7 @@ const Main = (function () {
   // skirmish difficulty knobs — module scope so replays can reconstruct them
   const DIFF_PRESETS = {
     EASY: { skirmish: 'EASY', aiCalm: 1.7, aiWaveCap: 6, aiCredits: 3500 },
-    HARD: { skirmish: 'HARD', aiCalm: 0.65, aiCredits: 9000 },
+    HARD: { skirmish: 'HARD', aiCalm: 0.65, aiCredits: 9000, aiElite: true },
   };
 
   function $(id) { return document.getElementById(id); }

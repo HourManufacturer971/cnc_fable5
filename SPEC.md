@@ -754,6 +754,27 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - If a ready building has no legal spot, the AI cancels it AND cooldowns that key for
   ~100s (`S.noSpot`); `_nextBuilding` skips cooled-down keys so the goals below still run
   (no build→cancel livelock freezing base development on cramped maps).
+- **Hover intel** (fine pointer, render-only): the unit or building under the cursor
+  shows its health bar AND a name chip in the owner's color (★/★★ for veteran/elite
+  units) — friend-or-foe identification without a click.
+- **Bankrupt liquidation** (all difficulties): an AI with <150 credits and no
+  harvesters starts SELLING after ~30s — one expendable building per ~10s
+  (SALE_ORDER: silos, pads, tech, defense, spare power; never the conyard,
+  refineries, factories, or last plant) while a way back to an economy exists.
+  When none does (or the sellables run dry), `_finalRush` liquidates EVERYTHING
+  and orders the entire army to attack-move on the enemy — no more going docile.
+- **Elite AI** (`aiElite: true` — the HARD skirmish preset): crate runs by fast idle
+  raiders; a supply-depot engineer (priority slot in the infantry line via
+  `st.wantEng`); up to TWO garrisoned village houses (hard-capped: garrison duty
+  must not bleed the wave army); MCV base expansion toward a rich far field
+  (`st.wantMcv` priority slot, deploys a second conyard the placement planner then
+  builds from — `_findSpot` searches every yard); refinery guard turrets
+  (`st.defGuardAt` placement hint); bigger massed waves (5 + 2/wave, min 12 cap) and
+  no lone-unit trickling (deep survivors regroup at ≥4); sharper economy (8-harvester
+  fleet, earlier 3rd/4th refinery); unit MICRO on a 12-tick clock — focus fire on the
+  weakest enemy unit in weapon range, wounded armor breaks off to the repair pad
+  (or home) and rejoins above 70% hp. The first two base defenses also jump the
+  big-ticket savings queue for every AI, so bases never sit gunless.
 - Skirmish difficulty presets (Operations menu → SKIRMISH EASY/NORMAL/HARD) ride the same
   knobs campaign missions use, as a pseudo-mission on `game.mission` (no `n`, no
   `objective`): EASY `{aiCalm:1.7, aiWaveCap:6, aiCredits:3500}`, NORMAL null, HARD

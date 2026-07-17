@@ -1458,14 +1458,35 @@ const Render = (function () {
           }
         }
         if (hov && !g.selection.includes(hov.id)) {
+          let barX, barY, barW;
           if (hov.kind === 'unit') {
             const air = DATA.units[hov.type].air;
-            _drawHealthBar(X(hov.x) - cs / 2, Y(hov.y) - cs / 2 - 10 - (air ? 16 : 0),
-              cs, hov.hp / hov.maxHp);
+            barX = X(hov.x) - cs / 2;
+            barY = Y(hov.y) - cs / 2 - 10 - (air ? 16 : 0);
+            barW = cs;
           } else {
-            _drawHealthBar(X(hov.cx * C.CELL), Y(hov.cy * C.CELL) - 10,
-              hov.w * cs, hov.hp / hov.maxHp);
+            barX = X(hov.cx * C.CELL);
+            barY = Y(hov.cy * C.CELL) - 10;
+            barW = hov.w * cs;
           }
+          _drawHealthBar(barX, barY, barW, hov.hp / hov.maxHp);
+          // name chip above the bar: what IS that (rank stars for veterans),
+          // tinted in the owner's color so friend/foe reads instantly
+          const hd = hov.kind === 'unit' ? DATA.units[hov.type] : DATA.buildings[hov.type];
+          let label = hd.name;
+          if (hov.kind === 'unit' && (hov.kills || 0) >= 3) {
+            label += hov.kills >= 6 ? ' ★★' : ' ★';
+          }
+          ctx.font = '12px monospace';
+          const tw3 = ctx.measureText(label).width;
+          const cx3 = clamp(barX + barW / 2 - tw3 / 2, 4, C.VIEW_PW - tw3 - 4);
+          const cy3 = Math.max(C.TAB_H + 3, barY - 18);
+          ctx.fillStyle = 'rgba(8,10,6,0.78)';
+          ctx.fillRect(cx3 - 5, cy3 - 2, tw3 + 10, 16);
+          ctx.fillStyle = OWNER_COLOR[hov.owner] || '#d8d0a8';
+          ctx.textBaseline = 'top';
+          ctx.fillText(label, cx3, cy3);
+          ctx.textBaseline = 'alphabetic';
         }
       }
     }
