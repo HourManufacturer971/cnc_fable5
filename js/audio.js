@@ -26,6 +26,10 @@ const AUDIO = (function () {
   let inited = false;
   let enabled = true;
   let voiceEnabled = true;    // the announcer/chatter voice, toggled separately
+  let sfxVol = 1;             // slider multiplier on MASTER_GAIN (0..2)
+  let voxVol = 1;             // slider multiplier on the voice bus (0..2)
+  let voxBus = null;          // voice gain -> lowpass; bypasses master so the
+                              // SFX slider doesn't also scale the announcer
   let activeVoices = 0;
   let noiseBuf = null;        // shared 1s white-noise buffer
   let pinkBuf = null;         // shared 2s pink-ish noise buffer (warmer roars/rumbles)
@@ -572,7 +576,7 @@ const AUDIO = (function () {
     bandpass.type = 'bandpass'; bandpass.frequency.value = 1500; bandpass.Q.value = 0.7;
     const hp = ctx.createBiquadFilter();
     hp.type = 'highpass'; hp.frequency.value = 340;
-    env.connect(bandpass); bandpass.connect(hp); hp.connect(master);
+    env.connect(bandpass); bandpass.connect(hp); hp.connect(voxBus || master);
 
     startSrc(o1, t0, dur); startSrc(o2, t0, dur);
 
@@ -625,7 +629,6 @@ const AUDIO = (function () {
         if (AC) {
           ctx = new AC();
           master = ctx.createGain();
-          master.gain.value = enabled ? MASTER_GAIN : 0;
           // gentle master lowpass takes the digital edge off every voice
           const lp = ctx.createBiquadFilter();
           lp.type = 'lowpass';
@@ -633,6 +636,9 @@ const AUDIO = (function () {
           lp.Q.value = 0.4;
           master.connect(lp);
           lp.connect(ctx.destination);
+          voxBus = ctx.createGain();
+          voxBus.connect(lp);
+          _applyGains();
           // shared short echo tap: big booms send here for a sense of size
           echoIn = ctx.createGain();
           echoIn.gain.value = 1;
@@ -656,9 +662,16 @@ const AUDIO = (function () {
         if (p && p.catch) p.catch(noop);
       }
     } catch (e) {
-      ctx = null; master = null; echoIn = null;
+      ctx = null; master = null; echoIn = null; voxBus = null;
     }
     inited = true;
+  }
+
+  // one place computes every bus level from the enabled flags + sliders
+  function _applyGains() {
+    if (master) { try { master.gain.value = enabled ? MASTER_GAIN * sfxVol : 0; } catch (e) {} }
+    // voice baseline matches MASTER_GAIN so routing around master is loudness-neutral
+    if (voxBus) { try { voxBus.gain.value = enabled && voiceEnabled ? MASTER_GAIN * voxVol : 0; } catch (e) {} }
   }
 
   function _stopVoice() {
@@ -669,15 +682,24 @@ const AUDIO = (function () {
 
   function setEnabled(b) {
     enabled = !!b;
-    if (master) { // mute/unmute in-flight sounds immediately
-      try { master.gain.value = enabled ? MASTER_GAIN : 0; } catch (e) {}
-    }
+    _applyGains(); // mute/unmute in-flight sounds immediately
     if (!enabled) _stopVoice();
   }
 
   function setVoiceEnabled(b) {
     voiceEnabled = !!b;
+    _applyGains();
     if (!voiceEnabled) _stopVoice();
+  }
+
+  // volume sliders: v is a 0..2 multiplier (1 = designed level)
+  function setVolume(v) {
+    sfxVol = Math.max(0, Math.min(2, +v || 0));
+    _applyGains();
+  }
+  function setVoiceVolume(v) {
+    voxVol = Math.max(0, Math.min(2, +v || 0));
+    _applyGains();
   }
 
   function play(name) {
@@ -758,6 +780,8 @@ const AUDIO = (function () {
     init: init,
     setEnabled: setEnabled,
     setVoiceEnabled: setVoiceEnabled,
+    setVolume: setVolume,
+    setVoiceVolume: setVoiceVolume,
     play: play,
     eva: eva,
     evaText: evaText,

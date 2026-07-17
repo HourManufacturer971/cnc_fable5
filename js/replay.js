@@ -16,10 +16,11 @@ const REPLAY = (function () {
 
   let recording = false;
   let playing = false;
-  let meta = null;      // { v, seed, side, mission, skirmish }
+  let meta = null;      // { v, seed, side, mission, skirmish, sk }
   let log = [];         // [{ t, c }] — command c executed after tick t
   let cursor = 0;
   let last = null;      // most recent finished recording { meta, log }
+  let resumeAt = -1;    // save/resume: tick where playback hands back control
 
   // ---- recording -------------------------------------------------------------
 
@@ -30,6 +31,7 @@ const REPLAY = (function () {
     meta = Object.assign({ v: VER }, m);
     log = [];
     cursor = 0;
+    resumeAt = -1;
   }
 
   function logCmd(c) {
@@ -52,6 +54,40 @@ const REPLAY = (function () {
 
   function hasLast() { return !!(last && last.meta); }
   function exportLast() { return last ? JSON.stringify(last) : null; }
+
+  // ---- mid-battle save -------------------------------------------------------
+  // A save IS a replay cut short: the setup plus every order so far, and the
+  // tick the player left off at. Resuming replays the log at fast-forward
+  // speed up to that tick, then flips back to live recording — so a resumed
+  // game can itself be saved or replayed again.
+
+  function exportLive() {
+    if (!recording || !meta) return null;
+    return JSON.stringify({
+      meta: Object.assign({}, meta, { p: NET.PROTO }),
+      log: log.slice(),
+      at: typeof game !== 'undefined' && game ? game.tick : 0,
+    });
+  }
+
+  function resumeData(json) {
+    const d = JSON.parse(json);
+    if (!d || !d.meta || d.meta.v !== VER || !Array.isArray(d.log) ||
+        typeof d.at !== 'number') {
+      throw new Error('Not a Harvest War save.');
+    }
+    if (d.meta.p !== undefined && d.meta.p !== NET.PROTO) {
+      throw new Error('Save is from an older game version.');
+    }
+    Main.startReplay(d.meta);
+    recording = false;
+    meta = d.meta;
+    log = d.log;
+    cursor = 0;
+    playing = true;
+    resumeAt = d.at;
+    game._ffTarget = d.at;
+  }
 
   // ---- playback --------------------------------------------------------------
 
@@ -87,12 +123,19 @@ const REPLAY = (function () {
       NET.execReplay(log[cursor].c, meta.side);
       cursor++;
     }
+    // resuming a save: once caught up, hand the controls back to the player
+    // and keep recording onto the same log so the game stays saveable
+    if (resumeAt >= 0 && game.tick >= resumeAt) {
+      playing = false;
+      recording = true;
+      resumeAt = -1;
+    }
   }
 
-  function stop() { playing = false; }
+  function stop() { playing = false; resumeAt = -1; }
 
   return {
-    arm, logCmd, finish, hasLast, exportLast,
+    arm, logCmd, finish, hasLast, exportLast, exportLive, resumeData,
     watchLast, watchData, applyPending, stop,
     get recording() { return recording; },
     get playing() { return playing; },

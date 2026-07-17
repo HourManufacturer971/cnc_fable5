@@ -1564,6 +1564,9 @@ function _tickCrates(g) {
   for (let i = crates.length - 1; i >= 0; i--) {
     if (g.tick - crates[i].born > 2700) crates.splice(i, 1);
   }
+  // skirmish option: no random drops (mission-scripted supply drops and the
+  // pickup/expiry sweeps above still work)
+  if (g._noCrates) return;
   if (crates.length >= 2 || g.rng() > 0.4) return;
   for (let tries = 0; tries < 20; tries++) {
     const cx = 2 + ((g.rng() * (C.MAP_W - 4)) | 0);

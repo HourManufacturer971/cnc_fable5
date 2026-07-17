@@ -1877,6 +1877,7 @@ const Render = (function () {
   // for a live game they've lost control of
   function _drawReplayBadge(g) {
     if (typeof REPLAY === 'undefined' || !REPLAY.playing) return;
+    if (g._ffTarget) return;   // resuming a save, not spectating
     ctx.font = 'bold 14px monospace';
     ctx.textBaseline = 'middle';
     const s = '▶ REPLAY';
@@ -2073,6 +2074,7 @@ const Render = (function () {
   // Pure render (keyed off g.tick) — deterministic across MP peers and replays.
   function _drawIntro(g) {
     if (g.status !== 'playing') return;
+    if (g._ffTarget) return;   // the resume veil owns the screen
     const t = g.tick;
     if (t < 26) {
       ctx.fillStyle = 'rgba(0,0,0,' + (0.92 * (1 - t / 26)).toFixed(3) + ')';
@@ -2109,6 +2111,30 @@ const Render = (function () {
     ctx.fillRect(0, 0, C.SCREEN_W, C.SCREEN_H);
   }
 
+  // save-resume catch-up: a full veil with a progress bar while the main loop
+  // burns through the recorded battle (game._ffTarget = tick to reach)
+  function _drawResume(g) {
+    if (!g._ffTarget) return;
+    const pct = Math.min(100, Math.floor(100 * g.tick / g._ffTarget));
+    ctx.fillStyle = 'rgba(4,8,6,0.88)';
+    ctx.fillRect(0, 0, C.SCREEN_W, C.SCREEN_H);
+    const cx2 = C.SCREEN_W / 2, cy2 = C.SCREEN_H / 2;
+    ctx.font = 'bold 26px monospace';
+    ctx.fillStyle = '#e0b840';
+    const t1 = 'RESUMING OPERATION';
+    ctx.fillText(t1, cx2 - ctx.measureText(t1).width / 2, cy2 - 30);
+    const bw = 380, bh = 14;
+    ctx.strokeStyle = '#7a6420';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cx2 - bw / 2, cy2 - 7, bw, bh);
+    ctx.fillStyle = '#b89430';
+    ctx.fillRect(cx2 - bw / 2 + 2, cy2 - 5, (bw - 4) * pct / 100, bh - 4);
+    ctx.font = '15px monospace';
+    ctx.fillStyle = '#98c8a0';
+    const t2 = 'replaying your battle — ' + pct + '%';
+    ctx.fillText(t2, cx2 - ctx.measureText(t2).width / 2, cy2 + 34);
+  }
+
   // ---- frame ----------------------------------------------------------------------------------
 
   function frame(g) {
@@ -2130,7 +2156,8 @@ const Render = (function () {
     _drawIconTooltip(g);
     _drawVerdict(g);
     _drawIntro(g);
-    if (Input.mouse.inside && !g.paused) _drawCursor();
+    _drawResume(g);
+    if (Input.mouse.inside && !g.paused && !g._ffTarget) _drawCursor();
     shownTick = g.tick;
   }
 

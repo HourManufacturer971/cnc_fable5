@@ -36,8 +36,9 @@
         </div>
       </div>
       <div id="menuActions">
+        <button id="btnResumeSave" class="hidden">Resume Battle<span class="bsub" id="resumeSaveSub"></span></button>
         <button id="btnMultiplayer">Multiplayer<span class="bsub">vs a friend &middot; P2P</span></button>
-        <button id="btnLoadReplay">Watch Replay<span class="bsub">load a saved battle</span></button>
+        <button id="btnLoadReplay">Watch Replay<span class="bsub">load a replay file</span></button>
       </div>
       <input type="file" id="replayFile" accept=".json,application/json" class="hidden">
       <button id="btnInstall" class="hidden">Install as App &mdash; plays fullscreen</button>
@@ -85,6 +86,24 @@
   <div id="missions" class="overlay hidden">
     <div class="panel">
       <h2 id="missionsTitle">OPERATIONS</h2>
+      <div id="skOpts">
+        <span class="skTitle">SKIRMISH SETUP</span>
+        <label>Funds <select id="skCredits">
+          <option value="3000">3000</option>
+          <option value="5000" selected>5000</option>
+          <option value="8000">8000</option>
+          <option value="12000">12000</option>
+        </select></label>
+        <label>Crates <select id="skCrates">
+          <option value="1" selected>ON</option>
+          <option value="0">OFF</option>
+        </select></label>
+        <label>Superweapons <select id="skSupers">
+          <option value="1" selected>ON</option>
+          <option value="0">OFF</option>
+        </select></label>
+        <label>Seed <input id="skSeed" type="text" inputmode="numeric" maxlength="10" placeholder="random" spellcheck="false"></label>
+      </div>
       <div id="missionList"></div>
       <button id="btnMissionsBack" class="backBtn">Back</button>
     </div>
@@ -107,11 +126,16 @@
       <button id="btnSound">Sound: ON</button>
       <button id="btnMusic">Music: ON</button>
       <button id="btnVoice">Voice: ON</button>
+      <label class="volRow">SFX <input type="range" id="volSfx" min="0" max="100" value="50"></label>
+      <label class="volRow">Music <input type="range" id="volMusic" min="0" max="100" value="50"></label>
+      <label class="volRow">Voice <input type="range" id="volVoice" min="0" max="100" value="50"></label>
       <button id="btnControls">Controls</button>
       <button id="btnFullscreen" class="hidden">Fullscreen: OFF</button>
       <label id="speedRow">Game Speed <input type="range" id="speedSlider" min="50" max="220" value="170"></label>
+      <button id="btnSaveGame">Save Battle</button>
       <button id="btnRestart">Restart Mission</button>
       <button id="btnAbort">Abort Mission</button>
+      <p id="seedLine"></p>
     </div>
   </div>
 
@@ -160,6 +184,7 @@
       <div id="scoreLines"></div>
       <button id="btnWatchReplay" class="hidden">Watch Replay</button>
       <button id="btnSaveReplay" class="hidden">Save Replay</button>
+      <button id="btnRematch" class="hidden">Rematch</button>
       <button id="btnAgain">Continue</button>
     </div>
   </div>

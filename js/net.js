@@ -19,7 +19,7 @@
 // execution itself (NET.applying) go to the real implementations.
 
 const NET = (function () {
-  const PROTO = 3;         // bump when commands/handshake OR sim rules change shape
+  const PROTO = 4;         // bump when commands/handshake OR sim rules change shape
   const DELAY = 5;         // ticks between issuing and executing an order
   const CK_EVERY = 128;    // checksum exchange cadence (ticks)
 
@@ -42,6 +42,9 @@ const NET = (function () {
   let remotePaused = false;
   let onStatus = null;     // lobby status callback (string)
   let started = false;     // handshake completed, game launched
+  let localRq = false;     // rematch: we asked
+  let remoteRq = false;    // rematch: opponent asked
+  let onRematch = null;    // score-screen callback: 'remote' | 'gone'
 
   // ---- tiny helpers ---------------------------------------------------------
 
@@ -266,10 +269,32 @@ const NET = (function () {
   function _begin(seed) {
     if (started) return;
     started = true;
+    localRq = false; remoteRq = false;
     _reset();
     active = true;
     lastAdvance = performance.now();
     Main.startGame(side, { seed, mp: true });
+  }
+
+  // ---- rematch: the datachannel stays open at the score screen ----------------
+  // Both players press Rematch -> both flags set on both clients -> the host
+  // re-runs the handshake, which rolls a FRESH seed and relaunches the match
+  // over the same connection. No new code exchange needed.
+
+  function requestRematch() {
+    if (!chan || desynced) return false;
+    localRq = true;
+    chan.send({ rq: 1 });
+    _tryRematch();
+    return true;
+  }
+
+  function _tryRematch() {
+    if (!localRq || !remoteRq) return;
+    localRq = false; remoteRq = false;
+    started = false;               // allow a fresh handshake on the open channel
+    active = false;
+    _handshake();                  // host rolls a new seed; guest waits for {h}
   }
 
   function _reset() {
@@ -293,11 +318,13 @@ const NET = (function () {
       Main.endGame(true);
     } else {
       _status('Connection lost.');
+      if (onRematch) onRematch('gone');   // score screen: stop offering rematch
     }
   }
 
   function _teardown() {
     active = false; started = false;
+    localRq = false; remoteRq = false;
     if (chan) { chan.close(); chan = null; }
     if (pc) { try { pc.close(); } catch (e) {} pc = null; }
   }
@@ -321,6 +348,7 @@ const NET = (function () {
     if (m.ck) { remoteCk.set(m.ck.t, m.ck.v); _compareCk(m.ck.t); return; }
     if (m.pz !== undefined) { remotePaused = !!m.pz; return; }
     if (m.ds) { _desync(); return; }
+    if (m.rq) { remoteRq = true; if (onRematch) onRematch('remote'); _tryRematch(); return; }
     if (m.bye) { _peerGone(); return; }
   }
 
@@ -667,7 +695,11 @@ const NET = (function () {
     get isHost() { return isHost; },
     get desynced() { return desynced; },
     get remotePaused() { return remotePaused; },
+    get PROTO() { return PROTO; },
+    get rematchOffered() { return remoteRq; },
+    set onRematch(f) { onRematch = f; },
     DELAY,
+    requestRematch,
     host, acceptAnswer, join, testLocal, close,
     pump, ready, applyTick, postTick, stalledMs, notifyPause, initExplored, checksum,
     execReplay,

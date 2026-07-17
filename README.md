@@ -227,6 +227,23 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   file, or load one from the main menu and watch any battle re-simulate
   move for move. Playback is a spectator's view: the whole map renders
   unfogged, both sides visible, cloaked ambushers included
+- **Save & resume** — pause any single-player battle and hit *Save Battle*;
+  the main menu then offers *Resume Battle*, which re-simulates your
+  recording at fast-forward (a progress bar counts it up) and hands the
+  controls back at the exact moment you left — same units, same credits,
+  same fog. A resumed battle keeps recording, so you can save again or
+  watch the whole thing later
+- **Skirmish setup** — dial a skirmish in before you launch: starting funds
+  (3000–12000), crates on/off, superweapons on/off, and a battlefield seed
+  you can type in to refight a favorite map — the pause menu shows the
+  current seed so you can share it
+- **Campaign records** — each operation remembers your fastest win and best
+  score, shown on the operations list and stamped NEW BEST on the tally
+- **Multiplayer rematch** — the connection stays up at the score screen:
+  both players hit *Rematch* and a fresh battlefield launches instantly,
+  no new codes to paste
+- **Volume sliders** — separate SFX, music and voice levels in the options
+  menu, remembered across sessions
 - **Vehicle repairs** — click your Repair Facility with vehicles selected
   and they roll over and park; a wrench blinks while the pad patches them
   up at the same credits-per-point rate building repairs cost
@@ -358,8 +375,8 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 
 ## Not included (yet)
 
-FMV, naval units, mid-mission save/load, multiplayer beyond 1v1 (no relay
-server for hard NATs, no matchmaking lobby).
+FMV, naval units, multiplayer beyond 1v1 (no relay server for hard NATs,
+no matchmaking lobby).
 
 ## Experimental: pre-rendered 3D sprite pipeline (unused)
 

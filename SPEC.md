@@ -87,8 +87,8 @@ define **exactly** the globals listed and may freely call any global listed for 
 | ai.js | `AI` (`init, tick, _peek` — `_peek` is a read-only debug/test hook) |
 | input.js | `Input` (`init, tick, mouse, cursorKind, mode, modeArg`) |
 | render.js | `Render` (`init, frame, worldFromScreen, hitTest`) |
-| net.js | `NET` (P2P lockstep: `host, acceptAnswer, join, testLocal, close, pump, ready, applyTick, postTick, stalledMs, initExplored, checksum, execReplay`, flags `active/applying/inSim/side/desynced`) |
-| replay.js | `REPLAY` (`arm, logCmd, finish, hasLast, exportLast, watchLast, watchData, applyPending, stop`, flags `recording/playing` — see "Replays") |
+| net.js | `NET` (P2P lockstep: `host, acceptAnswer, join, testLocal, close, pump, ready, applyTick, postTick, stalledMs, initExplored, checksum, execReplay, requestRematch`, flags `active/applying/inSim/side/desynced/PROTO/rematchOffered`, `onRematch` callback) |
+| replay.js | `REPLAY` (`arm, logCmd, finish, hasLast, exportLast, exportLive, resumeData, watchLast, watchData, applyPending, stop`, flags `recording/playing` — see "Replays") |
 | main.js | `Main` (`boot, startGame, startReplay, endGame`), starts loop, menu DOM wiring |
 
 ## Game state (created by `makeGame` in core.js — read it)
@@ -473,6 +473,13 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   id/hp/progress, credits, super timers) exchanged every 128 ticks; mismatch →
   both clients show "DESYNC DETECTED", `game.status = 'desync'`, link closed.
   Disconnect / Abort mid-game forfeits: the remaining player wins.
+- **Rematch**: `endGame` deliberately leaves the channel OPEN at the score screen
+  (btnAgain/btnAbort still `NET.close()`). Both players pressing Rematch exchange
+  `{rq:1}`; when both flags are set `_tryRematch` clears `started` and re-runs
+  `_handshake()` — the host rolls a FRESH seed and the match relaunches over the
+  same connection, sides kept, no new code exchange. `NET.onRematch('remote'|'gone')`
+  drives the button labels ("opponent is ready" / hide when the peer leaves);
+  `_peerGone` outside a live game only tears down + notifies. PROTO = 4.
 - **Determinism rules all future sim changes must respect**: sim randomness
   only via `game.rng`; sim behavior must never read `g.shroud`/`g.visible`,
   `g.humanSide`, or `p.isAI` (for fog filtering use `_exploredFor(g, side)` —
@@ -739,6 +746,11 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - `AUDIO.setVoiceEnabled(bool)` / `AUDIO.voiceEnabled`: the comms voice toggles separately
   from `setEnabled` (all SFX) and `MUSIC` — pause-menu "Voice" button, persisted in
   localStorage. All three are independent.
+- `AUDIO.setVolume(mult)` / `AUDIO.setVoiceVolume(mult)` / `MUSIC.setVolume(mult)`: 0–2
+  multipliers from the pause-menu sliders (see Menu DOM). The voice chain ends in a
+  dedicated `voxBus` gain wired straight to the master lowpass (NOT through the SFX
+  master), so the three levels are independent; `_applyGains()` is the single place
+  every bus level is computed from the enabled flags + sliders.
 - `AUDIO.init()` must be called from a user gesture (menu click) to unlock the context.
 
 ### Art direction (sprites_*.js) — original pixel art, mid-90s RTS look
@@ -842,16 +854,37 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   with `Render.frame`. Pause when menu open (`game.paused`).
 - Menu DOM (#menu overlays in index.html): title screen with the two faction emblems
   (canvas-drawn logos injected), faction buttons UDC / Serpent Order → Operations
-  (three SKIRMISH difficulty rows, then the five campaign ops) → Briefing → game; pause
-  menu (Resume, Sound/Music/Voice toggles, Fullscreen, Speed slider 0.5–2.2 defaulting
-  to 1.7, Restart mission, Abort mission); score screen. Esc toggles.
+  (a SKIRMISH SETUP strip `#skOpts`, three SKIRMISH difficulty rows, then the campaign
+  ops) → Briefing → game; pause menu (Resume, Sound/Music/Voice toggles, SFX/Music/Voice
+  volume sliders, Fullscreen, Speed slider 0.5–2.2 defaulting to 1.7, Save Battle,
+  Restart mission, Abort mission, a `#seedLine` "Map seed N" footer for sharing);
+  score screen (+ Rematch in MP). The main menu shows Resume Battle when a compatible
+  `hw_save` exists. Esc toggles.
+- **Skirmish setup** (`#skOpts`, skirmish only — missions/MP ignore it): starting funds
+  3000/5000/8000/12000 (applies to BOTH war chests, then the EASY/HARD preset still
+  overrides the AI's), crates ON/OFF (`game._noCrates` gates only the random-drop roll
+  in `_tickCrates`; pickup/expiry sweeps and mission `crates:` events still run),
+  superweapons ON/OFF (`game._noSupers` → `Production.prereqOk` refuses any building
+  with `superweapon:`, hiding it from the sidebar and the AI's build plan — the AI's
+  defense cap then stays at the pre-tech 4), and a numeric seed field (blank = random)
+  for refighting a shared battlefield. Choices persist in `hw_sk` (seed excluded);
+  all of it rides `opts.sk` into flags + the REPLAY meta so replays/saves reconstruct.
+- **Volume sliders** (`volSfx/volMusic/volVoice`, 0–100, 50 = designed level, persisted
+  as `hw_vol_*`): value/50 multiplies `AUDIO` MASTER_GAIN (0.35), the MUSIC master
+  (0.15), and a dedicated `voxBus` gain the synthesized voice routes through (it
+  bypasses the SFX master so the sliders stay independent; baseline equals MASTER_GAIN
+  so the reroute is loudness-neutral).
+- **Campaign records**: a genuine win (not a replay watch) on a mission with `n` writes
+  `hw_rec_<n>` keeping min time (secs) / max score; the score tally shows "Op record"
+  (with NEW BEST) and the ops list appends `BEST mm:ss · score` to completed rows.
 - Win check per rules; on end: `Main.endGame(won)` shows score screen; sound
   `missionAccomplished`/`missionFailed` EVA.
 
 ### Replays (`replay.js`, global `REPLAY`)
 - The sim is deterministic lockstep, so a battle IS `{seed, setup, orders}`. Every
   single-player game auto-records: `Main.startGame` arms `REPLAY.arm({seed, side,
-  mission: n|null, skirmish: 'EASY'|'HARD'|null})`; the net.js wrapper layer's `_rec(c)`
+  mission: n|null, skirmish: 'EASY'|'HARD'|null, sk: {credits, crates, supers}|null})`;
+  the net.js wrapper layer's `_rec(c)`
   logs each GENUINE player order (passthru path with `!active && !inSim && !applying`)
   as `{t: game.tick, c}` using the same command encoding multiplayer sends. Sim/AI calls
   never record (they run under `NET.inSim`).
@@ -866,6 +899,19 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `NET.execReplay` (`applying` guard). While watching, `_rec` SWALLOWS live player
   orders (look, don't touch — selection and camera stay free) and render shows a
   blinking ▶ REPLAY badge. Multiplayer games are not recorded (v1).
+- **Mid-battle save/resume**: a save IS the running recording cut short —
+  `REPLAY.exportLive()` = `{meta (+p: NET.PROTO), log, at: game.tick}`, written to
+  `localStorage.hw_save` by the pause menu's Save Battle (SP only: needs
+  `REPLAY.recording`). `REPLAY.resumeData(json)` validates (v, PROTO — a PROTO bump
+  invalidates old saves, by design), reruns `Main.startReplay(meta)`, enters playback
+  with `resumeAt = at` and sets `game._ffTarget = at`; the main loop then fast-forwards
+  in ~30 ms slices per RAF frame running the EXACT live step body (including per-tick
+  `Fog.update` — the sim reads `g.shroud` for harvester auto-seek) with SFX muted for
+  the catch-up, while render draws a RESUMING veil + progress bar off `g._ffTarget`.
+  When `applyPending` crosses `resumeAt` it flips `playing→recording` KEEPING the log,
+  so a resumed battle records on seamlessly — saveable again, and `finish()` still
+  yields a full from-tick-0 replay. The savetest suite verifies checksum equality at
+  and beyond the save tick.
 - **Spectator vision**: while `REPLAY.playing`, render sets a `seeAll` flag that skips
   the shroud fill/edges, un-gates the glow/water/crate draws, shows all radar blips
   (cloaked units shimmer like your own), and drops the minimap masks. STRICTLY
@@ -887,6 +933,6 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 
 ## Non-goals
 
-FMV, naval, mid-mission save/load, multiplayer beyond 1v1. Keep the door open but do not
-build. (Campaign missions, 1v1 multiplayer, walls, veterancy, and difficulty levels have
-since graduated out of this list and are specified above.)
+FMV, naval, multiplayer beyond 1v1. Keep the door open but do not build. (Campaign
+missions, 1v1 multiplayer, walls, veterancy, difficulty levels, and mid-mission
+save/load have since graduated out of this list and are specified above.)

@@ -196,8 +196,29 @@ const Main = (function () {
     });
     $('btnMissionsBack').addEventListener('click', () => {
       $('missions').classList.add('hidden');
+      _refreshResumeSave();
       $('menu').classList.remove('hidden');
     });
+    // skirmish setup: remember the player's choices (the seed stays per-visit)
+    try {
+      const s = JSON.parse(localStorage.getItem('hw_sk') || 'null');
+      if (s) {
+        if (s.c) $('skCredits').value = s.c;
+        if (s.cr !== undefined) $('skCrates').value = s.cr ? '1' : '0';
+        if (s.sw !== undefined) $('skSupers').value = s.sw ? '1' : '0';
+      }
+    } catch (e) {}
+    for (const id of ['skCredits', 'skCrates', 'skSupers']) {
+      $(id).addEventListener('change', () => {
+        try {
+          localStorage.setItem('hw_sk', JSON.stringify({
+            c: $('skCredits').value,
+            cr: $('skCrates').value === '1',
+            sw: $('skSupers').value === '1',
+          }));
+        } catch (e) {}
+      });
+    }
     _wireMpLobby();
     $('btnBriefBack').addEventListener('click', () => {
       $('briefing').classList.add('hidden');
@@ -229,6 +250,21 @@ const Main = (function () {
       localStorage.setItem('hw_voice', AUDIO.voiceEnabled ? '1' : '0');
       $('btnVoice').textContent = 'Voice: ' + (AUDIO.voiceEnabled ? 'ON' : 'OFF');
     });
+    // volume sliders: 50 = the designed level (multiplier value/50), persisted
+    for (const [id, key, apply] of [
+      ['volSfx', 'hw_vol_sfx', v => AUDIO.setVolume(v)],
+      ['volMusic', 'hw_vol_music', v => MUSIC.setVolume(v)],
+      ['volVoice', 'hw_vol_voice', v => AUDIO.setVoiceVolume(v)],
+    ]) {
+      const el = $(id);
+      const saved = localStorage.getItem(key);
+      if (saved !== null && saved !== '' && !isNaN(+saved)) el.value = +saved;
+      apply(el.value / 50);
+      el.addEventListener('input', () => {
+        apply(el.value / 50);
+        localStorage.setItem(key, el.value);
+      });
+    }
     $('btnControls').addEventListener('click', () => {
       $('pause').classList.add('hidden');
       $('controls').classList.remove('hidden');
@@ -251,6 +287,7 @@ const Main = (function () {
       AUDIO.eva('battleControlTerminated');
       game = null;
       window.game = null;
+      _refreshResumeSave();
       $('menu').classList.remove('hidden');
     });
     $('btnAgain').addEventListener('click', () => {
@@ -259,12 +296,62 @@ const Main = (function () {
       const wasMission = !!myMission;
       game = null;
       window.game = null;
+      _refreshResumeSave();
       // after a campaign game, return to the operations list (freshly
       // rebuilt, so a win shows the next mission unlocked) — not the
       // faction menu
       if (wasMission) _showMissions(mySide);
       else $('menu').classList.remove('hidden');
     });
+
+    // ---- mid-battle save / resume ------------------------------------------
+    // A save is the running replay recording plus the current tick; resuming
+    // replays it at fast-forward speed and hands the controls back (main loop
+    // drives the catch-up off game._ffTarget).
+    $('btnSaveGame').addEventListener('click', () => {
+      const data = (typeof REPLAY !== 'undefined' && REPLAY.recording &&
+        game && game.status === 'playing') ? REPLAY.exportLive() : null;
+      if (!data) { AUDIO.play('buzz'); return; }
+      try { localStorage.setItem('hw_save', data); }
+      catch (e) { AUDIO.play('buzz'); return; }
+      togglePause(false);
+      AUDIO.evaText('Battle saved');
+    });
+    _refreshResumeSave();
+    $('btnResumeSave').addEventListener('click', () => {
+      let data = null;
+      try { data = localStorage.getItem('hw_save'); } catch (e) {}
+      if (!data) return;
+      try {
+        AUDIO.init();
+        REPLAY.resumeData(data);
+      } catch (e) {
+        console.warn(e);
+        alert(e.message || 'Could not load that save.');
+      }
+    });
+
+    // ---- multiplayer rematch -------------------------------------------------
+    // the datachannel stays open at the score screen; both players pressing
+    // Rematch relaunches the match on a fresh seed with no new code exchange
+    $('btnRematch').addEventListener('click', () => {
+      if (NET.requestRematch()) {
+        $('btnRematch').disabled = true;
+        $('btnRematch').textContent = 'Waiting for opponent…';
+      } else {
+        AUDIO.play('buzz');
+      }
+    });
+    NET.onRematch = ev => {
+      const btn = $('btnRematch');
+      if (ev === 'gone') {          // opponent left — the offer is dead
+        btn.classList.add('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Rematch';
+      } else if (ev === 'remote' && !btn.disabled) {
+        btn.textContent = 'Rematch — opponent is ready!';
+      }
+    };
 
     // ---- replays: watch the battle you just fought, save it, load one ----
     $('btnWatchReplay').addEventListener('click', () => {
@@ -414,9 +501,43 @@ const Main = (function () {
     });
   }
 
+  // menu "Resume Saved Battle" button: shown only when a compatible save exists
+  function _refreshResumeSave() {
+    const btn = $('btnResumeSave');
+    if (!btn) return;
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem('hw_save') || 'null'); } catch (e) {}
+    const ok = !!(d && d.meta && Array.isArray(d.log) && typeof d.at === 'number' &&
+      (d.meta.p === undefined || d.meta.p === NET.PROTO));
+    btn.classList.toggle('hidden', !ok);
+    if (ok) {
+      const secs = Math.floor(d.at / C.TPS);
+      const mm = String(Math.floor(secs / 60)).padStart(2, '0');
+      const ss = String(secs % 60).padStart(2, '0');
+      const what = d.meta.mission ? 'OP ' + d.meta.mission
+        : 'Skirmish — ' + (d.meta.skirmish || 'NORMAL');
+      const sub = $('resumeSaveSub');
+      if (sub) {
+        sub.textContent = (d.meta.side === 'nod' ? 'Serpent Order' : 'UDC') +
+          ' · ' + what + ' · ' + mm + ':' + ss;
+      }
+    }
+  }
+
   // ---- mission select & briefing -----------------------------------------------------
 
   let pendingMission = null;
+
+  // read the skirmish setup panel (missions ignore it; MP has its own path)
+  function _skOptions() {
+    const seedRaw = ($('skSeed').value || '').trim();
+    return {
+      credits: +$('skCredits').value || undefined,
+      crates: $('skCrates').value === '1',
+      supers: $('skSupers').value === '1',
+      seed: /^\d+$/.test(seedRaw) ? (+seedRaw >>> 0) : undefined,
+    };
+  }
 
   function _showMissions(side) {
     mySide = side;
@@ -433,7 +554,7 @@ const Main = (function () {
       skirm.innerHTML = `<span>SKIRMISH — ${tag}</span><span class="tag">RANDOM BATTLEFIELD</span>`;
       skirm.addEventListener('click', () => {
         $('missions').classList.add('hidden');
-        startGame(mySide, { skirmish: diff });
+        startGame(mySide, { skirmish: diff, sk: _skOptions() });
       });
       list.appendChild(skirm);
     }
@@ -441,7 +562,17 @@ const Main = (function () {
     for (const m of MISSIONS) {
       const btn = document.createElement('button');
       const open = MissionProgress.unlocked(m);
-      const tag = m.n <= done ? 'COMPLETE' : open ? 'READY' : 'LOCKED';
+      let tag = m.n <= done ? 'COMPLETE' : open ? 'READY' : 'LOCKED';
+      // personal best for a completed op: fastest win + highest score
+      if (m.n <= done) {
+        let rec = null;
+        try { rec = JSON.parse(localStorage.getItem('hw_rec_' + m.n) || 'null'); } catch (e) {}
+        if (rec && rec.t !== undefined) {
+          const mm = String(Math.floor(rec.t / 60)).padStart(2, '0');
+          const ss = String(rec.t % 60).padStart(2, '0');
+          tag += ` · BEST ${mm}:${ss} · ${rec.s}`;
+        }
+      }
       btn.innerHTML = `<span>OP ${m.n}: ${m.title}</span><span class="tag">${tag}</span>`;
       if (m.n <= done) btn.classList.add('done');
       if (!open) btn.disabled = true;
@@ -501,13 +632,24 @@ const Main = (function () {
     $('mplobby').classList.add('hidden');
 
     const mission = myMission;
-    game = makeGame({ side, seed: opts.seed !== undefined ? opts.seed : (mission ? mission.seed : undefined) });
+    // skirmish setup options (credits/crates/superweapons/seed) — sim-relevant,
+    // so they ride the replay meta and reconstruct on watch/resume
+    const sk = (!opts.mp && !mission && opts.sk) ? opts.sk : null;
+    const seed = opts.seed !== undefined ? opts.seed
+      : mission ? mission.seed
+      : (sk && sk.seed !== undefined) ? sk.seed : undefined;
+    game = makeGame({ side, seed });
     // ai.js reads its difficulty knobs off game.mission — a skirmish
     // difficulty preset rides the same channel (it has no objective/n, so
     // the HUD chip and campaign unlock logic ignore it)
     game.mission = mission || mySkirmish || null;
     if (mission) {
       if (mission.credits !== undefined) game.human.credits = mission.credits;
+    }
+    if (sk) {
+      if (sk.credits) { game.human.credits = sk.credits; game.ai.credits = sk.credits; }
+      if (sk.crates === false) game._noCrates = true;
+      if (sk.supers === false) game._noSupers = true;
     }
     const aiCr = (mission && mission.aiCredits) || (mySkirmish && mySkirmish.aiCredits);
     if (aiCr !== undefined && aiCr !== null) game.ai.credits = aiCr;
@@ -591,6 +733,7 @@ const Main = (function () {
         side,
         mission: mission && mission.n ? mission.n : null,
         skirmish: mySkirmish && mySkirmish.skirmish ? mySkirmish.skirmish : null,
+        sk: sk ? { credits: sk.credits, crates: sk.crates, supers: sk.supers } : null,
       });
     }
     game.startTime = Date.now();
@@ -606,6 +749,45 @@ const Main = (function () {
     requestAnimationFrame(loop);
     const dt = Math.min(200, t - lastT);
     lastT = t;
+    // resuming a save: burn through the recorded battle in ~30ms slices per
+    // frame (render.js shows the progress veil off game._ffTarget). The step
+    // body must match the live loop exactly — including the per-tick fog
+    // update, which the sim reads (harvester auto-seek) — or the catch-up
+    // would diverge from the original battle.
+    if (game && !game.paused && game.status === 'playing' && game._ffTarget) {
+      const t0 = performance.now();
+      const sndWas = AUDIO.enabled;
+      if (sndWas) AUDIO.setEnabled(false);   // don't replay the battle's audio
+      try {
+        while (game.tick < game._ffTarget && performance.now() - t0 < 30) {
+          if (typeof REPLAY !== 'undefined' && REPLAY.playing) REPLAY.applyPending();
+          game.tick++;
+          Input.tick(game);
+          NET.inSim = true;
+          try {
+            Production.tick(game, game.players.gdi);
+            Production.tick(game, game.players.nod);
+            Sim.tick(game);
+            AI.tick(game);
+            if (MISSIONS.tick) MISSIONS.tick(game);
+          } finally {
+            NET.inSim = false;
+          }
+          Fog.update(game);
+          if (game.tick % 15 === 0 && game.tick > 450) _checkEnd();
+          if (!game || game.status !== 'playing') break;
+        }
+      } finally {
+        if (sndWas) AUDIO.setEnabled(true);
+      }
+      if (game && game.tick >= game._ffTarget) {
+        game._ffTarget = 0;   // caught up: REPLAY flips back to recording
+        acc = 0;
+        AUDIO.evaText('Battle control restored');
+      }
+      Render.frame(game);
+      return;
+    }
     if (game && !game.paused && game.status === 'playing') {
       acc += dt;
       const step = 1000 / (C.TPS * (game.speed || 1));
@@ -726,6 +908,7 @@ const Main = (function () {
     game.status = won ? 'won' : 'lost';
     if (won && game.mission && game.mission.n) MissionProgress.unlockUpTo(game.mission.n);
     AUDIO.eva(won ? 'missionAccomplished' : 'missionFailed');
+    const watched = typeof REPLAY !== 'undefined' && REPLAY.playing;
     if (typeof REPLAY !== 'undefined') {
       if (REPLAY.playing) REPLAY.stop();
       else REPLAY.finish(won);
@@ -733,11 +916,10 @@ const Main = (function () {
 
     const g = game;
     setTimeout(() => {
-      // the match is decided identically on both clients by now (the peer is
-      // at most DELAY ticks behind) — drop the link so post-game menus are
-      // free of it. Closing earlier risks the slower peer reading it as a
-      // forfeit before its own sim reaches the deciding tick.
-      if (NET.active) NET.close();
+      // in MP the link deliberately STAYS open at the score screen — both
+      // players can agree to a rematch over it (btnAgain/btnAbort close it).
+      // The match is decided identically on both clients by now: the peer is
+      // at most DELAY ticks behind.
       if (game !== g) return;   // restarted/aborted before the tally — stale score
       const secs = Math.floor(g.tick / C.TPS);
       const mm = String(Math.floor(secs / 60)).padStart(2, '0');
@@ -760,6 +942,22 @@ const Main = (function () {
         ['Score', score],
         ['Field rating', rating],
       ];
+      // campaign records: fastest win and highest score per operation
+      // (genuine wins only — watching an old replay must not set records)
+      if (won && !watched && g.mission && g.mission.n) {
+        const key = 'hw_rec_' + g.mission.n;
+        let rec = null;
+        try { rec = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) {}
+        const newBest = !rec || rec.t === undefined || secs < rec.t || score > rec.s;
+        const best = {
+          t: rec && rec.t !== undefined ? Math.min(rec.t, secs) : secs,
+          s: rec && rec.s !== undefined ? Math.max(rec.s, score) : score,
+        };
+        try { localStorage.setItem(key, JSON.stringify(best)); } catch (e) {}
+        const bm = String(Math.floor(best.t / 60)).padStart(2, '0');
+        const bs = String(best.t % 60).padStart(2, '0');
+        rows.push(['Op record' + (newBest ? ' — NEW BEST' : ''), bm + ':' + bs + ' · ' + best.s]);
+      }
       const title = $('scoreTitle');
       title.textContent = won ? 'MISSION ACCOMPLISHED' : 'MISSION FAILED';
       title.style.color = won ? '#e0b840' : '#e05038';
@@ -769,6 +967,11 @@ const Main = (function () {
       const canReplay = typeof REPLAY !== 'undefined' && REPLAY.hasLast();
       $('btnWatchReplay').classList.toggle('hidden', !canReplay);
       $('btnSaveReplay').classList.toggle('hidden', !canReplay);
+      // rematch only while the MP link is still up
+      const btnR = $('btnRematch');
+      btnR.classList.toggle('hidden', !NET.active);
+      btnR.disabled = false;
+      btnR.textContent = NET.rematchOffered ? 'Rematch — opponent is ready!' : 'Rematch';
       $('score').classList.remove('hidden');
     }, 1400);
   }
@@ -784,6 +987,13 @@ const Main = (function () {
     }
     game.paused = force !== undefined ? force : !game.paused;
     $('pause').classList.toggle('hidden', !game.paused);
+    if (game.paused) {
+      // saving needs a live recording: single-player, not watching a replay
+      $('btnSaveGame').classList.toggle('hidden',
+        NET.active || typeof REPLAY === 'undefined' || !REPLAY.recording);
+      $('seedLine').textContent = 'Map seed ' + game.seed +
+        ' — enter it in Skirmish Setup to refight this battlefield';
+    }
     if (!game.paused) $('controls').classList.add('hidden');
     if (NET.active) NET.notifyPause(game.paused);   // peer shows OPPONENT PAUSED
   }
@@ -810,6 +1020,7 @@ const Main = (function () {
     $('scoreLines').innerHTML =
       '<div class="row"><span>The two simulations diverged; the result cannot be scored.</span></div>' +
       '<div class="row"><span>Using the same browser on both ends makes this very unlikely.</span></div>';
+    $('btnRematch').classList.add('hidden');   // the link is already torn down
     $('score').classList.remove('hidden');
   }
 
@@ -827,7 +1038,7 @@ const Main = (function () {
     AUDIO.init();
     const mission = meta.mission ? MISSIONS[meta.mission - 1] : null;
     const skirm = meta.skirmish ? DIFF_PRESETS[meta.skirmish] : null;
-    startGame(meta.side, { seed: meta.seed, mission, skirmish: skirm });
+    startGame(meta.side, { seed: meta.seed, mission, skirmish: skirm, sk: meta.sk || undefined });
   }
 
   // _checkEnd is exposed for the headless test harness (manual sim rolls)

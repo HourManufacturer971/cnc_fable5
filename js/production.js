@@ -53,6 +53,8 @@ const Production = (function () {
     const d = DATA.buildings[key] || DATA.units[key];
     if (!d) return false;
     if (d.side && d.side !== player.side) return false;
+    // skirmish option: superweapon buildings removed from the game entirely
+    if (d.superweapon && game && game._noSupers) return false;
     const prereq = d.prereq || [];
     if (d.prereqAny && prereq.length) {
       let any = false;

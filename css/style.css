@@ -284,6 +284,26 @@ button:active {
 }
 #speedRow input { width: 100%; }
 
+/* the options panel grew tall — keep it comfortably on one screen */
+#pause .panel button { padding: 8px 16px; margin: 4px 0; }
+#pause h2 { margin-bottom: 10px; }
+
+/* pause-menu volume sliders */
+.volRow {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 11px; margin: 3px 0; color: #b8b09a; letter-spacing: 1px;
+}
+.volRow input { flex: 1; min-width: 0; }
+#seedLine {
+  margin: 9px 0 0; font-size: 9px; color: #7d7666; letter-spacing: 0.5px;
+}
+/* landscape phones: the options panel is tall — tighten it */
+@media (max-height: 520px) {
+  .volRow { margin: 1px 0; font-size: 10px; }
+  #pause .panel button { padding: 6px 14px; margin: 3px 0; }
+  #seedLine { display: none; }
+}
+
 /* multiplayer lobby */
 #mpSideRow { display: flex; gap: 10px; }
 #mpSideRow button { opacity: 0.55; }
@@ -334,6 +354,26 @@ button:active {
   #controls .panel { padding: 14px 26px 12px; }
   .ckey { font-size: 10px; }
 }
+
+/* skirmish setup strip (top of the operations panel) */
+#skOpts {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: 5px 14px;
+  margin: 0 0 12px; padding: 7px 10px 8px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--hw-edge-lo);
+  border-radius: 4px;
+  font-size: 10px; color: #b8b09a; letter-spacing: 1px;
+}
+#skOpts .skTitle { flex-basis: 100%; font-size: 9px; letter-spacing: 3px; color: #9a9280; }
+#skOpts label { display: flex; align-items: center; gap: 5px; }
+#skOpts select, #skOpts input {
+  font-family: inherit; font-size: 10px;
+  background: #0b1108; color: #7fe07f;
+  border: 1px solid var(--hw-edge-lo); border-radius: 3px;
+  padding: 3px 4px;
+}
+#skOpts input { width: 84px; }
 
 /* mission select + briefing */
 #missionList button {

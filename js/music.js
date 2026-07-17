@@ -14,8 +14,10 @@
 // MUSIC.enabled            current toggle state
 
 const MUSIC = (function () {
+  const BASE_GAIN = 0.15;    // designed master level; the volume slider scales it
   let ctx = null, master = null, delaySend = null;
   let enabled = true, running = false;
+  let musVol = 1;            // slider multiplier (0..2)
   let timer = 0, nextTime = 0, step = 0, pos = 0, loops = 0, trackIdx = 0;
   let noiseBuf = null;
 
@@ -541,7 +543,7 @@ const MUSIC = (function () {
     comp.threshold.value = -22; comp.ratio.value = 3.5;
     comp.attack.value = 0.006; comp.release.value = 0.2;
     master = ctx.createGain();
-    master.gain.value = 0.15;
+    master.gain.value = BASE_GAIN * musVol;
     master.connect(comp).connect(ctx.destination);
     // shared echo for the lead voice
     delaySend = ctx.createGain(); delaySend.gain.value = 0.4;
@@ -584,8 +586,14 @@ const MUSIC = (function () {
     else if (game && game.status === 'playing') start();
   }
 
+  // volume slider: v is a 0..2 multiplier (1 = designed level)
+  function setVolume(v) {
+    musVol = Math.max(0, Math.min(2, +v || 0));
+    if (master) { try { master.gain.value = BASE_GAIN * musVol; } catch (e) {} }
+  }
+
   return {
-    start, stop, setEnabled,
+    start, stop, setEnabled, setVolume,
     get enabled() { return enabled; },
   };
 })();
