@@ -242,8 +242,8 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   seed you can type in to refight a favorite map — the pause menu shows the
   current seed so you can share it
 - **Four armies on one field** — the extra combatants fly recolored
-  faction banners: UDC Azure in steel blue and the Serpent Verdant in
-  toxin green, so a four-way brawl reads at a glance
+  faction banners: UDC Azure in steel blue and the Serpent Amethyst in
+  royal violet, so a four-way brawl reads at a glance
 - **Campaign records** — each operation remembers your fastest win and best
   score, shown on the operations list and stamped NEW BEST on the tally
 - **Multiplayer rematch** — the connection stays up at the score screen:

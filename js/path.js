@@ -56,7 +56,7 @@ const findPath = (function () {
     return top;
   }
 
-  const BLOCK = 0, FREE = 1, SOFT = 2, GATE = 3;
+  const BLOCK = 0, FREE = 1, SOFT = 2, GATE = 3, CRUSH = 4;
   function cellState(cx, cy, unit) {
     if (!inMap(cx, cy)) return BLOCK;
     const i = cellIdx(cx, cy);
@@ -64,7 +64,15 @@ const findPath = (function () {
     const o = game.occ[i];
     if (!o || (unit && o === unit.id)) return FREE;
     const e = getEnt(o);
-    if (e && e.kind === 'unit') return SOFT;
+    if (e && e.kind === 'unit') {
+      // treads beat a detour: a crusher rolls straight OVER enemy infantry
+      // (isPassable admits it, _stepAlongPath squishes on entry). Civilians
+      // are spared the routing preference — only a deliberate order harms them.
+      if (unit && unit.type && DATA.units[unit.type].crush &&
+          e.owner !== unit.owner && e.owner !== 'civ' &&
+          DATA.units[e.type].infantry) return CRUSH;
+      return SOFT;
+    }
     // a finished friendly gate is a doorway: near-free passage (a token
     // penalty keeps open ground preferred when both routes are equal)
     if (e && e.kind === 'building' && unit && DATA.buildings[e.type].gate &&
@@ -151,7 +159,7 @@ const findPath = (function () {
         if (state[ni] === closedTag) continue;
         const tibPenalty = (avoidTib && game.tib[ni] > 0) ? 30 : 0;
         const step = (dx && dy ? 14 : 10) +
-          (st === SOFT ? 80 : st === GATE ? 15 : 0) + tibPenalty;
+          (st === SOFT ? 80 : st === GATE ? 15 : st === CRUSH ? 4 : 0) + tibPenalty;
         const ng = gCost[cur] + step;
         if (state[ni] !== openTag || ng < gCost[ni]) {
           gCost[ni] = ng;

@@ -283,6 +283,12 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   warhead, splash (px, 0=direct), antiAir (bool), turret (bool for shooter aiming)}`.
 - Damage = `dmg * DATA.warheads[wh][armor]` via `applyDamage` (already in core.js); armor ∈
   none/light/heavy/wood/concrete.
+- **Crushing**: `crush: true` vehicles (all tanks + APC) kill enemy infantry by
+  entering their cell (`_stepAlongPath` squish + SFX; `isPassable` admits the entry).
+  The A* also PREFERS the straight line through them: cells held by enemy infantry
+  cost a crusher +4 instead of the +80 soft-unit penalty, so ordering armor through
+  a picket line runs it over instead of politely detouring (civilians keep the full
+  penalty — only a deliberate order harms them).
 - Units auto-acquire: idle combat units scan every 8 ticks for nearest enemy within
   `sight+1` cells and attack (harvester/mcv/apc/engineer never auto-attack; they FLEE:
   harvester heads to refinery when hit). Attackers chase up to ~4 cells past their
@@ -827,9 +833,16 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   is (re)built. Paints the whole map per-pixel at 24 px/cell in world space: bilinear-sampled
   per-cell material fields (dirt/water/rock) + value-noise mottle and edge-raggedness fields
   + per-pixel grain dithering, so ground types flow across cell borders with organic edges
-  (no tile seams). Water gets depth bands, foam and a wet-sand shore; rock cells get varied
-  boulder formations; tree cells get overlapping canopies (deciduous + conifer) over a
-  darkened forest floor; open land gets sparse doodads (tufts, flowers, pebbles, cracks,
+  (no tile seams). Water shades by a SHORE-DISTANCE field (per-cell BFS from the banks,
+  capped, 3x3-blurred, bilinear-sampled, hash-dithered at band edges): lakes darken
+  toward their middle along their own coastline contours, with foam pinned to the noisy
+  waterline. The render-side water pass draws ONLY the animated foam rim — the old flat
+  per-cell shallow/deep washes stamped blocky rectangles over the painter's contours.
+  Rock cells get varied boulder formations. Tree cells paint their darkened forest
+  floor into the static cache, but the CANOPIES render into per-tree sprites
+  (`build()` returns `trees: [{kind:'tree', canvas, wx, wy, base}]`) that render.js
+  merges into the baseline-sorted entity pass — a building north of a tree sits
+  BEHIND its crown, a building south of it covers the trunk; open land gets sparse doodads (tufts, flowers, pebbles, cracks,
   fallen logs, mushroom clusters, pale mineral stains, worn tire ruts — and reed beds
   with cattail heads along every waterline —
   bushes). The painting is nearest-upscaled ×2 into the screen-scale cache.
@@ -846,6 +859,17 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   and `scroll*` (edge). `SPRITES.logo.gdi/nod` ~120×90 emblems for radar-idle and menu.
 - `SPRITES.shroudEdge`: 8 directional 24×24 jagged black-edge tiles (N,NE,E,...) with
   alpha.
+
+### Map generation (`map.js`) — water realism
+- The river descends the elevation valley column-by-column inside a band scaled to the
+  map (28%-69% of H). Ponds are CONTOUR FLOODS (`floodPond`): lowest-first flood of the
+  basin around a genuine elevation minimum up to a randomized water level (a deeper,
+  larger lake on riverless seeds), so shorelines follow the landform; sub-5-cell
+  puddles are discarded. Most ponds drain through a 1-wide downhill `stream` (steepest
+  descent, ≤14 cells, stops at water/starts). `smoothShores` then dries orphan
+  1-neighbour water specks and floods ≥7-neighbour land pinholes — coasts read as
+  coasts, not cell noise. Fords/bridges survive all of it (their gap cells never meet
+  the thresholds).
 
 ### Map generation (`map.js`)
 - 64×64. Deterministic from seed via `mulberry` (features additionally use seeded hash
@@ -909,8 +933,9 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   faction whose DATA (build lists, side-locked items, superweapon key, free helipad
   aircraft, crate tank) and sprites they use. Slots 3/4 wear lazily generated
   recolors (`SPRITES.ensureSideArt`, end of sprites_buildings.js): exact team-ramp
-  remap (UDC AZURE = steel blue; SERPENT VERDANT = green accents) plus, for VERDANT,
-  an olive tilt on the base faction's many auxiliary greys. Combat hostility was
+  remap (UDC AZURE = steel blue; SERPENT AMETHYST = violet accents — green was
+  retired, it read as chrysalite ore) plus, for AMETHYST, a violet tilt on the base
+  faction's many auxiliary greys. Combat hostility was
   already owner-inequality — FFA needs no rule changes. `AI` keeps one state per AI
   side (`ST[side]`), initialized in `g.sides` order (deterministic rng), each picking
   ONE current enemy (nearest living side by start position, re-picked on elimination)

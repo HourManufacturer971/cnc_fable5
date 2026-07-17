@@ -178,6 +178,92 @@ const MAPGEN = (function () {
 
   // Roundish blob of terrain id `tid` centered on (cx,cy) with radius ~r.
   // Only converts open ground (grass/dirt), so features never eat each other.
+  // Water pools along CONTOURS: flood the basin around a genuine minimum up
+  // to a water level, so shorelines follow the landform instead of stamping
+  // a circle on it. big=true floods a deeper level — a proper lake.
+  function floodPond(g, rng, cx, cy, elev, starts, _unused, big) {
+    const W = C.MAP_W, H = C.MAP_H;
+    const level = elev[cellIdx(cx, cy)] + (big ? 0.055 : 0.03) * (0.7 + rng() * 0.6);
+    const cap = big ? 90 + ((rng() * 60) | 0) : 14 + ((rng() * 22) | 0);
+    const q = [[cx, cy]];
+    const seen = new Set([cellIdx(cx, cy)]);
+    const cells = [];
+    while (q.length && cells.length < cap) {
+      // lowest-first flood: the basin fills bottom-up like real water
+      let bi = 0;
+      for (let k = 1; k < q.length; k++) {
+        if (elev[cellIdx(q[k][0], q[k][1])] < elev[cellIdx(q[bi][0], q[bi][1])]) bi = k;
+      }
+      const [x, y] = q.splice(bi, 1)[0];
+      const i = cellIdx(x, y);
+      if (elev[i] > level) continue;
+      if (x < 2 || y < 2 || x >= W - 2 || y >= H - 2) continue;
+      if (g.terrain[i] !== T_GRASS && g.terrain[i] !== T_DIRT) continue;
+      let nearStart = false;
+      for (const st of starts) {
+        if (distC(x, y, st.cx, st.cy) < 14) { nearStart = true; break; }
+      }
+      if (nearStart) continue;
+      cells.push(i);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const ni = cellIdx(x + dx, y + dy);
+        if (!seen.has(ni)) { seen.add(ni); q.push([x + dx, y + dy]); }
+      }
+    }
+    if (cells.length < 5) return;   // too small to read as water — skip
+    for (const i of cells) g.terrain[i] = T_WATER;
+    // drainage: a thin stream runs out of the basin downhill (real ponds
+    // have outlets), petering out after a dozen cells or on reaching water
+    if (rng() < 0.7) stream(g, cx, cy, elev, starts);
+  }
+
+  // 1-wide downhill stream from (cx,cy): follow the steepest descent
+  function stream(g, cx, cy, elev, starts) {
+    const W = C.MAP_W, H = C.MAP_H;
+    let x = cx, y = cy;
+    for (let n = 0; n < 14; n++) {
+      let nx = x, ny = y, be = Infinity;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+        const xx = x + dx, yy = y + dy;
+        if (xx < 2 || yy < 2 || xx >= W - 2 || yy >= H - 2) continue;
+        const e = elev[cellIdx(xx, yy)];
+        if (e < be) { be = e; nx = xx; ny = yy; }
+      }
+      if (nx === x && ny === y) return;
+      x = nx; y = ny;
+      const i = cellIdx(x, y);
+      if (g.terrain[i] === T_WATER) return;      // joined a river or pond
+      if (g.terrain[i] !== T_GRASS && g.terrain[i] !== T_DIRT) return;
+      for (const st of starts) if (distC(x, y, st.cx, st.cy) < 14) return;
+      g.terrain[i] = T_WATER;
+    }
+  }
+
+  // shoreline cleanup: orphan water specks dry up, one-cell land pinholes
+  // inside a body flood — coasts read as coasts, not cell noise
+  function smoothShores(g) {
+    const W = C.MAP_W, H = C.MAP_H;
+    for (let pass = 0; pass < 2; pass++) {
+      const drop = [], fill = [];
+      for (let y = 1; y < H - 1; y++) {
+        for (let x = 1; x < W - 1; x++) {
+          const i = cellIdx(x, y);
+          const t = g.terrain[i];
+          if (t !== T_WATER && t !== T_GRASS && t !== T_DIRT) continue;
+          let wet = 0;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, 1], [1, -1], [-1, -1]]) {
+            if (g.terrain[cellIdx(x + dx, y + dy)] === T_WATER) wet++;
+          }
+          if (t === T_WATER && wet <= 1) drop.push(i);
+          else if (t !== T_WATER && wet >= 7) fill.push(i);
+        }
+      }
+      for (const i of drop) g.terrain[i] = T_GRASS;
+      for (const i of fill) g.terrain[i] = T_WATER;
+      if (!drop.length && !fill.length) break;
+    }
+  }
+
   function blob(g, rng, cx, cy, r, tid) {
     const R = Math.ceil(r);
     for (let dy = -R; dy <= R; dy++) {
@@ -217,7 +303,7 @@ const MAPGEN = (function () {
   // start<->start line so the classic centre route always survives.
   function river(g, rng, hs, as, elev) {
     const W = C.MAP_W, H = C.MAP_H;
-    const yMin = 18, yMax = 44;          // the middle band, off both base plateaus
+    const yMin = Math.round(H * 0.28), yMax = Math.round(H * 0.69); // middle band, off both base plateaus
     // base plateaus repel the channel: without this the path can hug a start
     // and the safety guard below then censors those columns, visibly
     // snapping the river in half
@@ -634,8 +720,11 @@ const MAPGEN = (function () {
       }
       cands.sort((a, b) => a.e - b.e);
       for (let i = 0; i < Math.min(want, cands.length); i++) {
-        blob(g, rng, cands[i].cx, cands[i].cy, 1.6 + rng() * 1.6, T_WATER);
+        floodPond(g, rng, cands[i].cx, cands[i].cy, elev, starts,
+          hasRiver ? null : riv, i === 0 && !hasRiver);
       }
+      // water finished: knock the cell noise off every shoreline
+      smoothShores(g);
     }
 
     // --- rock ridges on the high ground, dirt on the dry flats and talus ---------

@@ -2197,9 +2197,9 @@
 // The multi-AI skirmish fields up to four armies. Slots 3 and 4 ('gd2'/'nd2')
 // play by their base faction's rules and art, with the TEAM COLORS remapped so
 // the four forces read apart at a glance: UDC AZURE swaps the desert gold for
-// steel blue, SERPENT VERDANT swaps the crimson accents (and cools the greys)
-// toward toxin green. Generated lazily on the first game that needs them —
-// classic 1v1 pays nothing.
+// steel blue, SERPENT AMETHYST swaps the crimson accents (and tints the greys)
+// toward royal violet — green was retired, it read as chrysalite. Generated
+// lazily on the first game that needs them — classic 1v1 pays nothing.
 (function () {
   if (typeof SPRITES === 'undefined' || typeof document === 'undefined') return;
 
@@ -2208,14 +2208,14 @@
       '#c8a84c': '#6088c0', '#8a7230': '#40608e', '#e8d088': '#9cbce4', '#5c4c20': '#2a3c5e',
     },
     nd2: {
-      '#8a8a94': '#84946e', '#54545e': '#4e5e40', '#b8b8c2': '#b2c298', '#36363e': '#323e26',
-      '#b02818': '#1e8c2e', '#e05038': '#46c94e',
+      '#8a8a94': '#8c7c9e', '#54545e': '#564a66', '#b8b8c2': '#b6a8ce', '#36363e': '#382e46',
+      '#b02818': '#7c2cc0', '#e05038': '#ae66ec',
     },
   };
   // Serpent art leans on many auxiliary gunmetal greys beyond the 4-color
-  // ramp — VERDANT also tilts every near-grey pixel toward olive so the two
-  // serpent armies never read as the same force
-  const GREY_TILT = { nd2: [-6, 9, -12] };
+  // ramp — AMETHYST also tilts every near-grey pixel toward violet so the
+  // two serpent armies never read as the same force
+  const GREY_TILT = { nd2: [7, -8, 14] };
 
   function _lut(map) {
     const out = new Map();

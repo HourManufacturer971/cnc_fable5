@@ -40,7 +40,7 @@ const C = {
   SCROLL_SPEED: 12,        // WORLD px per frame while scrolling
   // display names for the internal side keys (the keys themselves are legacy
   // identifiers baked into save-free game state; only the labels are shown)
-  SIDE_NAME: { gdi: 'UDC', nod: 'SERPENT', gd2: 'UDC AZURE', nd2: 'SERPENT VERDANT' },
+  SIDE_NAME: { gdi: 'UDC', nod: 'SERPENT', gd2: 'UDC AZURE', nd2: 'SERPENT AMETHYST' },
 };
 
 // Widen the fixed 16:10 layout to a device's real aspect (phones in landscape

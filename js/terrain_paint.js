@@ -426,6 +426,59 @@ const TERRAINPAINT = (function () {
       rockF[i] = t === T_ROCK ? 1 : 0;
     }
 
+    // shore-distance field: how many cells of open water lie between a cell
+    // and the nearest bank (capped). Depth shading samples THIS instead of
+    // the raw 0/1 water mask, so the darkening follows the coastline's shape
+    // in smooth contour bands — the old mask plateaued into blocky squares
+    // on anything wider than a river.
+    const wDist = new Float32Array(W * H);
+    {
+      const q = [];
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          const i = y * W + x;
+          if (!waterF[i]) { wDist[i] = 0; continue; }
+          let shore = false;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const xx = x + dx, yy = y + dy;
+            if (xx < 0 || yy < 0 || xx >= W || yy >= H || !waterF[yy * W + xx]) { shore = true; break; }
+          }
+          wDist[i] = shore ? 1 : 99;
+          if (shore) q.push(i);
+        }
+      }
+      for (let h = 0; h < q.length; h++) {
+        const i = q[h], x = i % W, y = (i / W) | 0, d = wDist[i];
+        if (d >= 3) continue;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+          const ni = yy * W + xx;
+          if (waterF[ni] && wDist[ni] > d + 1) { wDist[ni] = d + 1; q.push(ni); }
+        }
+      }
+      for (let i = 0; i < W * H; i++) wDist[i] = waterF[i] ? Math.min(wDist[i], 3.2) / 3.2 : 0;
+      // one 3x3 blur: the integer steps become slopes, so the quantized
+      // depth bands glide between cells instead of cliffing at cell edges
+      const sm = new Float32Array(W * H);
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          let sum = 0, wsum = 0;
+          for (let dy = -1; dy <= 1; dy++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const xx = x + dx, yy = y + dy;
+              if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+              const wgt = (dx === 0 && dy === 0) ? 4 : (dx === 0 || dy === 0) ? 2 : 1;
+              sum += wDist[yy * W + xx] * wgt;
+              wsum += wgt;
+            }
+          }
+          sm[y * W + x] = sum / wsum;
+        }
+      }
+      wDist.set(sm);
+    }
+
     // noise layers: broad tonal mottle + two decorrelated edge-raggedness fields
     const mott = noiseGrid(PW, PH, 6, 110, 3, seed ^ 0x51ab3d);
     const edgeA = noiseGrid(PW, PH, 3, 26, 2, seed ^ 0x77c1e5);
@@ -444,15 +497,23 @@ const TERRAINPAINT = (function () {
         if (w > 0.03) {
           wv = w + (gridAt(edgeA, x, y) - 0.5) * 0.5;
           if (wv > 0.5) {
-            // WATER: depth bands from the noisy waterline inward
-            const dd = (wv - 0.5) * 2.6 + (m - 0.5) * 0.35;
-            if (dd < 0.08) {
+            // WATER: foam stays pinned to the noisy waterline; the interior
+            // shade follows the SHORE-DISTANCE contours (deep = far from any
+            // bank), so lakes darken toward their middle along their own
+            // coastline shape instead of in blocky mask plateaus
+            const ddEdge = (wv - 0.5) * 2.6 + (m - 0.5) * 0.35;
+            const dw = cellAt(wDist, x, y);
+            const dd = ddEdge * 0.45 + dw * 1.75 + (m - 0.5) * 0.3;
+            if (ddEdge < 0.08) {
               px[o] = gr > 0.6 ? U_FOAM : WR[0];
             } else if (h2(x >> 2, y, GSEED ^ 0xa1) < 0.05 && dd < 0.95) {
               px[o] = gr > 0.8 ? U_RIPHI : U_RIP;      // drifting ripple dashes
             } else {
-              let wi = 1 + (dd * 5.4) | 0;
-              if (wi > 6) wi = 6;
+              // per-pixel dither feathers the band boundaries — quantized
+              // depth over a bilinear field otherwise draws hard blocky
+              // isolines that hug the cell lattice
+              let wi = 1 + ((dd + (gr - 0.5) * 0.26) * 5.4) | 0;
+              if (wi > 6) wi = 6; else if (wi < 1) wi = 1;
               px[o] = WR[wi];
             }
             continue;
@@ -708,7 +769,13 @@ const TERRAINPAINT = (function () {
       }
     }
 
-    // trees, row by row so southern canopies overlap northern ones
+    // trees: each cell's canopies render into their OWN sprite instead of
+    // the static cache, so the main renderer can baseline-sort them with
+    // buildings and units — a structure north of a tree sits BEHIND its
+    // canopy, one south of it covers the trunk. (The darkened forest floor
+    // stays baked above; only the canopy lifts off the ground plane.)
+    const trees = [];
+    const TR_PAD_X = 24, TR_PAD_TOP = 24, TR_H = 56;
     for (let cy = 0; cy < H; cy++) {
       for (let cx = 0; cx < W; cx++) {
         const ti = cellIdx(cx, cy);
@@ -717,7 +784,11 @@ const TERRAINPAINT = (function () {
         const jx = ((h2(cx, cy, seed ^ 0x7e4e) * 11) | 0) - 5;
         const jy = ((h2(cy, cx, seed ^ 0x7e5e) * 7) | 0) - 3;
         const x = cx * CS + 12 + jx, gy = cy * CS + 20 + jy;
-        // in dense woods, a second canopy fills the gaps between cells
+        const ox = cx * CS + 12 - TR_PAD_X, oy = cy * CS + 20 - TR_PAD_TOP;
+        const tc = mkCanvas(TR_PAD_X * 2, TR_H);
+        const tq = tc.getContext('2d');
+        tq.imageSmoothingEnabled = false;
+        tq.translate(-ox, -oy);   // paint with the same global coordinates
         let orth = 0;
         if (cx > 0 && g.terrain[ti - 1] === T_TREE) orth++;
         if (cx < W - 1 && g.terrain[ti + 1] === T_TREE) orth++;
@@ -725,15 +796,21 @@ const TERRAINPAINT = (function () {
         if (cy < H - 1 && g.terrain[ti + W] === T_TREE) orth++;
         const th2 = h2(cx * 3, cy * 5, seed ^ 0x7e6e);
         if (orth >= 3 && th2 < 0.6) {
-          treeDec(q, x + (th2 < 0.3 ? -9 : 9), gy - 7, 7, 4, th2);
+          treeDec(tq, x + (th2 < 0.3 ? -9 : 9), gy - 7, 7, 4, th2);
         }
         if (th < 0.3) {
-          treeCon(q, x, gy, 12 + ((th * 26) | 0), th);
+          treeCon(tq, x, gy, 12 + ((th * 26) | 0), th);
         } else if (th < 0.5) {
-          treeDec(q, x, gy, 8, 5, th);
+          treeDec(tq, x, gy, 8, 5, th);
         } else {
-          treeDec(q, x, gy, 8 + ((th * 8) | 0) - 4, 5 + (th > 0.8 ? 2 : 1), th);
+          treeDec(tq, x, gy, 8 + ((th * 8) | 0) - 4, 5 + (th > 0.8 ? 2 : 1), th);
         }
+        // upscale to screen scale so the renderer blits 1:1
+        const up = mkCanvas(tc.width * C.ZOOM, tc.height * C.ZOOM);
+        const uq = up.getContext('2d');
+        uq.imageSmoothingEnabled = false;
+        uq.drawImage(tc, 0, 0, up.width, up.height);
+        trees.push({ kind: 'tree', canvas: up, wx: ox, wy: oy, base: gy });
       }
     }
 
@@ -768,7 +845,7 @@ const TERRAINPAINT = (function () {
       }
     }
 
-    return { canvas: cache, anim };
+    return { canvas: cache, anim, trees };
   }
 
   return { build };

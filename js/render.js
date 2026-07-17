@@ -12,6 +12,7 @@ const Render = (function () {
   let cv = null, ctx = null;
   let terrainCache = null;      // full-map prerender at screen scale
   let terrainCacheSeed = -1;
+  let treeSprites = [];   // baseline-sorted canopy sprites (terrain_paint)
   let animCells = [];           // water/blossom cells redrawn live
   let minimap = null, minimapTick = -10;
   let creditsShown = 0;
@@ -208,6 +209,7 @@ const Render = (function () {
       const res = TERRAINPAINT.build(g);
       terrainCache = res.canvas;
       animCells = res.anim;
+      treeSprites = res.trees || [];
       terrainCacheSeed = g.seed;
       _buildMinimapBase();
       return;
@@ -243,7 +245,7 @@ const Render = (function () {
   //   entity blips  — drawn straight to the frame EVERY frame from live
   //                   world coordinates, so movement is real-time and smooth
 
-  const OWNER_COLOR = { gdi: '#ffd23c', nod: '#ff2418', gd2: '#4c8ce0', nd2: '#46c94e', mut: '#4ce03c', civ: '#e8e6da' };
+  const OWNER_COLOR = { gdi: '#ffd23c', nod: '#ff2418', gd2: '#4c8ce0', nd2: '#b46ae8', mut: '#4ce03c', civ: '#e8e6da' };
   const MMC = C.MM_S / C.MAP_W;   // minimap px per cell
   let minimapBase = null;
 
@@ -1177,21 +1179,11 @@ const Render = (function () {
           const landW = cx > 0 && g.terrain[cellIdx(cx - 1, cy)] !== 3;
           const landE = cx < C.MAP_W - 1 && g.terrain[cellIdx(cx + 1, cy)] !== 3;
           const x = X(cx * C.CELL), y = Y(cy * C.CELL);
-          // depth from the 8-neighbourhood water count, so it grades from
-          // shore to channel instead of a hard deep/shallow rectangle
-          let wn = 0;
-          for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
-            if (!dx && !dy) continue;
-            const nx = cx + dx, ny = cy + dy;
-            if (inMap(nx, ny) && g.terrain[cellIdx(nx, ny)] === 3) wn++;
-          }
-          if (!(landN || landS || landW || landE)) {
-            ctx.fillStyle = 'rgba(6,20,42,' + (0.03 + wn * 0.010).toFixed(3) + ')';  // deepens with enclosure
-            ctx.fillRect(x, y, cs, cs);
-            continue;
-          }
-          ctx.fillStyle = 'rgba(96,168,188,0.15)';   // shallow turquoise
-          ctx.fillRect(x, y, cs, cs);
+          // depth AND shallow brightness live in the terrain painter now
+          // (smooth shore-distance contours) — the flat per-cell washes here
+          // only stamped blocky alpha steps over them. This pass keeps just
+          // the ANIMATED foam rim on land-facing edges.
+          if (!(landN || landS || landW || landE)) continue;
           // soft foam: low alpha and a thin rim, so small ponds don't read
           // as boxes traced in white
           const fa = (0.20 + 0.12 * Math.sin(t * 0.22 + (cx * 1.3 + cy * 0.7))).toFixed(3);
@@ -1258,12 +1250,22 @@ const Render = (function () {
     const ground = [];
     for (const b of g.buildings.values()) ground.push(b);
     for (const u of units) if (!DATA.units[u.type].air && _unitSeen(g, u)) ground.push(u);
+    // tree canopies join the same depth sort: a building north of a tree is
+    // occluded by its crown, one south of it draws over the trunk
+    for (const t of treeSprites) {
+      if (t.wx > ox + C.VIEW_W + 8 || t.wx + 48 < ox - 8 ||
+          t.wy > oy + C.VIEW_H + 8 || t.wy + 56 < oy - 8) continue;
+      ground.push(t);
+    }
     const baseY = e => e.kind === 'building'
       ? (e.cy + e.h) * C.CELL           // footprint bottom edge
-      : e.y + C.CELL * 0.5;             // feet, half a cell below center
+      : e.kind === 'tree'
+        ? e.base                        // trunk root row
+        : e.y + C.CELL * 0.5;           // feet, half a cell below center
     ground.sort((a, b) => baseY(a) - baseY(b));
     for (const e of ground) {
       if (e.kind === 'building') _drawBuilding(g, e, X, Y);
+      else if (e.kind === 'tree') ctx.drawImage(e.canvas, X(e.wx), Y(e.wy));
       else _drawUnit(g, e, X, Y);
     }
 
