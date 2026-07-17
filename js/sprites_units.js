@@ -650,14 +650,17 @@
     if (spr.turret) cg.drawImage(spr.turret[F], 0, 0);
     if (spr.anim && (key === 'orca' || key === 'heli')) cg.drawImage(spr.anim[0][F], 0, 0);
 
-    const c = mkCanvas(C.CAMEO_W, C.CAMEO_H);
+    // 2x plate (128x96) blitted 1:1 into the sidebar slot: fine dither,
+    // hairline frame, readable 13px label. The unit itself stays chunky
+    // pixel art (4 plate px per sprite px, as before).
+    const c = mkCanvas(C.CAMEO_W * 2, C.CAMEO_H * 2);
     const g = c.getContext('2d');
     g.imageSmoothingEnabled = false;
     // dark diagonal-gradient slate (4 bands with dithered boundaries)
     const bands = ['#3c3c33', '#2c2c25', '#20201a', '#151511'];
-    for (let y = 0; y < 48; y++) {
-      for (let x = 0; x < 64; x++) {
-        const t = (x + y) / 110 * 4;
+    for (let y = 0; y < 96; y++) {
+      for (let x = 0; x < 128; x++) {
+        const t = (x + y) / 220 * 4;
         let i = Math.floor(t);
         if (t - i > 0.5 && ((x ^ y) & 1)) i++;
         g.fillStyle = bands[Math.min(3, i)];
@@ -666,29 +669,29 @@
     }
     // faint top-left sheen streak
     g.fillStyle = 'rgba(255,255,255,0.07)';
-    for (let i = 0; i < 13; i++) g.fillRect(2 + i, 14 - i, 2, 1);
+    for (let i = 0; i < 26; i++) g.fillRect(4 + i, 28 - i, 3, 1);
     // soft ground shadow under the unit
     g.fillStyle = 'rgba(0,0,0,0.38)';
-    g.fillRect(15, 31, 34, 3);
-    g.fillRect(19, 34, 26, 2);
-    // unit drawn big: 2x nearest-neighbour
-    g.drawImage(comp, 0, 0, 24, 24, 8, -4, 48, 48);
-    // thin gold inner frame
+    g.fillRect(30, 62, 68, 6);
+    g.fillRect(38, 68, 52, 4);
+    // unit drawn big: 4x nearest-neighbour off the 24px composite
+    g.drawImage(comp, 0, 0, 24, 24, 16, -8, 96, 96);
+    // thin gold inner frame (a true hairline at plate resolution)
     g.fillStyle = 'rgba(224,184,64,0.45)';
-    g.fillRect(1, 1, 62, 1); g.fillRect(1, 2, 1, 42); g.fillRect(62, 2, 1, 42);
-    // name band (dark backing keeps the tiny text readable)
-    R(g, 0, 36, 64, 8, 'rgba(0,0,0,0.5)');
-    g.font = '7px monospace';
+    g.fillRect(2, 2, 124, 1); g.fillRect(2, 3, 1, 84); g.fillRect(125, 3, 1, 84);
+    // name band (dark backing keeps the text readable)
+    R(g, 0, 72, 128, 16, 'rgba(0,0,0,0.5)');
+    g.font = '13px monospace';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
     g.fillStyle = PAL.uiText;
-    g.fillText(d.name, 32, 40, 62);
+    g.fillText(d.name, 64, 80, 124);
     // faction-neutral gold bottom stripe
-    R(g, 0, 44, 64, 4, PAL.uiGold);
-    R(g, 0, 44, 64, 1, '#f0d070'); R(g, 0, 47, 64, 1, '#a07820');
-    // thin 1px black frame
-    R(g, 0, 0, 64, 1, '#000'); R(g, 0, 47, 64, 1, '#000');
-    R(g, 0, 0, 1, 48, '#000'); R(g, 63, 0, 1, 48, '#000');
+    R(g, 0, 88, 128, 8, PAL.uiGold);
+    R(g, 0, 88, 128, 2, '#f0d070'); R(g, 0, 94, 128, 2, '#a07820');
+    // black frame
+    R(g, 0, 0, 128, 2, '#000'); R(g, 0, 94, 128, 2, '#000');
+    R(g, 0, 0, 2, 96, '#000'); R(g, 126, 0, 2, 96, '#000');
     return c;
   }
 

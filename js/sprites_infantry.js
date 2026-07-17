@@ -2,7 +2,7 @@
 // sprites_infantry.js — procedurally drawn infantry sprites + cameos.
 // Fills SPRITES.infantry[key][side] for e1,e2,e3,e4,e5,e6,rmbo (both sides) with
 // { stand:[8], walk:[8][4], fire:[8][2], die:[4] } 24x24 canvases, and
-// SPRITES.cameo[key] 64x48 bust-portrait icons. Original pixel art, mid-90s RTS style.
+// SPRITES.cameo[key] 128x96 bust-portrait icons. Original pixel art, mid-90s RTS style.
 // Facing index 0 = N, 1 = NE, ... clockwise (unit facing16 >> 1).
 
 (function () {
@@ -668,9 +668,13 @@
     const p = portraitPal(side);
     const name = (typeof DATA !== 'undefined' && DATA.units && DATA.units[key])
       ? DATA.units[key].name : key.toUpperCase();
-    const c = mkCanvas(C.CAMEO_W, C.CAMEO_H);
+    // 2x plate: the bust stays chunky pixel art (drawn in 64x48 coords under
+    // a 2x transform), the label band re-renders at native 13px
+    const c = mkCanvas(C.CAMEO_W * 2, C.CAMEO_H * 2);
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = false;
+    ctx.save();
+    ctx.scale(2, 2);
     const R = (x, y, w, h, col) => { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); };
 
     bgPanel(ctx, p);
@@ -814,23 +818,25 @@
       }
     }
 
-    // gold bottom stripe with the unit name (kept exactly as the sidebar expects)
+    ctx.restore();   // label plate at native 2x resolution
+
+    // gold bottom stripe with the unit name
     ctx.fillStyle = PAL.uiGold;
-    ctx.fillRect(1, 38, 62, 9);
+    ctx.fillRect(2, 76, 124, 18);
     ctx.fillStyle = '#a8842c';
-    ctx.fillRect(1, 38, 62, 1);
+    ctx.fillRect(2, 76, 124, 2);
     ctx.fillStyle = '#1c1608';
-    ctx.font = '7px monospace';
+    ctx.font = '13px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(name, 32, 43, 60);
+    ctx.fillText(name, 64, 86, 120);
 
-    // 1px black frame
+    // black frame
     ctx.fillStyle = '#000000';
-    ctx.fillRect(0, 0, C.CAMEO_W, 1);
-    ctx.fillRect(0, C.CAMEO_H - 1, C.CAMEO_W, 1);
-    ctx.fillRect(0, 0, 1, C.CAMEO_H);
-    ctx.fillRect(C.CAMEO_W - 1, 0, 1, C.CAMEO_H);
+    ctx.fillRect(0, 0, 128, 2);
+    ctx.fillRect(0, 94, 128, 2);
+    ctx.fillRect(0, 0, 2, 96);
+    ctx.fillRect(126, 0, 2, 96);
     return c;
   }
 

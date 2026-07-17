@@ -24,8 +24,8 @@ const C = {
   MM_X: 1312, MM_Y: 34, MM_S: 256,      // radar minimap blit rect (4px/cell)
   BTN_Y: 292, BTN_H: 40,
   STRIP_BX: 1288, STRIP_UX: 1424, STRIP_Y: 344, STRIP_SPACING: 100, STRIP_VISIBLE: 6,
-  CAMEO_W: 64, CAMEO_H: 48,             // cameo SOURCE size (art authored at this)
-  CAMEO_PW: 128, CAMEO_PH: 96,          // cameo SCREEN slot size
+  CAMEO_W: 64, CAMEO_H: 48,             // cameo layout unit (art authored at 2x = 128x96)
+  CAMEO_PW: 128, CAMEO_PH: 96,          // cameo SCREEN slot size (1:1 with the 2x art)
   HARV_CAP: 700,
   BAIL: 25,
   TIB_MAX: 300,

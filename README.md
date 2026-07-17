@@ -102,6 +102,7 @@ so bandwidth is tiny. Notes:
 | `P` | Set the selected factory building as primary for its kind |
 | Shift+click a unit icon | Queue 5 at once (Shift+right-click cancels the whole batch) |
 | Arrow keys / screen edges | Scroll the map |
+| Right-click and drag | Grab and pan the map (best way to scroll in a browser window) |
 | Two-finger touchpad scroll (or mouse wheel) | Pan the map |
 | `Esc` | Options menu / cancel placement, sell, repair, targeting |
 | `F1` (or `?`) | Pause and open the in-game controls reference (also on the Options menu) |

@@ -15,6 +15,10 @@ Inspired by the classic RTS genre; contains no assets, names, or code from any o
   every draw call stays in logical `C.SCREEN` coordinates. Text and HUD hairlines rasterize
   at native resolution (no browser resampling = no fuzzy text at non-integer window scales);
   sprites still blit nearest-neighbour through the transform, keeping hard pixel edges.
+  Caveat that follows: at fractional device scales, ABUTTING per-cell fills antialias
+  into hairline seams — the black shroud therefore fills whole horizontal runs of
+  shrouded cells with a half-pixel bleed instead of per-cell rects (a visible grid in
+  the dark otherwise).
   Re-fits on window `resize` and after `_fitScreen` sets the CSS box (main.js). Input is
   unaffected — the mouse maps through `getBoundingClientRect` ratios to logical coords.
 - Game logic runs at a fixed **15 ticks/second** (`C.TPS`) the classic "normal" RTS tick rate;
@@ -283,6 +287,13 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_autoAcquire` — they NEVER start fights and nobody auto-guns them. The 'damaged'
   handler makes a shot villager return fire on a reachable attacker (guardAnchor leash
   keeps them home); unreachable attackers (aircraft) still trigger the old panic-flee.
+- **Wall runs**: dragging with a wall ready sweeps a run (`Input._wallCells`, ≤13 cells,
+  wire format stays an explicit cell list). Angled drags rasterize as an orthogonal
+  STAIRCASE — every cell shares an edge with the next, so the 16-frame auto-connect
+  sprites always join and units can't slip between corner-touching posts. Hand-placed
+  segments with a wall on a DIAGONAL only (no shared orthogonal neighbor to route
+  through) draw one of 4 corner-stub sprites (`SPRITES.wallStub`, under the frame) so
+  odd angles still read as a connected line.
 - **Wall Gate** (`gate: true` in DATA.buildings; wall family, $250, instant place, one
   per click): a 3-CELL gatehouse. Placement centers on the clicked cell; orientation
   follows the wall run around it (`Production.gateOrient/gateFootprint` — walls N/S ⇒
@@ -535,8 +546,10 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   hover-lit buttons, recessed faction cards with mottos. All cosmetic; determinism-safe.
 - **Battle aftermath decals** (sim-spawned in `killEntity`, drawn in the ground-marks
   pass before entities): destroyed buildings leave a `rubble` effect sized to their
-  footprint (ttl 1350 — charred bed, hashed broken slabs, wall stubs, embers that cool
-  over the first ~17s, alpha fade near expiry); non-air vehicles leave a `wreck` husk
+  footprint (ttl 1350 — charred bed drawn as hash-jittered row strips with pinched end
+  rows plus outlying soot daubs past the footprint, so the silhouette is an eroded
+  stain rather than the building's rectangle; hashed broken slabs, wall stubs, embers
+  that cool over the first ~17s, alpha fade near expiry); non-air vehicles leave a `wreck` husk
   (ttl 675 — soot ring, burnt hull, collapsed cabin, cooling ember). Deterministic:
   spawned in the sim path, drawn from position hashes (`_gl`), no rng, not checksummed.
 - **Hover feedback** (fine pointer, render-only): the unit or building under the cursor
@@ -611,6 +624,10 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   building w/ engineer... (engineer targets enemy building = enter/capture cursor); click
   selected MCV again → deploy; click own factory → select it (its rally shown).
 - **Drag left**: selection box (own units only; buildings excluded unless single-click).
+- **Right-drag**: grabs and pans the map (tracked on window-level listeners so leaving
+  the canvas or window doesn't strand the gesture; <5 px of client movement still counts
+  as a plain right-click). Windowed browsers make edge scrolling clumsy — this is the
+  primary desktop pan.
 - **Right-click**: deselect / cancel mode (placement, repair, sell, super target). NO
   right-click orders — authentic to the original.
 - Shift+click adds/removes from selection. Double-click a unit selects all visible of type.
@@ -780,7 +797,9 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   pyramid with red trim; gtwr = sandbag tower; atwr = tall twin-rocket tower; gun/obli:
   base drawn in building sprite, obelisk = black spike (glows when charging); sam = domed
   launcher with open/close anim (3 frames); hpad = square pad with H; fix = ring platform.
-- Cameos (`SPRITES.cameo[key]`, 64×48): mini portrait of the thing on dark slate bg with
+- Cameos (`SPRITES.cameo[key]`, authored at 128×96 = 2× the 64×48 layout unit, blitted
+  1:1 into the sidebar slot — fine dither, hairline frames, 13px labels; the portrait
+  art itself stays chunky pixel art): mini portrait of the thing on dark slate bg with
   faction-color bottom stripe and 1px black frame — stylized, chunky, readable. Also
   `SPRITES.cameo.ion` (satellite dish + beam) and `SPRITES.cameo.nuke` (missile).
 - Terrain (`SPRITES.terrain[id] = [variants...]` 24×24): grass = mottled olive greens; dirt

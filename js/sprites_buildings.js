@@ -1639,44 +1639,53 @@
 
   // ---- cameos -------------------------------------------------------------------
 
+  // Cameos are authored at 2x (128x96) so the sidebar's 128x96 slot gets a
+  // 1:1 blit: fine 1px dither, hairline framing, and READABLE 13px labels
+  // instead of a blown-up 7px squint. The portrait art stays chunky pixel
+  // art by design — the finesse is in the plate, not the subject.
   function cameoCanvas() {
-    const c = mkCanvas(C.CAMEO_W, C.CAMEO_H);
+    const c = mkCanvas(C.CAMEO_W * 2, C.CAMEO_H * 2);
     const ctx = c.getContext('2d');
-    P(ctx, 0, 0, 64, 48, PAL.cameoBg);
-    // diagonal slate bands + dot dither
-    for (let y = 0; y < 38; y++) {
-      for (let x = 1; x < 63; x++) {
-        if ((((x + y) / 8) | 0) % 2) P(ctx, x, y, 1, 1, '#1e1e19');
+    P(ctx, 0, 0, 128, 96, PAL.cameoBg);
+    // diagonal slate bands + dot dither (native-res: half the grain size)
+    for (let y = 0; y < 76; y++) {
+      for (let x = 1; x < 127; x++) {
+        if ((((x + y) / 16) | 0) % 2) P(ctx, x, y, 1, 1, '#1e1e19');
       }
     }
     ctx.fillStyle = '#2b2b25';
-    for (let y = 2; y < 38; y += 4)
-      for (let x = (y % 8 === 2) ? 2 : 4; x < 62; x += 4) ctx.fillRect(x, y, 1, 1);
+    for (let y = 4; y < 76; y += 6)
+      for (let x = (y % 12 === 4) ? 3 : 6; x < 125; x += 6) ctx.fillRect(x, y, 1, 1);
     // soft key-light from top-left
     ctx.fillStyle = 'rgba(216,208,168,0.05)';
-    for (let y = 0; y < 16; y++) ctx.fillRect(1, y, Math.max(0, 20 - y), 1);
+    for (let y = 0; y < 32; y++) ctx.fillRect(1, y, Math.max(0, 40 - y), 1);
     return c;
   }
 
   function finishCameo(ctx, label) {
-    P(ctx, 1, 38, 62, 9, PAL.uiGold);
-    P(ctx, 1, 38, 62, 1, '#f0d878');
-    P(ctx, 1, 46, 62, 1, '#907020');
-    ctx.font = '7px monospace';
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);   // label plate at native resolution
+    P(ctx, 2, 76, 124, 18, PAL.uiGold);
+    P(ctx, 2, 76, 124, 1, '#f0d878');
+    P(ctx, 2, 92, 124, 2, '#907020');
+    ctx.font = '13px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#241c08';
     const w = ctx.measureText(label).width;
-    if (w > 58) {
-      ctx.save();
-      ctx.translate(32, 43);
-      ctx.scale(58 / w, 1);
+    if (w > 118) {
+      ctx.translate(64, 85);
+      ctx.scale(118 / w, 1);
       ctx.fillText(label, 0, 0);
-      ctx.restore();
     } else {
-      ctx.fillText(label, 32, 43);
+      ctx.fillText(label, 64, 85);
     }
-    outlineRect(ctx, 0, 0, 64, 48, '#000000');
+    ctx.restore();
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    outlineRect(ctx, 0, 0, 128, 96, '#000000');
+    outlineRect(ctx, 1, 1, 126, 94, '#000000');
+    ctx.restore();
   }
 
   // opaque-pixel bounding box, so tall sprites with empty yOff headroom still
@@ -1716,13 +1725,15 @@
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     const cr = cropAlpha(spr);
-    const s = Math.min(56 / cr.w, 32 / cr.h, 1.6);
+    // scale computed against the 2x plate: fractional nearest-neighbour
+    // steps are half as coarse, so uneven pixel rows mostly disappear
+    const s = Math.min(112 / cr.w, 64 / cr.h, 3.2);
     const dw = Math.max(1, Math.round(cr.w * s));
     const dh = Math.max(1, Math.round(cr.h * s));
     // grounding shadow behind the portrait
-    ellipseFill(ctx, 32, Math.round((37 - dh) / 2) + dh - 1, Math.min(28, (dw >> 1) + 4), 3, 'rgba(0,0,0,0.35)');
+    ellipseFill(ctx, 64, Math.round((74 - dh) / 2) + dh - 2, Math.min(56, (dw >> 1) + 8), 6, 'rgba(0,0,0,0.35)');
     ctx.drawImage(spr, cr.x, cr.y, cr.w, cr.h,
-                  Math.round((64 - dw) / 2), Math.round((37 - dh) / 2) + 1, dw, dh);
+                  Math.round((128 - dw) / 2), Math.round((74 - dh) / 2) + 2, dw, dh);
     finishCameo(ctx, d.name);
     return c;
   }
@@ -1730,6 +1741,8 @@
   function ionCameo() {
     const c = cameoCanvas();
     const ctx = c.getContext('2d');
+    ctx.save();
+    ctx.scale(2, 2);   // scene authored in 64x48 coords on the 2x plate
     // deep space
     P(ctx, 1, 1, 62, 37, '#0a0e16');
     const stars = [[6, 4], [16, 9], [55, 4], [45, 10], [59, 18], [9, 18], [24, 3], [36, 7]];
@@ -1765,6 +1778,7 @@
     ellipseFill(ctx, 48, 36, 10, 3, 'rgba(168,216,248,0.5)');
     ellipseFill(ctx, 48, 36, 6, 2, PAL.ion);
     ellipseFill(ctx, 48, 36, 3, 1, '#ffffff');
+    ctx.restore();
     finishCameo(ctx, 'Orbital Lance');
     return c;
   }
@@ -1772,6 +1786,8 @@
   function nukeCameo() {
     const c = cameoCanvas();
     const ctx = c.getContext('2d');
+    ctx.save();
+    ctx.scale(2, 2);   // scene authored in 64x48 coords on the 2x plate
     // ominous red-black sky
     P(ctx, 1, 1, 62, 37, '#1a0f0c');
     P(ctx, 1, 1, 62, 8, '#33201a');
@@ -1805,6 +1821,7 @@
     P(ctx, 30, 30, 4, 3, PAL.fire2);
     P(ctx, 31, 33, 2, 3, PAL.fire3);
     P(ctx, 28, 29, 1, 2, 'rgba(240,144,32,0.5)'); P(ctx, 35, 29, 1, 2, 'rgba(240,144,32,0.5)');
+    ctx.restore();
     finishCameo(ctx, 'Nuclear Strike');
     return c;
   }
@@ -1919,32 +1936,34 @@
   }
   SPRITES.wallStub = [stubFrame(0), stubFrame(1), stubFrame(2), stubFrame(3)];
 
-  // cameo: a short wall run
-  const cam = mkCanvas(64, 48);
+  // cameo: a short wall run (2x plate, native label — see cameoCanvas)
+  const cam = mkCanvas(128, 96);
   const g = cam.getContext('2d');
-  g.fillStyle = PAL.cameoBg; g.fillRect(0, 0, 64, 48);
-  g.drawImage(wallFrame(10, false), 4, 4, 24, 32);   // E+W run piece
-  g.drawImage(wallFrame(10, false), 22, 4, 24, 32);
-  g.drawImage(wallFrame(10, false), 40, 2, 24, 32);
-  g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(0, 36, 64, 8);
-  g.font = '7px monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.fillStyle = PAL.uiText; g.fillText('Concrete Wall', 32, 40, 62);
-  g.fillStyle = PAL.uiGold; g.fillRect(0, 44, 64, 4);
+  g.imageSmoothingEnabled = false;
+  g.fillStyle = PAL.cameoBg; g.fillRect(0, 0, 128, 96);
+  g.drawImage(wallFrame(10, false), 8, 8, 48, 64);   // E+W run piece
+  g.drawImage(wallFrame(10, false), 44, 8, 48, 64);
+  g.drawImage(wallFrame(10, false), 80, 4, 48, 64);
+  g.fillStyle = 'rgba(0,0,0,0.5)'; g.fillRect(0, 72, 128, 16);
+  g.font = '13px monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillStyle = PAL.uiText; g.fillText('Concrete Wall', 64, 80, 124);
+  g.fillStyle = PAL.uiGold; g.fillRect(0, 88, 128, 8);
   SPRITES.cameo.brik = cam;
 
   // ---- wall gate: a 3-cell powered gatehouse. Frames indexed
   // [closedH, openH, closedV, openV]; render picks the orientation from the
   // instance footprint and opens it when the owner's units approach.
-  function gatePost(g2, x, y) {
+  function gatePost(g2, x, y, w) {
     // a chunky gatehouse pier, taller than the wall it anchors
-    g2.fillStyle = OUT; g2.fillRect(x - 1, y - 1, 12, 26);
-    g2.fillStyle = TOP_L; g2.fillRect(x, y, 10, 7);
-    g2.fillStyle = TOP; g2.fillRect(x, y + 4, 10, 3);
-    g2.fillStyle = FACE; g2.fillRect(x, y + 7, 10, 14);
-    g2.fillStyle = FACE_D; g2.fillRect(x, y + 19, 10, 2);
-    g2.fillStyle = '#d8d8ca'; g2.fillRect(x, y, 10, 1);
-    g2.fillStyle = '#3c3c34'; g2.fillRect(x + 2, y + 9, 6, 3);   // vision slit
-    g2.fillStyle = '#c8a83c'; g2.fillRect(x + 4, y + 10, 2, 1);  // status lamp
+    w = w || 10;
+    g2.fillStyle = OUT; g2.fillRect(x - 1, y - 1, w + 2, 26);
+    g2.fillStyle = TOP_L; g2.fillRect(x, y, w, 7);
+    g2.fillStyle = TOP; g2.fillRect(x, y + 4, w, 3);
+    g2.fillStyle = FACE; g2.fillRect(x, y + 7, w, 14);
+    g2.fillStyle = FACE_D; g2.fillRect(x, y + 19, w, 2);
+    g2.fillStyle = '#d8d8ca'; g2.fillRect(x, y, w, 1);
+    g2.fillStyle = '#3c3c34'; g2.fillRect(x + (w >> 1) - 3, y + 9, 6, 3);   // vision slit
+    g2.fillStyle = '#c8a83c'; g2.fillRect(x + (w >> 1) - 1, y + 10, 2, 1);  // status lamp
   }
   function gateFrame(vert, open, damaged) {
     const c2 = vert ? mkCanvas(24, 80) : mkCanvas(72, 32);
@@ -1976,31 +1995,36 @@
       gatePost(g2, 60, 4);
       g2.fillStyle = 'rgba(0,0,0,0.22)'; g2.fillRect(64, 26, 8, 4);
     } else {
-      // vertical span: piers top and bottom, roadway running north-south
-      g2.fillStyle = 'rgba(0,0,0,0.30)'; g2.fillRect(8, 8, 8, 64);
-      g2.fillStyle = 'rgba(255,255,255,0.06)'; g2.fillRect(8, 8, 1, 64);
+      // vertical span: piers top and bottom, roadway running north-south.
+      // Everything is WIDER than the horizontal gate's parts — in the 3/4
+      // view a north-south structure shows its whole flank, and the old
+      // slim arm read as a fence post
+      g2.fillStyle = 'rgba(0,0,0,0.30)'; g2.fillRect(6, 8, 12, 64);
+      g2.fillStyle = 'rgba(255,255,255,0.06)'; g2.fillRect(6, 8, 1, 64);
       if (open) {
         // halves hug the piers — a long clear roadway between them
-        for (const by of [12, 60]) {
-          g2.fillStyle = OUT; g2.fillRect(8, by, 8, 7);
-          g2.fillStyle = '#6e6e64'; g2.fillRect(9, by + 1, 6, 2);
-          g2.fillStyle = '#54544c'; g2.fillRect(9, by + 3, 6, 3);
-          g2.fillStyle = '#c8a83c'; g2.fillRect(9, by + 3, 6, 1);
+        for (const by of [13, 58]) {
+          g2.fillStyle = OUT; g2.fillRect(5, by, 14, 8);
+          g2.fillStyle = '#6e6e64'; g2.fillRect(6, by + 1, 12, 3);
+          g2.fillStyle = '#54544c'; g2.fillRect(6, by + 4, 12, 3);
+          g2.fillStyle = '#c8a83c'; g2.fillRect(6, by + 4, 12, 1);
         }
       } else {
-        // slim barrier — a gate arm, not a wall of steel
-        g2.fillStyle = OUT; g2.fillRect(7, 12, 10, 55);
-        g2.fillStyle = '#76766c'; g2.fillRect(8, 13, 8, 3);
-        g2.fillStyle = '#8a8a7e'; g2.fillRect(8, 13, 8, 1);
-        for (let i = 0; i < 13; i++) {
+        // full-width armored barrier with a lit west edge + shaded east face
+        g2.fillStyle = OUT; g2.fillRect(4, 12, 16, 55);
+        g2.fillStyle = '#76766c'; g2.fillRect(5, 13, 14, 3);
+        g2.fillStyle = '#8a8a7e'; g2.fillRect(5, 13, 14, 1);
+        for (let i = 0; i < 12; i++) {
           g2.fillStyle = i & 1 ? '#c8a83c' : '#2c2c26';
-          g2.fillRect(8, 16 + i * 4, 8, 4);
+          g2.fillRect(5, 16 + i * 4, 12, 4);
         }
-        g2.fillStyle = '#1c1c16'; g2.fillRect(8, 38, 8, 2);     // center seam
+        g2.fillStyle = '#8a8a7e'; g2.fillRect(5, 16, 1, 48);    // lit west edge
+        g2.fillStyle = '#3c3c34'; g2.fillRect(17, 16, 2, 48);   // shaded east face
+        g2.fillStyle = '#1c1c16'; g2.fillRect(5, 38, 14, 2);    // center seam
       }
-      gatePost(g2, 7, 2);
-      gatePost(g2, 7, 56);
-      g2.fillStyle = 'rgba(0,0,0,0.22)'; g2.fillRect(18, 74, 6, 4);
+      gatePost(g2, 4, 2, 16);
+      gatePost(g2, 4, 56, 16);
+      g2.fillStyle = 'rgba(0,0,0,0.22)'; g2.fillRect(20, 74, 4, 4);
     }
     if (damaged) {
       g2.fillStyle = 'rgba(20,16,10,0.35)'; g2.fillRect(0, 0, c2.width, c2.height);
@@ -2018,14 +2042,15 @@
   const gateEntry = { normal: gateN, damaged: gateD, yOff: 4, gateFrames: true };
   SPRITES.buildings.gate = { gdi: gateEntry, nod: gateEntry, mut: gateEntry, civ: gateEntry };
 
-  const gcam = mkCanvas(64, 48);
+  const gcam = mkCanvas(128, 96);
   const gg = gcam.getContext('2d');
-  gg.fillStyle = PAL.cameoBg; gg.fillRect(0, 0, 64, 48);
-  gg.drawImage(gateFrame(false, false, false), 2, 5, 60, 27);
-  gg.fillStyle = 'rgba(0,0,0,0.5)'; gg.fillRect(0, 36, 64, 8);
-  gg.font = '7px monospace'; gg.textAlign = 'center'; gg.textBaseline = 'middle';
-  gg.fillStyle = PAL.uiText; gg.fillText('Wall Gate', 32, 40, 62);
-  gg.fillStyle = PAL.uiGold; gg.fillRect(0, 44, 64, 4);
+  gg.imageSmoothingEnabled = false;
+  gg.fillStyle = PAL.cameoBg; gg.fillRect(0, 0, 128, 96);
+  gg.drawImage(gateFrame(false, false, false), 4, 10, 120, 54);
+  gg.fillStyle = 'rgba(0,0,0,0.5)'; gg.fillRect(0, 72, 128, 16);
+  gg.font = '13px monospace'; gg.textAlign = 'center'; gg.textBaseline = 'middle';
+  gg.fillStyle = PAL.uiText; gg.fillText('Wall Gate', 64, 80, 124);
+  gg.fillStyle = PAL.uiGold; gg.fillRect(0, 88, 128, 8);
   SPRITES.cameo.gate = gcam;
 
   // ==== CIVILIAN VILLAGE ========================================================
