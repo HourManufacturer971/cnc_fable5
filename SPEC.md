@@ -175,9 +175,13 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   live sight-glass gauge of `credits/storage` (render-only, in `_drawBuilding`).
 - Harvester field discipline: target cells are LEASHED to ~20 cells of the home dock while
   local crystal lasts; when the neighborhood is dry an EMPTY harvester treks unleashed to
-  whatever is left on the map (never idles the economy to death), and a PARTIALLY loaded
-  one tops off within ~10 cells of itself — so a far field is eaten until the hopper is
-  full, never one cell per round trip. Known-unreachable cells are blacklisted
+  whatever is left on the map (never idles the economy to death). A PARTIALLY loaded one
+  tops off around where it STANDS first (unanchored, ~16 cells — wide enough to walk a
+  whole field pocket), falling back to the leashed home-side search only if its own
+  surroundings are bare — so a far field is eaten until the hopper is FULL, never one
+  cell per round trip. (Order matters: the home leash rejects every cell of a distant
+  field, so leash-first sent far trekkers home half-empty — the harvtest covers this.)
+  Known-unreachable cells are blacklisted
   (`u._noReach`) for ~60s. Cell choice is SCORED, not nearest-wins:
   `dist² − (3x3 richness)/100 + 60·crowd`, where crowd counts other own harvesters whose
   current target sits within 3 cells — the fleet aims at fat pockets and spreads out

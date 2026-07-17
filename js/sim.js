@@ -799,12 +799,14 @@ function _harvester(u, d) {
     let tries = 8;
     // EMPTY harvesters make the full stay-or-commit decision (leash while
     // the local field is real, trek when it's crumbs — _pickTibTarget);
-    // PARTIAL ones stay leashed or top off close to where they stand, so a
-    // far-field trekker keeps eating until full instead of round-tripping
-    // home after every single cell
+    // PARTIAL ones top off around where they STAND first (unanchored, wide
+    // enough to walk a whole field pocket), then fall back to the leashed
+    // home-side search. Order matters: the home leash rejects every cell of
+    // a distant field, so checking it first sent far-field trekkers home
+    // half-full the moment their corner of the field ran dry.
     const pick = () => u.tib === 0
       ? _pickTibTarget(u, homeDock)
-      : (_findTibCell(u, 40, homeDock) || _findTibCell(u, 10, null));
+      : (_findTibCell(u, 16, null) || _findTibCell(u, 40, homeDock));
     let c;
     while ((c = pick())) {
       const path = findPath(u, c.cx, c.cy);
