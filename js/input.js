@@ -1121,9 +1121,11 @@ const Input = (function () {
     if (keys.ArrowUp) sy -= 1;
     if (keys.ArrowDown) sy += 1;
 
-    // edge scroll
+    // edge scroll — but never while a drag is already steering the camera
+    // (right-drag pan, radar scrub): two drivers on one wheel means the map
+    // stutters between them the moment the cursor nears a screen edge
     let edge = -1;
-    if (mouse.inside) {
+    if (mouse.inside && !rPan && !radarDrag) {
       const e = C.EDGE_SCROLL;
       const l = mouse.x < e, r = mouse.x > C.SCREEN_W - e;
       const t = mouse.y < e, b = mouse.y > C.SCREEN_H - e;
