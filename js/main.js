@@ -5,7 +5,7 @@
 const Main = (function () {
   let canvas = null;
   let acc = 0, lastT = 0, rafStarted = false;
-  let mySide = 'gdi';
+  let mySide = 'udc';
   let myMission = null;   // current mission definition (null = skirmish)
   let mySkirmish = null;  // skirmish difficulty preset (null = normal)
   let ended = false;
@@ -178,7 +178,7 @@ const Main = (function () {
     }
 
     // faction logos on the menu
-    for (const [slot, side] of [['logoGdi', 'gdi'], ['logoNod', 'nod']]) {
+    for (const [slot, side] of [['logoUdc', 'udc'], ['logoSrp', 'srp']]) {
       const el = $(slot);
       if (el && SPRITES.logo[side]) el.appendChild(SPRITES.logo[side]);
     }
@@ -228,11 +228,11 @@ const Main = (function () {
     // the skirmish window: its own screen with EVERYTHING — side, difficulty,
     // combatants, map, funds, crates, superweapons, seed
     const skSideSync = () => {
-      $('skSideGdi').classList.toggle('sel', skSide === 'gdi');
-      $('skSideNod').classList.toggle('sel', skSide === 'nod');
+      $('skSideUdc').classList.toggle('sel', skSide === 'udc');
+      $('skSideSrp').classList.toggle('sel', skSide === 'srp');
     };
-    $('skSideGdi').addEventListener('click', () => { skSide = 'gdi'; skSideSync(); });
-    $('skSideNod').addEventListener('click', () => { skSide = 'nod'; skSideSync(); });
+    $('skSideUdc').addEventListener('click', () => { skSide = 'udc'; skSideSync(); });
+    $('skSideSrp').addEventListener('click', () => { skSide = 'srp'; skSideSync(); });
     $('btnSkBack').addEventListener('click', () => {
       $('skirmish').classList.add('hidden');
       _showMissions(skFrom);
@@ -256,27 +256,8 @@ const Main = (function () {
     });
 
     $('btnResume').addEventListener('click', () => togglePause(false));
-    $('btnSound').addEventListener('click', () => {
-      AUDIO.setEnabled(!AUDIO.enabled);
-      $('btnSound').textContent = 'Sound: ' + (AUDIO.enabled ? 'ON' : 'OFF');
-    });
-    // soundtrack toggle, persisted across sessions
-    if (localStorage.getItem('td_music') === '0') MUSIC.setEnabled(false);
-    $('btnMusic').textContent = 'Music: ' + (MUSIC.enabled ? 'ON' : 'OFF');
-    $('btnMusic').addEventListener('click', () => {
-      MUSIC.setEnabled(!MUSIC.enabled);
-      localStorage.setItem('td_music', MUSIC.enabled ? '1' : '0');
-      $('btnMusic').textContent = 'Music: ' + (MUSIC.enabled ? 'ON' : 'OFF');
-    });
-    // the synthesized comms voice (announcer + unit chatter), toggled apart
-    // from SFX so players can keep gunfire but silence the talking
-    if (localStorage.getItem('hw_voice') === '0') AUDIO.setVoiceEnabled(false);
-    $('btnVoice').textContent = 'Voice: ' + (AUDIO.voiceEnabled ? 'ON' : 'OFF');
-    $('btnVoice').addEventListener('click', () => {
-      AUDIO.setVoiceEnabled(!AUDIO.voiceEnabled);
-      localStorage.setItem('hw_voice', AUDIO.voiceEnabled ? '1' : '0');
-      $('btnVoice').textContent = 'Voice: ' + (AUDIO.voiceEnabled ? 'ON' : 'OFF');
-    });
+    // audio is controlled by the three sliders alone — a slider at 0 IS the
+    // mute switch, so the old ON/OFF toggle buttons are gone
     // volume sliders: 50 = the designed level (multiplier value/50), persisted
     for (const [id, key, apply] of [
       ['volSfx', 'hw_vol_sfx', v => AUDIO.setVolume(v)],
@@ -429,14 +410,14 @@ const Main = (function () {
     if (q.get('mpbc')) {
       AUDIO.init();
       NET.testLocal(q.get('mpbc'), q.get('mphost') === '1',
-        q.get('side') || 'gdi', s => console.log('[mp]', s));
+        q.get('side') || 'udc', s => console.log('[mp]', s));
     }
     if (q.get('nomenu')) {
       AUDIO.init();
-      startGame(q.get('side') === 'nod' ? 'nod' : 'gdi', {
+      startGame(q.get('side') === 'srp' ? 'srp' : 'udc', {
         seed: q.get('seed') ? +q.get('seed') : undefined,
         mission: q.get('mission')
-          ? MISSIONS.arc(q.get('side') === 'nod' ? 'nod' : 'gdi')[+q.get('mission') - 1]
+          ? MISSIONS.arc(q.get('side') === 'srp' ? 'srp' : 'udc')[+q.get('mission') - 1]
           : undefined,
       });
     }
@@ -450,7 +431,7 @@ const Main = (function () {
   // ---- multiplayer lobby ---------------------------------------------------------------
 
   function _wireMpLobby() {
-    let mpSide = 'gdi';
+    let mpSide = 'udc';
     const status = s => { $('mpStatus').textContent = s; };
     const showFlow = which => {
       $('mpChoose').classList.toggle('hidden', which !== 'choose');
@@ -490,15 +471,15 @@ const Main = (function () {
       status('');
       $('mplobby').classList.remove('hidden');
     });
-    const sideBtns = { gdi: $('mpSideGdi'), nod: $('mpSideNod') };
+    const sideBtns = { udc: $('mpSideUdc'), srp: $('mpSideSrp') };
     const pickSide = s => {
       mpSide = s;
-      sideBtns.gdi.classList.toggle('sel', s === 'gdi');
-      sideBtns.nod.classList.toggle('sel', s === 'nod');
+      sideBtns.udc.classList.toggle('sel', s === 'udc');
+      sideBtns.srp.classList.toggle('sel', s === 'srp');
     };
-    sideBtns.gdi.addEventListener('click', () => pickSide('gdi'));
-    sideBtns.nod.addEventListener('click', () => pickSide('nod'));
-    pickSide('gdi');
+    sideBtns.udc.addEventListener('click', () => pickSide('udc'));
+    sideBtns.srp.addEventListener('click', () => pickSide('srp'));
+    pickSide('udc');
 
     $('btnMpHost').addEventListener('click', () => {
       showFlow('host');
@@ -547,7 +528,7 @@ const Main = (function () {
         : 'Skirmish — ' + (d.meta.skirmish || 'NORMAL');
       const sub = $('resumeSaveSub');
       if (sub) {
-        sub.textContent = (d.meta.side === 'nod' ? 'Serpent Order' : 'UDC') +
+        sub.textContent = (d.meta.side === 'srp' ? 'Serpent Order' : 'UDC') +
           ' · ' + what + ' · ' + mm + ':' + ss;
       }
     }
@@ -579,13 +560,13 @@ const Main = (function () {
 
   // the skirmish window remembers which theater opened it (Back returns
   // there) and which side is toggled for the next battle
-  let skSide = 'gdi', skFrom = 'gdi';
+  let skSide = 'udc', skFrom = 'udc';
 
   function _showSkirmish(side) {
-    skFrom = baseSide(side || mySide || 'gdi');
+    skFrom = baseSide(side || mySide || 'udc');
     skSide = skFrom;
-    $('skSideGdi').classList.toggle('sel', skSide === 'gdi');
-    $('skSideNod').classList.toggle('sel', skSide === 'nod');
+    $('skSideUdc').classList.toggle('sel', skSide === 'udc');
+    $('skSideSrp').classList.toggle('sel', skSide === 'srp');
     $('menu').classList.add('hidden');
     $('missions').classList.add('hidden');
     $('skirmish').classList.remove('hidden');
@@ -646,7 +627,7 @@ const Main = (function () {
     if (!cv) return;
     const q = cv.getContext('2d');
     const W = cv.width, H = cv.height;
-    const accent = side === 'nod' ? '#e05038' : '#e0b840';
+    const accent = side === 'srp' ? '#e05038' : '#e0b840';
     const rng = mulberry(0xC0FFEE);
     // --- the sea: deep water with lapping wave dashes -----------------------
     q.fillStyle = '#081019';
@@ -1006,7 +987,7 @@ const Main = (function () {
     C.MAP_W = C.MAP_H = 64;
     const n = 64 * 64;
     const fake = {
-      seed: m.seed, sides: ['gdi', 'nod'], humanSide: mySide,
+      seed: m.seed, sides: ['udc', 'srp'], humanSide: mySide,
       terrain: new Uint8Array(n), tvar: new Uint8Array(n),
       tib: new Uint16Array(n), tibType: new Uint8Array(n),
       startPos: null, decor: null,
@@ -1054,10 +1035,10 @@ const Main = (function () {
       q.fillText(s, lx, ly);
     };
     const you = fake.startPos[mySide] || fake.startPos.human;
-    const foe = fake.startPos[mySide === 'gdi' ? 'nod' : 'gdi'] || fake.startPos.ai;
+    const foe = fake.startPos[mySide === 'udc' ? 'srp' : 'udc'] || fake.startPos.ai;
     // markers wear FACTION colors: a Serpent commander is RED on their own
     // survey and the Coalition enemy is gold — never the other way around
-    const meRed = baseSide(mySide) === 'nod';
+    const meRed = baseSide(mySide) === 'srp';
     const YOU = meRed
       ? { fill: '#ff2418', edge: '#ffb4a4', label: '#ff9c88', ring: 'rgba(255,60,40,0.5)' }
       : { fill: '#ffd23c', edge: '#fff2b0', label: '#ffe28a', ring: 'rgba(255,210,60,0.5)' };
@@ -1123,7 +1104,7 @@ const Main = (function () {
     $('missions').classList.add('hidden');
     $('briefTitle').textContent = 'OP ' + m.n + ': ' + m.title;
     $('briefSector').textContent = 'SECTOR ' + m.seed + ' · ' + (m.sector || 'UNCHARTED');
-    $('briefClass').textContent = mySide === 'gdi'
+    $('briefClass').textContent = mySide === 'udc'
       ? 'UDC TACTICAL NET — EYES ONLY' : 'SERPENT WHISPERS — FOR THE FAITHFUL';
     _teletype($('briefBody'), m.brief);
     $('briefBody').scrollTop = 0;   // the element persists across briefings
@@ -1153,7 +1134,7 @@ const Main = (function () {
       return out;
     };
     if (withMcv) addUnit(makeUnit('mcv', side, pos.cx, pos.cy));
-    const scout = side === 'gdi' ? 'jeep' : 'bggy';
+    const scout = side === 'udc' ? 'jeep' : 'bggy';
     const spots = passableNear(4);
     if (spots[0]) addUnit(makeUnit(scout, side, spots[0].cx, spots[0].cy));
     for (let i = 1; i < 4 && spots[i]; i++) {
@@ -1227,10 +1208,10 @@ const Main = (function () {
     if (opts.mp) {
       // multiplayer: two human MCV starts. The side->position mapping and
       // the spawn ORDER must be canonical — identical on both clients — so
-      // both mint the same entity ids: gdi always takes the SW spot (the
-      // map's "human" slot), nod the NE one, gdi spawns first.
-      _spawnEscort(game, 'gdi', hp, true);
-      _spawnEscort(game, 'nod', ap, true);
+      // both mint the same entity ids: udc always takes the SW spot (the
+      // map's "human" slot), srp the NE one, udc spawns first.
+      _spawnEscort(game, 'udc', hp, true);
+      _spawnEscort(game, 'srp', ap, true);
     } else {
       // human: MCV + escort (missions may bring their own force instead;
       // spectate fields no human force at all)
@@ -1287,7 +1268,7 @@ const Main = (function () {
     if (opts.mp) NET.initExplored(game);
 
     // camera on the LOCAL player's start (in MP that is side-dependent)
-    const myPos = opts.mp ? (side === 'gdi' ? hp : ap) : hp;
+    const myPos = opts.mp ? (side === 'udc' ? hp : ap) : hp;
     game.camera.x = clamp(cellCenterX(myPos.cx) - C.VIEW_W / 2, 0, C.MAP_W * C.CELL - C.VIEW_W);
     game.camera.y = clamp(cellCenterY(myPos.cy) - C.VIEW_H / 2, 0, C.MAP_H * C.CELL - C.VIEW_H);
 

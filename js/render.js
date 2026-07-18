@@ -319,7 +319,7 @@ const Render = (function () {
   //   entity blips  — drawn straight to the frame EVERY frame from live
   //                   world coordinates, so movement is real-time and smooth
 
-  const OWNER_COLOR = { gdi: '#ffd23c', nod: '#ff2418', gd2: '#4c8ce0', nd2: '#b46ae8', mut: '#4ce03c', civ: '#e8e6da' };
+  const OWNER_COLOR = { udc: '#ffd23c', srp: '#ff2418', ud2: '#4c8ce0', sr2: '#b46ae8', mut: '#4ce03c', civ: '#e8e6da' };
   // minimap px per cell — computed at each use: C.MAP_W changes per game
   // (64 classic, 88 large), and a load-time constant would draw every blip
   // and fog cell at the classic scale on top of a large-map terrain base
@@ -811,7 +811,7 @@ const Render = (function () {
         const fall = (e.ttl - e.tick) * 12;
         ctx.fillStyle = '#ddd';
         ctx.fillRect(X(e.x) - 4, Y(e.y - fall) - 24, 8, 24);
-        ctx.fillStyle = PAL.nodRed;
+        ctx.fillStyle = PAL.srpRed;
         ctx.fillRect(X(e.x) - 4, Y(e.y - fall) - 28, 8, 6);
         return;
       }

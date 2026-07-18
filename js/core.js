@@ -40,7 +40,7 @@ const C = {
   SCROLL_SPEED: 12,        // WORLD px per frame while scrolling
   // display names for the internal side keys (the keys themselves are legacy
   // identifiers baked into save-free game state; only the labels are shown)
-  SIDE_NAME: { gdi: 'UDC', nod: 'SERPENT', gd2: 'UDC AZURE', nd2: 'SERPENT AMETHYST' },
+  SIDE_NAME: { udc: 'UDC', srp: 'SERPENT', ud2: 'UDC AZURE', sr2: 'SERPENT AMETHYST' },
 };
 
 // Widen the fixed 16:10 layout to a device's real aspect (phones in landscape
@@ -64,10 +64,10 @@ function applyScreenAspect(aspect) {
 const PAL = {
   outline: '#101008',
   // UDC: desert gold/tan
-  gdi: '#c8a84c', gdiDark: '#8a7230', gdiLight: '#e8d088', gdiShadow: '#5c4c20',
+  udc: '#c8a84c', udcDark: '#8a7230', udcLight: '#e8d088', udcShadow: '#5c4c20',
   // Serpent Order: steel grey + red accents
-  nod: '#8a8a94', nodDark: '#54545e', nodLight: '#b8b8c2', nodShadow: '#36363e',
-  nodRed: '#b02818', nodRedLight: '#e05038',
+  srp: '#8a8a94', srpDark: '#54545e', srpLight: '#b8b8c2', srpShadow: '#36363e',
+  srpRed: '#b02818', srpRedLight: '#e05038',
   // terrain
   grass1: '#4c6832', grass2: '#546e36', grass3: '#42592b', grass4: '#5b7a3c',
   dirt1: '#8f7a4e', dirt2: '#9c8656', dirt3: '#7c6a42',
@@ -98,7 +98,7 @@ const SPRITES = {
   cameo: {},      // cameo[key] = 64x48 canvas (units, buildings, ion, nuke)
   fx: {},         // named frame arrays, see SPEC
   cursor: {},     // cursor[kind] = {c: canvas, hx, hy} hotspot
-  logo: {},       // logo.gdi / logo.nod big emblems
+  logo: {},       // logo.udc / logo.srp big emblems
   shroudEdge: [], // 8 directional edge tiles
 };
 
@@ -238,8 +238,8 @@ const EV = {
 // the two factions' rules and art with remapped team colors; baseSide()
 // resolves any side to the faction whose DATA (build lists, side-locked
 // items) and sprites it plays with.
-const SIDE_ORDER = ['gdi', 'nod', 'gd2', 'nd2'];
-function baseSide(s) { return s === 'gd2' ? 'gdi' : s === 'nd2' ? 'nod' : s; }
+const SIDE_ORDER = ['udc', 'srp', 'ud2', 'sr2'];
+function baseSide(s) { return s === 'ud2' ? 'udc' : s === 'sr2' ? 'srp' : s; }
 
 function makePlayer(side, isAI) {
   return {
@@ -283,12 +283,12 @@ function makeGame(opts) {
     // mut is a stub owner for tiberium creatures (visceroids): no base, no
     // production, hostile to everyone, never checked for win/lose.
     // civ is the neutral village: bystanders no one auto-targets.
-    players: { gdi: makePlayer('gdi', false), nod: makePlayer('nod', true), mut: makePlayer('mut', true), civ: makePlayer('civ', true) },
+    players: { udc: makePlayer('udc', false), srp: makePlayer('srp', true), mut: makePlayer('mut', true), civ: makePlayer('civ', true) },
     // COMBAT sides in play, canonical order (determinism: every sim loop
     // over players iterates this). 1v1 default; multi-AI skirmish adds
-    // gd2/nd2 slots.
-    sides: (opts && opts.sides) ? opts.sides.slice() : ['gdi', 'nod'],
-    humanSide: (opts && opts.side) || 'gdi',
+    // ud2/sr2 slots.
+    sides: (opts && opts.sides) ? opts.sides.slice() : ['udc', 'srp'],
+    humanSide: (opts && opts.side) || 'udc',
     human: null, ai: null,
     camera: { x: 0, y: 0 },
     selection: [],
@@ -317,7 +317,7 @@ function makeGame(opts) {
   return g;
 }
 
-function enemyOf(side) { return side === 'gdi' ? 'nod' : 'gdi'; }
+function enemyOf(side) { return side === 'udc' ? 'srp' : 'udc'; }
 
 // spread a group destination into a spiral cluster of passable cells —
 // shared by player group orders (input.js) and the AI's wave movement

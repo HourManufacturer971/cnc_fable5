@@ -37,12 +37,12 @@
   const WHT = '#e8e8e0', WHT_D = '#b0b0a8';
 
   function sidePal(side) {
-    return side === 'gdi'
-      ? { base: PAL.gdi, light: PAL.gdiLight, dark: PAL.gdiDark, shadow: PAL.gdiShadow,
+    return side === 'udc'
+      ? { base: PAL.udc, light: PAL.udcLight, dark: PAL.udcDark, shadow: PAL.udcShadow,
           trim: PAL.uiGold, trim2: '#f4dc80', haz: '#e0b840',
           blackA: '#2b2822', blackB: '#38342c', blackC: '#474033' }
-      : { base: PAL.nod, light: PAL.nodLight, dark: PAL.nodDark, shadow: PAL.nodShadow,
-          trim: PAL.nodRed, trim2: PAL.nodRedLight, haz: '#c8321e',
+      : { base: PAL.srp, light: PAL.srpLight, dark: PAL.srpDark, shadow: PAL.srpShadow,
+          trim: PAL.srpRed, trim2: PAL.srpRedLight, haz: '#c8321e',
           blackA: '#25252d', blackB: '#32323c', blackC: '#41414d' };
   }
 
@@ -924,7 +924,7 @@
     // antenna mast (east roof) + blink
     P(ctx, 39, -4, 1, 11, '#262622');
     P(ctx, 37, -1, 5, 1, '#262622');
-    P(ctx, 38, -6, 3, 2, (f % 2) ? PAL.nodRedLight : '#5c2014');
+    P(ctx, 38, -6, 3, 2, (f % 2) ? PAL.srpRedLight : '#5c2014');
     // facade: hazard door + windows + comms panel
     hazardH(ctx, 7, 30, 12, pal.haz);
     pDoor(ctx, 9, 33, 8, 9);
@@ -1258,7 +1258,7 @@
     P(ctx, x, y, 8, 1, pal.light);
     P(ctx, x + 3, y, 1, 4, pal.shadow);
     P(ctx, x + 1, y + 1, 2, 2, '#d8d8d2'); P(ctx, x + 5, y + 1, 2, 2, '#d8d8d2');
-    P(ctx, x + 1, y + 1, 1, 1, PAL.nodRed); P(ctx, x + 5, y + 1, 1, 1, PAL.nodRed);
+    P(ctx, x + 1, y + 1, 1, 1, PAL.srpRed); P(ctx, x + 5, y + 1, 1, 1, PAL.srpRed);
     P(ctx, x, y + 3, 8, 1, pal.light);          // parapet
     // south face with warning diamond
     P(ctx, x, y + 4, 8, 6, pal.dark);
@@ -1439,14 +1439,14 @@
         P(ctx, 24 - gap, 9, gap * 2, 1, '#4c4c44');
         P(ctx, 20, 3, 2, 9, '#e2e2da'); P(ctx, 20, 3, 1, 9, '#ffffff');
         P(ctx, 26, 3, 2, 9, '#e2e2da'); P(ctx, 26, 3, 1, 9, '#ffffff');
-        P(ctx, 20, 3, 2, 2, PAL.nodRedLight); P(ctx, 26, 3, 2, 2, PAL.nodRedLight);
+        P(ctx, 20, 3, 2, 2, PAL.srpRedLight); P(ctx, 26, 3, 2, 2, PAL.srpRedLight);
         P(ctx, 20, 10, 2, 1, '#8a8a84'); P(ctx, 26, 10, 2, 1, '#8a8a84');
       }
       if (open >= 3) {
         // center missile raised on the elevator
         P(ctx, 23, 0, 3, 12, '#f0f0e8');
         P(ctx, 23, 0, 1, 12, '#ffffff');
-        P(ctx, 23, 0, 3, 2, PAL.nodRedLight);
+        P(ctx, 23, 0, 3, 2, PAL.srpRedLight);
         P(ctx, 23, 1, 1, 1, '#ffe0d0');
         P(ctx, 22, 11, 5, 1, '#6a6a62');
       }
@@ -1709,7 +1709,7 @@
 
   function buildingCameo(key) {
     const d = DATA.buildings[key];
-    const side = d.side || 'gdi';
+    const side = d.side || 'udc';
     const entry = SPRITES.buildings[key][side];
     let spr = entry.normal[0];
     if (key === 'gun') { // composite base + north turret so it reads as a turret
@@ -1801,9 +1801,9 @@
     P(ctx, 34, 7, 2, 20, '#74747c');
     outlineRect(ctx, 27, 6, 10, 22, '#15151a');
     // red nose cone
-    P(ctx, 31, 1, 2, 2, PAL.nodRedLight);
-    P(ctx, 30, 3, 4, 2, PAL.nodRedLight);
-    P(ctx, 29, 5, 6, 2, PAL.nodRed);
+    P(ctx, 31, 1, 2, 2, PAL.srpRedLight);
+    P(ctx, 30, 3, 4, 2, PAL.srpRedLight);
+    P(ctx, 29, 5, 6, 2, PAL.srpRed);
     P(ctx, 30, 3, 1, 3, '#ff8a70');
     // radiation trefoil band
     P(ctx, 28, 13, 8, 6, '#e8d048');
@@ -1832,7 +1832,7 @@
     if (DATA.buildings[key].wall) continue; // walls have their own generator below
     if (DATA.buildings[key].civ) continue;  // village houses too (end of file)
     SPRITES.buildings[key] = SPRITES.buildings[key] || {};
-    for (const side of ['gdi', 'nod']) {
+    for (const side of ['udc', 'srp']) {
       const n = FRAME_COUNT[key] || 2;
       const normal = [], damaged = [];
       for (let f = 0; f < n; f++) {
@@ -1921,7 +1921,7 @@
     damagedArr.push(wallFrame(m, true));
   }
   const entry = { normal, damaged: damagedArr, yOff: 4, wallMask: true };
-  SPRITES.buildings.brik = { gdi: entry, nod: entry, mut: entry };
+  SPRITES.buildings.brik = { udc: entry, srp: entry, mut: entry };
 
   // corner stubs toward diagonal-only neighbors: two stepped chunks from the
   // post toward the cell corner, drawn UNDER the frame so hand-placed
@@ -2052,7 +2052,7 @@
   const gateD = [gateFrame(false, false, true), gateFrame(false, true, true),
     gateFrame(true, false, true), gateFrame(true, true, true)];
   const gateEntry = { normal: gateN, damaged: gateD, yOff: 4, gateFrames: true };
-  SPRITES.buildings.gate = { gdi: gateEntry, nod: gateEntry, mut: gateEntry, civ: gateEntry };
+  SPRITES.buildings.gate = { udc: gateEntry, srp: gateEntry, mut: gateEntry, civ: gateEntry };
 
   const gcam = mkCanvas(128, 96);
   const gg = gcam.getContext('2d');
@@ -2189,12 +2189,12 @@
 
   for (const key of ['vil1', 'vil2', 'vil3', 'chur', 'depo']) {
     const entry = { normal: [_houseFrame(key, false)], damaged: [_houseFrame(key, true)] };
-    SPRITES.buildings[key] = { civ: entry, gdi: entry, nod: entry };
+    SPRITES.buildings[key] = { civ: entry, udc: entry, srp: entry };
   }
 })();
 
 // ==== EXTRA COMBAT SIDES: recolored faction art ==================================
-// The multi-AI skirmish fields up to four armies. Slots 3 and 4 ('gd2'/'nd2')
+// The multi-AI skirmish fields up to four armies. Slots 3 and 4 ('ud2'/'sr2')
 // play by their base faction's rules and art, with the TEAM COLORS remapped so
 // the four forces read apart at a glance: UDC AZURE swaps the desert gold for
 // steel blue, SERPENT AMETHYST swaps the crimson accents (and tints the greys)
@@ -2204,10 +2204,10 @@
   if (typeof SPRITES === 'undefined' || typeof document === 'undefined') return;
 
   const REMAP = {
-    gd2: {
+    ud2: {
       '#c8a84c': '#6088c0', '#8a7230': '#40608e', '#e8d088': '#9cbce4', '#5c4c20': '#2a3c5e',
     },
-    nd2: {
+    sr2: {
       '#8a8a94': '#8c7c9e', '#54545e': '#564a66', '#b8b8c2': '#b6a8ce', '#36363e': '#382e46',
       '#b02818': '#7c2cc0', '#e05038': '#ae66ec',
     },
@@ -2215,7 +2215,7 @@
   // Serpent art leans on many auxiliary gunmetal greys beyond the 4-color
   // ramp — AMETHYST also tilts every near-grey pixel toward violet so the
   // two serpent armies never read as the same force
-  const GREY_TILT = { nd2: [7, -8, 14] };
+  const GREY_TILT = { sr2: [7, -8, 14] };
 
   function _lut(map) {
     const out = new Map();
@@ -2289,7 +2289,7 @@
         if (!entry || entry[side] || !entry[base]) continue;
         // faction-neutral art (walls, gates, houses share one entry across
         // sides) needs no recolor — alias it instead of cloning
-        if (entry.gdi && entry.gdi === entry.nod) {
+        if (entry.udc && entry.udc === entry.srp) {
           entry[side] = entry[base];
         } else {
           entry[side] = _recolorEntry(entry[base], lut, seen, tilt);

@@ -255,11 +255,11 @@ const AI = (function () {
   // ---- build order -----------------------------------------------------------------
 
   const DEF_PLAN = {
-    gdi: ['gtwr', 'gtwr', 'atwr', 'gtwr', 'atwr', 'gtwr', 'atwr', 'atwr', 'gtwr'],
+    udc: ['gtwr', 'gtwr', 'atwr', 'gtwr', 'atwr', 'gtwr', 'atwr', 'atwr', 'gtwr'],
     // SAMs moved late: they are air-ONLY, and with the enemy wing capped at
     // a few gunships an early SAM was a dead slot exactly when the ground
     // waves arrived — the Serpent now meets those with guns and Spires
-    nod: ['gun', 'gun', 'obli', 'gun', 'obli', 'sam', 'obli', 'gun', 'sam'],
+    srp: ['gun', 'gun', 'obli', 'gun', 'obli', 'sam', 'obli', 'gun', 'sam'],
   };
 
   // Strict-priority build goals. The first applicable goal either starts
@@ -270,8 +270,8 @@ const AI = (function () {
   function _nextBuilding(g, p, st) {
     st.savingFor = null;
     const side = baseSide(p.side);
-    const inf = side === 'gdi' ? 'pyle' : 'hand';
-    const veh = side === 'gdi' ? 'weap' : 'afld';
+    const inf = side === 'udc' ? 'pyle' : 'hand';
+    const veh = side === 'udc' ? 'weap' : 'afld';
     const projectedPower = p.power.out - p.power.drain;
     const pick = (key, bar) => {
       // never set a savings bar the treasury cannot physically reach: the
@@ -319,7 +319,7 @@ const AI = (function () {
     // wave count. Until the superweapon tech building exists the perimeter
     // goal caps at 4, so the ever-rising defense appetite can't starve the
     // nuke/lance out of the build order forever (it used to).
-    const tech = side === 'gdi' ? 'eye' : 'tmpl';
+    const tech = side === 'udc' ? 'eye' : 'tmpl';
     const techDone = _planned(g, p, tech) >= 1;
     const defWant = Math.min(2 + Math.floor(st.wave / 2) + Math.floor(g.tick / 4500), 9);
     const defHave = _defenseSpots(g, p).length +
@@ -341,7 +341,7 @@ const AI = (function () {
               Math.abs(db.cx - b.cx) <= 6 && Math.abs(db.cy - b.cy) <= 6) { guarded = true; break; }
         }
         if (!guarded) {
-          const want = side === 'gdi' ? 'gtwr' : 'gun';
+          const want = side === 'udc' ? 'gtwr' : 'gun';
           if (Production.prereqOk(p, want) && !blocked(want)) {
             st.defGuardAt = { cx: b.cx + 1, cy: b.cy + 1 };
             return pick(want, 600);
@@ -352,7 +352,7 @@ const AI = (function () {
 
     // BOTH war machines run a Repair Facility: wounded armor gets a pad to
     // limp to, and the expansion MCV (prereq 'fix') opens up for either
-    // side — this was gdi-gated, so the Serpent never fielded an MCV at all
+    // side — this was udc-gated, so the Serpent never fielded an MCV at all
     if (_planned(g, p, 'fix') < 1 &&
         Production.prereqOk(p, 'fix') && !blocked('fix')) return pick('fix', 1500);
     if (!st.builtHpad && Production.prereqOk(p, 'hpad') && !blocked('hpad')) return pick('hpad', 2000);
@@ -374,8 +374,8 @@ const AI = (function () {
   // measured, not guessed: the mixes are tuned by AI-vs-AI soak runs
   // (scratchpad balance53) toward an even UDC/Serpent win rate
   const WEIGHTS = {
-    gdi: [['e1', 2], ['e2', 2], ['e3', 2], ['jeep', 2], ['mtnk', 4], ['msam', 2], ['htnk', 1], ['orca', 1]],
-    nod: [['e1', 3], ['e3', 2], ['e4', 1], ['e5', 1], ['bggy', 2], ['bike', 2], ['ltnk', 6], ['arty', 3], ['ftnk', 3], ['stnk', 1], ['heli', 1]],
+    udc: [['e1', 2], ['e2', 2], ['e3', 2], ['jeep', 2], ['mtnk', 4], ['msam', 2], ['htnk', 1], ['orca', 1]],
+    srp: [['e1', 3], ['e3', 2], ['e4', 1], ['e5', 1], ['bggy', 2], ['bike', 2], ['ltnk', 6], ['arty', 3], ['ftnk', 3], ['stnk', 1], ['heli', 1]],
   };
 
   // kind: 'infantry' | 'vehicle' | 'air' — each factory line picks only its
@@ -1134,7 +1134,7 @@ const AI = (function () {
       if (ud.air) continue;
       const w = ud.weapon && DATA.weapons[ud.weapon];
       if (!w) continue;
-      // wounded armor breaks off: GDI limps to the repair pad, everyone
+      // wounded armor breaks off: UDC limps to the repair pad, everyone
       // else falls back home out of the firefight
       if (u.hp < u.maxHp * 0.3 && !ud.infantry && !u._fallback) {
         u._fallback = true;
@@ -1178,7 +1178,7 @@ const AI = (function () {
   // No arg = the classic single opponent (primary enemy of the human).
   function _peek(side) {
     if (!ST) return null;
-    return ST[side || (typeof game !== 'undefined' && game ? enemyOf(game.humanSide) : 'nod')] || null;
+    return ST[side || (typeof game !== 'undefined' && game ? enemyOf(game.humanSide) : 'srp')] || null;
   }
 
   return { init, tick, _peek };

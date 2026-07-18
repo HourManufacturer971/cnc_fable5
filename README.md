@@ -42,7 +42,7 @@ fixed battlefield and scripted mission events. Winning an operation pushes
 the front forward; progress is saved per faction in your browser. You start with an MCV:
 click it twice to deploy your Construction Yard.
 
-Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1&mission=2`.
+Handy URL parameters for testing: `?side=udc&seed=42&nomenu=1&mute=1&mission=2`.
 
 ## Multiplayer (P2P, no server)
 
@@ -73,7 +73,7 @@ so bandwidth is tiny. Notes:
   symmetric-NAT network the direct connection may fail (there is no relay).
   Same LAN always works.
 - For fun/testing on one machine: open two tabs of
-  `?mpbc=room1&mphost=1&side=gdi` and `?mpbc=room1` — they connect through a
+  `?mpbc=room1&mphost=1&side=udc` and `?mpbc=room1` — they connect through a
   local channel, no network at all.
 
 ## Controls (classic 1995 scheme)

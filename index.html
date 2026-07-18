@@ -24,14 +24,14 @@
       <p class="sub">An original retro RTS &mdash; all code, art &amp; audio built from scratch</p>
       <div class="menuRule"></div>
       <div id="factionRow">
-        <div class="faction" id="pickGdi">
-          <div class="logoSlot" id="logoGdi"></div>
-          <button data-side="gdi">United Defense Coalition</button>
+        <div class="faction" id="pickUdc">
+          <div class="logoSlot" id="logoUdc"></div>
+          <button data-side="udc">United Defense Coalition</button>
           <span class="fmotto">Order &middot; Discipline &middot; Steel</span>
         </div>
-        <div class="faction" id="pickNod">
-          <div class="logoSlot" id="logoNod"></div>
-          <button data-side="nod">The Serpent Order</button>
+        <div class="faction" id="pickSrp">
+          <div class="logoSlot" id="logoSrp"></div>
+          <button data-side="srp">The Serpent Order</button>
           <span class="fmotto">One Vision &middot; One Purpose</span>
         </div>
       </div>
@@ -56,8 +56,8 @@
         <p class="hint">Direct browser-to-browser (WebRTC). No account, no server &mdash;
         exchange two codes with your opponent over any chat.</p>
         <div id="mpSideRow">
-          <button id="mpSideGdi" class="sel">UDC</button>
-          <button id="mpSideNod">Serpent Order</button>
+          <button id="mpSideUdc" class="sel">UDC</button>
+          <button id="mpSideSrp">Serpent Order</button>
         </div>
         <button id="btnMpHost">Host Game</button>
         <button id="btnMpJoin">Join Game</button>
@@ -98,8 +98,8 @@
       <h2>SKIRMISH SETUP</h2>
       <p class="hint">One battle, your rules &mdash; pick a side and shape the fight.</p>
       <div id="skSideRow">
-        <button id="skSideGdi" class="sel">UDC</button>
-        <button id="skSideNod">Serpent Order</button>
+        <button id="skSideUdc" class="sel">UDC</button>
+        <button id="skSideSrp">Serpent Order</button>
       </div>
       <div id="skOpts">
         <label>Difficulty <select id="skDiff">
@@ -164,19 +164,20 @@
   <div id="pause" class="overlay hidden">
     <div class="panel small">
       <h2>OPTIONS</h2>
-      <button id="btnResume">Resume Mission</button>
-      <button id="btnSound">Sound: ON</button>
-      <button id="btnMusic">Music: ON</button>
-      <button id="btnVoice">Voice: ON</button>
-      <label class="volRow">SFX <input type="range" id="volSfx" min="0" max="100" value="50"></label>
-      <label class="volRow">Music <input type="range" id="volMusic" min="0" max="100" value="50"></label>
-      <label class="volRow">Voice <input type="range" id="volVoice" min="0" max="100" value="50"></label>
-      <button id="btnControls">Controls</button>
-      <button id="btnFullscreen" class="hidden">Fullscreen: OFF</button>
-      <label id="speedRow">Game Speed <input type="range" id="speedSlider" min="50" max="220" value="170"></label>
-      <button id="btnSaveGame">Save Battle</button>
-      <button id="btnRestart">Restart Mission</button>
-      <button id="btnAbort">Abort Mission</button>
+      <button id="btnResume">Resume</button>
+      <div class="pgroup">
+        <label class="volRow">SFX <input type="range" id="volSfx" min="0" max="100" value="50"></label>
+        <label class="volRow">Music <input type="range" id="volMusic" min="0" max="100" value="50"></label>
+        <label class="volRow">Voice <input type="range" id="volVoice" min="0" max="100" value="50"></label>
+        <label id="speedRow" class="volRow">Speed <input type="range" id="speedSlider" min="50" max="220" value="170"></label>
+      </div>
+      <div class="pauseGrid">
+        <button id="btnControls">Controls</button>
+        <button id="btnFullscreen" class="hidden">Fullscreen: OFF</button>
+        <button id="btnSaveGame">Save Battle</button>
+        <button id="btnRestart">Restart</button>
+      </div>
+      <button id="btnAbort">Abort to Menu</button>
       <p id="seedLine"></p>
     </div>
   </div>

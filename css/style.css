@@ -5,7 +5,7 @@
   --accent: var(--hw-gold);          /* faction accent, retinted on pick */
   --scan: rgba(0, 0, 0, 0.16);
 }
-body[data-side="nod"] { --accent: var(--hw-red); }
+body[data-side="srp"] { --accent: var(--hw-red); }
 
 html, body {
   margin: 0; padding: 0;
@@ -228,8 +228,8 @@ h2 { margin: 0 0 14px; letter-spacing: 4px; color: #e0b840; text-shadow: 0 2px 0
   border-radius: 5px;
   transition: transform 0.12s, box-shadow 0.12s, border-color 0.12s;
 }
-#pickGdi { --accent: var(--hw-gold); }
-#pickNod { --accent: var(--hw-red); }
+#pickUdc { --accent: var(--hw-gold); }
+#pickSrp { --accent: var(--hw-red); }
 .faction:hover {
   transform: translateY(-3px);
   border-color: var(--accent);
@@ -276,8 +276,8 @@ button:active {
   box-shadow: inset 0 2px 5px var(--hw-edge-lo);
 }
 
-#pickGdi button:hover { color: #e0b840; box-shadow: 0 0 14px -2px var(--hw-gold), inset 0 1px 0 var(--hw-edge-hi); border-color: var(--hw-gold); }
-#pickNod button:hover { color: #e05038; box-shadow: 0 0 14px -2px var(--hw-red), inset 0 1px 0 var(--hw-edge-hi); border-color: var(--hw-red); }
+#pickUdc button:hover { color: #e0b840; box-shadow: 0 0 14px -2px var(--hw-gold), inset 0 1px 0 var(--hw-edge-hi); border-color: var(--hw-gold); }
+#pickSrp button:hover { color: #e05038; box-shadow: 0 0 14px -2px var(--hw-red), inset 0 1px 0 var(--hw-edge-hi); border-color: var(--hw-red); }
 
 #speedRow {
   display: block; font-size: 11px; margin: 8px 0; color: #b8b09a;
@@ -386,7 +386,22 @@ button:active {
 #missionList button.skLink { border-left: 3px solid var(--accent); }
 #missionList button.skLink .tag { color: var(--accent); }
 
-/* mission select + briefing */
+/* pause / options: sliders in one sheet, utility buttons in a 2-col grid */
+.pgroup {
+  display: flex; flex-direction: column; gap: 6px;
+  margin: 10px 0 12px; padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--hw-edge-lo); border-radius: 4px;
+}
+.pauseGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 8px; }
+.pauseGrid button { width: 100%; margin: 0; }
+
+/* mission select + briefing.
+   The ops ledger scrolls INSIDE the panel: the theater map and the Back
+   button stay put, so leaving the screen never needs a scroll. */
+#missions .panel { display: flex; flex-direction: column; overflow: hidden; }
+#missions #theaterMap { flex: 0 0 auto; width: 100%; height: auto; }
+#missionList { overflow-y: auto; flex: 1 1 auto; min-height: 96px; }
 #missionList button {
   display: flex; justify-content: space-between; gap: 20px;
   text-align: left;

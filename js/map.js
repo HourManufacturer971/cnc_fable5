@@ -688,11 +688,11 @@ const MAPGEN = (function () {
     const starts = [hs, as];
     // side-keyed entries: the human's side at slot 0, the rest of g.sides
     // (canonical order) fill the remaining corners
-    const sides = (g.sides || ['gdi', 'nod']).slice();
-    g.startPos[g.humanSide || 'gdi'] = hs;
+    const sides = (g.sides || ['udc', 'srp']).slice();
+    g.startPos[g.humanSide || 'udc'] = hs;
     let slot = 1;
     for (const s of sides) {
-      if (s === (g.humanSide || 'gdi')) continue;
+      if (s === (g.humanSide || 'udc')) continue;
       const pos = slot === 1 ? as : mkStart(slot);
       g.startPos[s] = pos;
       if (slot >= 2) starts.push(pos);

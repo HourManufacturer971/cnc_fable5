@@ -1454,7 +1454,7 @@ function _tickBuildingWeapon(b) {
 
 // ---- crates: battlefield goodies in the classic mold ---------------------------
 // Deterministic (game.rng inside the sim step). A crate sits on a passable
-// cell until a gdi/nod ground unit rolls over it; contents favor cash.
+// cell until a udc/srp ground unit rolls over it; contents favor cash.
 
 function _crateEffect(g, c, u) {
   const p = g.players[u.owner];
@@ -1483,7 +1483,7 @@ function _crateEffect(g, c, u) {
     }
   } else if (roll < 0.95) {
     // a mothballed tank, if there's room beside the crate
-    const key = baseSide(u.owner) === 'gdi' ? 'mtnk' : 'ltnk';
+    const key = baseSide(u.owner) === 'udc' ? 'mtnk' : 'ltnk';
     let placed = false;
     for (let r = 1; r <= 2 && !placed; r++) {
       for (let dy = -r; dy <= r && !placed; dy++) {

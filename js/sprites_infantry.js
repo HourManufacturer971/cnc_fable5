@@ -64,27 +64,27 @@
   // ---- per type+side figure configuration ------------------------------------
 
   function makeCfg(type, side) {
-    const gdi = side === 'gdi';
+    const udc = side === 'udc';
     const cfg = {
       type,
       // torso 3-shade ramp (lit left, dark right)
-      uniform: gdi ? PAL.gdi : PAL.nod,
-      uniformHi: gdi ? PAL.gdiLight : PAL.nodLight,
-      uniformDk: gdi ? PAL.gdiDark : PAL.nodDark,
-      pants: gdi ? PAL.gdiDark : PAL.nodDark,
-      pantsDk: gdi ? PAL.gdiShadow : PAL.nodShadow,
-      belt: gdi ? PAL.gdiShadow : '#26262e',
-      helmet: gdi ? '#7c6c30' : '#4c4c58',
-      helmetHi: gdi ? '#a4904a' : '#6e6e80',
-      helmetDk: gdi ? '#544a1e' : '#32323c',
+      uniform: udc ? PAL.udc : PAL.srp,
+      uniformHi: udc ? PAL.udcLight : PAL.srpLight,
+      uniformDk: udc ? PAL.udcDark : PAL.srpDark,
+      pants: udc ? PAL.udcDark : PAL.srpDark,
+      pantsDk: udc ? PAL.udcShadow : PAL.srpShadow,
+      belt: udc ? PAL.udcShadow : '#26262e',
+      helmet: udc ? '#7c6c30' : '#4c4c58',
+      helmetHi: udc ? '#a4904a' : '#6e6e80',
+      helmetDk: udc ? '#544a1e' : '#32323c',
       hairTop: null,          // draws hair instead of helmet dome (rmbo)
       face: SKIN,
       visor: false,           // face row is a visor (e4/e5)
       visorGlint: null,
-      arm: gdi ? PAL.gdi : PAL.nod,
-      armDk: gdi ? PAL.gdiDark : PAL.nodDark,
+      arm: udc ? PAL.udc : PAL.srp,
+      armDk: udc ? PAL.udcDark : PAL.srpDark,
       hand: SKIN,
-      chest: gdi ? PAL.gdiLight : PAL.nodRed, // 1px chest strap/emblem accent
+      chest: udc ? PAL.udcLight : PAL.srpRed, // 1px chest strap/emblem accent
       weapon: 'rifle',        // 'rifle' | 'tube' | 'nozzle' | 'throw' | 'none'
       gunLen: 4,
       bigFlash: false,
@@ -103,9 +103,9 @@
         cfg.chest = '#5c7ca0'; cfg.chestBand = true;
         cfg.weapon = 'throw';
         cfg.packStyle = 'box';
-        cfg.pack = gdi ? '#8a7440' : '#565662';
-        cfg.packHi = gdi ? '#ac9458' : '#787886';
-        cfg.packDk = gdi ? '#5e4e28' : '#3a3a44';
+        cfg.pack = udc ? '#8a7440' : '#565662';
+        cfg.packHi = udc ? '#ac9458' : '#787886';
+        cfg.packDk = udc ? '#5e4e28' : '#3a3a44';
         break;
       case 'e3': // Rocket Soldier: rust helmet + red bandolier, tube + backblast
         cfg.helmet = '#8a4a24'; cfg.helmetHi = '#b06e42'; cfg.helmetDk = '#5c3012';
@@ -121,7 +121,7 @@
         cfg.face = '#20242a'; cfg.visor = true; cfg.visorGlint = '#8a929e';
         cfg.arm = OR; cfg.armDk = OR_DK;
         cfg.hand = OR_DK; // gloves
-        cfg.chest = gdi ? PAL.gdiLight : PAL.nodRed;
+        cfg.chest = udc ? PAL.udcLight : PAL.srpRed;
         cfg.weapon = 'nozzle';
         cfg.gunLen = 2;
         cfg.pack = METAL_SH; cfg.packHi = METAL; cfg.packDk = METAL_DK;
@@ -156,7 +156,7 @@
         cfg.hairTop = '#26211a';
         cfg.helmet = '#cc2c1c'; cfg.helmetHi = '#f05540'; cfg.helmetDk = '#8a1c10';
         cfg.arm = SKIN; cfg.armDk = SKIN_SH; // bare arms
-        cfg.chest = gdi ? PAL.gdiLight : PAL.nodRed;
+        cfg.chest = udc ? PAL.udcLight : PAL.srpRed;
         cfg.gunLen = 5;
         cfg.bigFlash = true;
         break;
@@ -540,23 +540,23 @@
   // ---- cameos: bust-style character portraits ------------------------------------
 
   // side used for the shared cameo portrait (matches the faction that fields it)
-  const CAMEO_SIDE = { e1: 'gdi', e2: 'gdi', e3: 'gdi', e4: 'nod', e5: 'nod', e6: 'gdi', rmbo: 'gdi' };
+  const CAMEO_SIDE = { e1: 'udc', e2: 'udc', e3: 'udc', e4: 'srp', e5: 'srp', e6: 'udc', rmbo: 'udc' };
 
   // Portrait palette per side
   function portraitPal(side) {
-    const gdi = side === 'gdi';
+    const udc = side === 'udc';
     return {
-      bg: gdi ? '#2a2618' : '#201c22',
-      bgGlow: gdi ? '#38321e' : '#2c262e',
-      bgGlow2: gdi ? '#443c26' : '#362e38',
-      accent: gdi ? PAL.uiGold : PAL.nodRed,
-      uni: gdi ? PAL.gdi : PAL.nod,
-      uniHi: gdi ? PAL.gdiLight : PAL.nodLight,
-      uniDk: gdi ? PAL.gdiDark : PAL.nodDark,
-      uniSh: gdi ? PAL.gdiShadow : PAL.nodShadow,
-      helm: gdi ? '#7c6c30' : '#4c4c58',
-      helmHi: gdi ? '#a4904a' : '#6e6e80',
-      helmDk: gdi ? '#544a1e' : '#32323c',
+      bg: udc ? '#2a2618' : '#201c22',
+      bgGlow: udc ? '#38321e' : '#2c262e',
+      bgGlow2: udc ? '#443c26' : '#362e38',
+      accent: udc ? PAL.uiGold : PAL.srpRed,
+      uni: udc ? PAL.udc : PAL.srp,
+      uniHi: udc ? PAL.udcLight : PAL.srpLight,
+      uniDk: udc ? PAL.udcDark : PAL.srpDark,
+      uniSh: udc ? PAL.udcShadow : PAL.srpShadow,
+      helm: udc ? '#7c6c30' : '#4c4c58',
+      helmHi: udc ? '#a4904a' : '#6e6e80',
+      helmDk: udc ? '#544a1e' : '#32323c',
     };
   }
 
@@ -844,8 +844,8 @@
 
   for (const key of INF_KEYS) {
     SPRITES.infantry[key] = {
-      gdi: buildSet(makeCfg(key, 'gdi')),
-      nod: buildSet(makeCfg(key, 'nod')),
+      udc: buildSet(makeCfg(key, 'udc')),
+      srp: buildSet(makeCfg(key, 'srp')),
     };
     SPRITES.cameo[key] = buildCameo(key);
   }
@@ -853,7 +853,7 @@
   // neutral villagers: plain clothes, bare heads, no weapon. Keyed by their
   // 'civ' owner (never buildable, so no cameo needed).
   function civCfg(kind) {
-    const cfg = makeCfg('e1', 'gdi');
+    const cfg = makeCfg('e1', 'udc');
     cfg.type = kind;
     cfg.weapon = 'none';
     if (kind === 'c1') {
@@ -873,6 +873,6 @@
   }
   for (const kind of ['c1', 'c2']) {
     const set = buildSet(civCfg(kind));
-    SPRITES.infantry[kind] = { civ: set, gdi: set, nod: set };
+    SPRITES.infantry[kind] = { civ: set, udc: set, srp: set };
   }
 })();

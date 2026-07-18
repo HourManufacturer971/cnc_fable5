@@ -99,12 +99,12 @@ define **exactly** the globals listed and may freely call any global listed for 
 
 Key fields: `tick, seed, rng, terrain (Uint8Array), tvar (Uint8Array), tib (Uint16Array),
 occ (Int32Array unit/building id per cell or 0), units (Map id→unit),
-buildings (Map id→building), bullets [], effects [], players {gdi, nod}, human, ai,
+buildings (Map id→building), bullets [], effects [], players {udc, srp}, human, ai,
 humanSide, camera {x,y}, selection [id...], groups {1..9: [ids]}, shroud (Uint8Array),
 status ('playing'|'won'|'lost'), speed (tick multiplier 1), stats {kills, losses,
 buildingsKilled, buildingsLost, harvested}, evaCooldowns {}`.
 
-Player fields (`makePlayer`): `side ('gdi'|'nod'), isAI, credits, storage (recomputed),
+Player fields (`makePlayer`): `side ('udc'|'srp'), isAI, credits, storage (recomputed),
 power {out, drain}, queues {building:null|Job, infantry:null|Job, vehicle:null|Job,
 air:null|Job} (each factory kind builds concurrently on its own line), unitQueue
 {infantry:[], vehicle:[], air:[]} (pending keys per line, max C.QUEUE_MAX each),
@@ -214,7 +214,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   standing on chrysalite take 1 hp per 8 ticks (chem warrior `e5` immune).
 - **Supply crates** (`g.crates`, sim state, in the MP checksum): every 10s there's a 40%
   chance a crate spawns on a random passable, unoccupied, chrysalite-free cell (max 2 live,
-  expire after 3 min). Any gdi/nod ground unit entering the cell consumes it (checked every
+  expire after 3 min). Any udc/srp ground unit entering the cell consumes it (checked every
   5 ticks via `g.occ`); effect rolls on `game.rng`: <0.5 cash 1200-2000 (ignores storage
   caps — found money), <0.65 heal every owned unit to full, <0.8 the picker gains +3 kills
   (instant promotion), <0.95 a free mtnk/ltnk beside the crate (800 scrap if no room),
@@ -265,7 +265,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   per tick at cost `cost/maxHp * C.REPAIR_COST=0.3` credits per hp (stops when broke/full).
   Wrench overlay blinks while repairing. EVA `repairing` on start.
 - **Vehicle repair at the Repair Facility** (`fix`, DATA `repairPad`): `_tickRepairPads`
-  (sim.js, every tick, sides in fixed gdi→nod order) heals ONE own ground vehicle per
+  (sim.js, every tick, sides in fixed udc→srp order) heals ONE own ground vehicle per
   pad per pass — the first `state === 'idle'`, damaged, non-infantry non-air unit found in
   a row-major scan of the footprint+2 apron — 2 hp/tick at the building repair rate,
   skipped when broke. Clicking an own finished `fix` with vehicles selected orders them to
@@ -333,7 +333,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   re-issues the sweep to the stored destination. Any explicit player order (move/attack/
   stop) clears `_amove`. Non-combat and air units delegate to plain move. Networked as the
   `amv` command.
-- **Veterancy**: gdi/nod units track `u.kills` (credited in `killEntity` to a living
+- **Veterancy**: udc/srp units track `u.kills` (credited in `killEntity` to a living
   attacker of a different side; civilian victims don't count). `vetLevel(u)`: ≥3 kills =
   veteran (+20% weapon damage, silver chevron), ≥6 = elite (+40%, gold chevrons, self-heals
   1hp/24 ticks). Promotion of your own unit: EVA `unitPromoted` + rising gold-chevron
@@ -425,7 +425,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   the bell; mission 3 pairs this with `holdout: true` map gen), `killEconomy` (arms once
   the AI owns a refinery or harvester — flag `game._ecoArmed` — then wins when the count
   returns to zero), `capture {btype}` (win the moment a building of that type flies the
-  human's colors — an engineer walks in; btype may be a per-side map `{gdi, nod}`; if
+  human's colors — an engineer walks in; btype may be a per-side map `{udc, srp}`; if
   every standing copy dies first — armed via `g._capArmed` — the mission FAILS), and
   `escort {unit, dest, radius}` (win when the human's unit of that type stands within
   `radius` cells of dest — `dest: 'ai'` resolves to `g.startPos.ai`; the unit dying
@@ -463,8 +463,8 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_pickSale`/`_finalRush` also never sell the mission's demolish/capture
   objective building (`_saleForbidden`) — a fire sale must not end a mission.
   `mission.aiCredits: 0` is honored (checked `!== undefined`, not truthiness).
-- The campaign is TWO SEPARATE FACTION ARCS of ten ops each (`MISSIONS.gdi` /
-  `MISSIONS.nod`, fetched via `MISSIONS.arc(side)`) — classic structure, original
+- The campaign is TWO SEPARATE FACTION ARCS of ten ops each (`MISSIONS.udc` /
+  `MISSIONS.srp`, fetched via `MISSIONS.arc(side)`) — classic structure, original
   fiction. Mission defs are single-faction now (`brief` is a paragraph array,
   `objText` a string) and carry `terr: [x,y]` territory coords for the THEATER
   OF WAR screen (main.js `_drawTheater`): a procedurally drawn original country
@@ -477,7 +477,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   last secured op and the next, which is tagged NEXT OP (clickable →
   briefing); the accessible "war ledger" rows remain beneath it. The briefing
   tactical survey (`_drawBriefMap`) wears FACTION colors: a Serpent commander
-  is RED and the Coalition enemy GOLD, never the seat-based inverse. `MissionProgress` is per faction (`hw_progress_gdi/nod`,
+  is RED and the Coalition enemy GOLD, never the seat-based inverse. `MissionProgress` is per faction (`hw_progress_udc/srp`,
   `get/unlockUpTo/unlocked` take a side) and records live at
   `hw_rec_<side>_<n>`. New objective type `demolish {btype}` (arms while a
   building of the type stands anywhere, wins when the last is rubble — capture
@@ -538,8 +538,8 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   (BroadcastChannel tests bypass SDP entirely).
 - Lockstep: both clients run the identical sim from the host's seed; only
   orders travel. Each order is queued locally, broadcast with execution tick
-  `now + DELAY` (5 ticks), and applied on BOTH clients at that tick, gdi's
-  batch before nod's. A client may only advance to tick T once it holds both
+  `now + DELAY` (5 ticks), and applied on BOTH clients at that tick, udc's
+  batch before srp's. A client may only advance to tick T once it holds both
   batches for T; the loop stalls otherwise (render keeps running, "WAITING FOR
   OPPONENT…" after 600 ms). Batches for a tick horizon are always broadcast
   BEFORE the barrier check so a stall can never deadlock.
@@ -550,11 +550,11 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   they serialize a command. Fog-based validation (`cellOk` shroud test,
   `launchSuper` explored test) is pre-validation on the issuing client only and
   is skipped under `NET.applying`.
-- MP start is symmetric and canonical: both sides get an MCV + escort; gdi
-  always takes the map's SW slot, nod the NE one, gdi spawns first (identical
+- MP start is symmetric and canonical: both sides get an MCV + escort; udc
+  always takes the map's SW slot, srp the NE one, udc spawns first (identical
   entity ids on both clients). `_uid` resets in `makeGame`. AI.tick is skipped
   (AI.init still runs — a symmetric rng draw). The main loop ticks production
-  in fixed side order (gdi, nod), never human-first.
+  in fixed side order (udc, srp), never human-first.
 - Desync detection: FNV-1a checksum of (tick, unit id/x/y/hp/load, building
   id/hp/progress, credits, super timers) exchanged every 128 ticks; mismatch →
   both clients show "DESYNC DETECTED", `game.status = 'desync'`, link closed.
@@ -565,8 +565,12 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_handshake()` — the host rolls a FRESH seed and the match relaunches over the
   same connection, sides kept, no new code exchange. `NET.onRematch('remote'|'gone')`
   drives the button labels ("opponent is ready" / hide when the peer leaves);
-  `_peerGone` outside a live game only tears down + notifies. PROTO = 14 (bumped
-  for the holdout interior scrub + gate clearing, midfield fallback off the
+  `_peerGone` outside a live game only tears down + notifies. PROTO = 15 (bumped
+  for the side-token rename — the internal faction keys are `udc`/`srp` (extra
+  slots `ud2`/`sr2`) everywhere: entity owners, replay/save meta, MP handshake,
+  URL `?side=`, storage `hw_progress_udc/srp` + `hw_rec_<side>_<n>` — a clean
+  break, no legacy-key migration; 14 covered
+  the holdout interior scrub + gate clearing, midfield fallback off the
   map center, bridge road approaches, and the shore landing shifted east; 13
   covered the landing coastline: `shore` map gen, crystal-free reinforcement
   spawns, landward rally on shore maps; 12 covered the classic first-mission
@@ -858,14 +862,14 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   credit on replacement units could never save for the second refinery and
   starved forever; this loop decided most one-sided AI battles.
 - **Faction balance** (measured by AI-vs-AI soaks, scratchpad balance53, both
-  map orientations): Nod builds the Repair Facility too (was gdi-gated — the
-  Serpent could never field an MCV or heal armor); Nod DEF_PLAN moves its
-  air-only SAMs late; WEIGHTS retuned (nod ltnk 6 / arty 3 / ftnk 3, e1 3 /
-  e4 1 — flamers die crossing open ground to rifles; gdi mtnk 4 / htnk 1);
-  DATA: ltnk 550/330hp (Nod's cheap-fast identity), nuke strike 850 dmg (the
+  map orientations): Serpent builds the Repair Facility too (was udc-gated — the
+  Serpent could never field an MCV or heal armor); Serpent DEF_PLAN moves its
+  air-only SAMs late; WEIGHTS retuned (srp ltnk 6 / arty 3 / ftnk 3, e1 3 /
+  e4 1 — flamers die crossing open ground to rifles; udc mtnk 4 / htnk 1);
+  DATA: ltnk 550/330hp (Serpent's cheap-fast identity), nuke strike 850 dmg (the
   warhead must still DELETE what it lands on now that buildings auto-repair
   after superweapon hits — a survivable blast was quietly worth far less than
-  the ion's pinpoint kill). Measured result: from GDI 7–0 sweeps to ~parity
+  the ion's pinpoint kill). Measured result: from UDC 7–0 sweeps to ~parity
   (draw leans split, decisive wins ~even across difficulties).
 - **Expansion discipline** (elite): `wantMcv` clears the moment the MCV exists
   (it used to stay set for the whole trek, so the factory turned out MCV after
@@ -946,8 +950,8 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - All sprites drawn programmatically on offscreen canvases at 1× with integer `fillRect`
   pixels; NO anti-aliasing, no gradients except tiny dithers; dark outline (#111-ish) around
   readable silhouettes; light source top-left; palettes from `PAL` in core.js.
-- Team colors: UDC = desert gold/tan (`PAL.gdi*`), Serpent Order = steel grey with red accents
-  (`PAL.nod*`). Same shapes, different palette per `side`.
+- Team colors: UDC = desert gold/tan (`PAL.udc*`), Serpent Order = steel grey with red accents
+  (`PAL.srp*`). Same shapes, different palette per `side`.
 - Vehicles: 24×24 canonical facing NORTH, then `rotFrames(c, 16)` (core helper) for 16
   facings; turreted vehicles (ltnk, mtnk, htnk, gun turret) supply separate `body` and
   `turret` frame arrays (turret drawn centered over body). Tracks/wheels visibly darker;
@@ -1010,7 +1014,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   render OK), `nukeCloud` (6 fr, 64px mushroom), `crater` (static), `plane` (cargo plane
   48×24, 1 fr, for airstrip deliveries), `wrench` (12px), `flagReady`? (skip), `dock` arcs.
 - `SPRITES.cursor[kind]` 16-24px each, hotspot center except `default` (tip at top-left)
-  and `scroll*` (edge). `SPRITES.logo.gdi/nod` ~120×90 emblems for radar-idle and menu.
+  and `scroll*` (edge). `SPRITES.logo.udc/srp` ~120×90 emblems for radar-idle and menu.
 - `SPRITES.shroudEdge`: 8 directional 24×24 jagged black-edge tiles (N,NE,E,...) with
   alpha.
 
@@ -1089,9 +1093,11 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   from its seed via MAPGEN into a throwaway grid (C.MAP_W flipped to 64 and
   restored synchronously), drawn schematic-style with markers — your force,
   enemy crosshair (or the escort BEACON + dashed route), the holdout ring, the
-  blue lode on harvest ops, depot/village dots; pause menu (Resume, Sound/Music/Voice toggles, SFX/Music/Voice
-  volume sliders, Fullscreen, Speed slider 0.5–2.2 defaulting to 1.7, Save Battle,
-  Restart mission, Abort mission, a `#seedLine` "Map seed N" footer for sharing);
+  blue lode on harvest ops, depot/village dots; pause menu — decluttered to one
+  sheet: Resume, a slider group (SFX/Music/Voice/Speed — a slider at 0 IS the
+  mute switch, the old ON/OFF toggle buttons are gone along with their
+  `td_music`/`hw_voice` persistence), a 2-column grid (Controls, Fullscreen,
+  Save Battle, Restart), Abort to Menu, a `#seedLine` "Map seed N" footer;
   score screen (+ Rematch in MP). The main menu shows Resume Battle when a compatible
   `hw_save` exists. Esc toggles.
 - **Skirmish setup** (the `#skirmish` window, skirmish only — missions/MP ignore
@@ -1107,7 +1113,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   pre-tech 4), and a numeric seed field (blank = random) for refighting a shared
   battlefield. Choices persist in `hw_sk` (seed excluded, difficulty included);
   all of it rides `opts.sk` into flags + the REPLAY meta so replays/saves reconstruct.
-- **Multi-AI combat model**: `SIDE_ORDER = ['gdi','nod','gd2','nd2']` (core.js);
+- **Multi-AI combat model**: `SIDE_ORDER = ['udc','srp','ud2','sr2']` (core.js);
   `g.sides` lists the combat sides in play in canonical order and EVERY sim loop over
   players iterates it (production ticks, depot/repair-pad sweeps, checksum) — classic
   1v1 games run the identical old sequence. `baseSide(s)` maps the extra slots to the
@@ -1208,8 +1214,8 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 ## Testing hooks (must implement)
 
 - `main.js` exposes `window.game` (live game object) and `Main.startGame` so a headless
-  browser can boot straight into a game: `Main.startGame('gdi', {seed: 42})`.
-- Add URL params: `?side=gdi&seed=42&nomenu=1&mission=N` (and `mpbc=name&mphost=1`
+  browser can boot straight into a game: `Main.startGame('udc', {seed: 42})`.
+- Add URL params: `?side=udc&seed=42&nomenu=1&mission=N` (and `mpbc=name&mphost=1`
   for two-tab multiplayer over BroadcastChannel) → boot directly into game (skip menu),
   `&mute=1` → `AUDIO.setEnabled(false)`.
 - Every module must be defensive at boot: no top-level code that throws if DOM absent

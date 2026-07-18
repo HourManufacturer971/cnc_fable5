@@ -862,26 +862,26 @@
   {
     const t = mk(48, 24); const g = t.g;
     // tail fin (red, swept)
-    g.fillStyle = PAL.nodRed;
+    g.fillStyle = PAL.srpRed;
     for (let i = 0; i < 8; i++) g.fillRect(5, 3 + i, 2 + i, 1);
-    g.fillStyle = PAL.nodRedLight;
+    g.fillStyle = PAL.srpRedLight;
     g.fillRect(5, 3, 2, 2); g.fillRect(6, 5, 1, 1);
     // tailplane
-    g.fillStyle = PAL.nodDark; g.fillRect(2, 9, 7, 2);
-    g.fillStyle = PAL.nodLight; g.fillRect(2, 9, 6, 1);
+    g.fillStyle = PAL.srpDark; g.fillRect(2, 9, 7, 2);
+    g.fillStyle = PAL.srpLight; g.fillRect(2, 9, 6, 1);
     // fuselage
-    g.fillStyle = PAL.nod; g.fillRect(7, 10, 34, 7);
+    g.fillStyle = PAL.srp; g.fillRect(7, 10, 34, 7);
     g.fillRect(41, 11, 3, 5); g.fillRect(44, 12, 2, 3);   // nose taper
     g.fillRect(4, 10, 3, 4);                              // tail cone
-    g.fillStyle = PAL.nodLight; g.fillRect(7, 10, 34, 2); g.fillRect(41, 11, 3, 1);
-    g.fillStyle = PAL.nodDark; g.fillRect(7, 15, 34, 2); g.fillRect(41, 15, 3, 1);
+    g.fillStyle = PAL.srpLight; g.fillRect(7, 10, 34, 2); g.fillRect(41, 11, 3, 1);
+    g.fillStyle = PAL.srpDark; g.fillRect(7, 15, 34, 2); g.fillRect(41, 15, 3, 1);
     // wing (dark band) + engines
-    g.fillStyle = PAL.nodDark; g.fillRect(18, 12, 12, 3); g.fillRect(16, 13, 2, 1);
-    g.fillStyle = PAL.nodShadow; g.fillRect(18, 14, 12, 1);
-    g.fillStyle = PAL.nodDark;
+    g.fillStyle = PAL.srpDark; g.fillRect(18, 12, 12, 3); g.fillRect(16, 13, 2, 1);
+    g.fillStyle = PAL.srpShadow; g.fillRect(18, 14, 12, 1);
+    g.fillStyle = PAL.srpDark;
     g.fillRect(20, 17, 4, 3); g.fillRect(27, 17, 4, 3);
-    g.fillStyle = PAL.nodLight; g.fillRect(20, 17, 4, 1); g.fillRect(27, 17, 4, 1);
-    g.fillStyle = PAL.nodShadow; g.fillRect(20, 19, 4, 1); g.fillRect(27, 19, 4, 1);
+    g.fillStyle = PAL.srpLight; g.fillRect(20, 17, 4, 1); g.fillRect(27, 17, 4, 1);
+    g.fillStyle = PAL.srpShadow; g.fillRect(20, 19, 4, 1); g.fillRect(27, 19, 4, 1);
     g.fillStyle = '#181820'; g.fillRect(19, 18, 1, 1); g.fillRect(26, 18, 1, 1);
     // cockpit + window row
     g.fillStyle = '#2c3644'; g.fillRect(38, 11, 3, 2);
@@ -909,7 +909,7 @@
   {
     const w0 = outline(bmp(WRENCH, { '#': PAL.uiGold }));
     const t1 = mk(12, 12);
-    t1.g.drawImage(outline(bmp(WRENCH, { '#': PAL.gdiLight })), 0, 0);
+    t1.g.drawImage(outline(bmp(WRENCH, { '#': PAL.udcLight })), 0, 0);
     t1.g.fillStyle = '#ffffff';
     t1.g.fillRect(4, 2, 1, 1); t1.g.fillRect(5, 5, 1, 1);
     fx.wrench = [w0, t1.c];
@@ -993,9 +993,9 @@
   {
     const t = mk(20, 20);
     drawBrackets(t.g, 1, 1, 18, 18, 6, 2, PAL.uiRed);
-    drawBrackets(t.g, 1, 1, 18, 18, 3, 1, PAL.nodRedLight);
-    drawBrackets(t.g, 5, 5, 14, 14, 3, 1, PAL.nodRedLight);
-    t.g.fillStyle = PAL.nodRedLight; t.g.fillRect(9, 9, 2, 2);
+    drawBrackets(t.g, 1, 1, 18, 18, 3, 1, PAL.srpRedLight);
+    drawBrackets(t.g, 5, 5, 14, 14, 3, 1, PAL.srpRedLight);
+    t.g.fillStyle = PAL.srpRedLight; t.g.fillRect(9, 9, 2, 2);
     t.g.fillStyle = '#ffd0c0'; t.g.fillRect(9, 9, 1, 1);
     SPRITES.cursor.attack = cur(outline(t.c), 10, 10);
   }
@@ -1046,7 +1046,7 @@
     return outline(t.c);
   }
   SPRITES.cursor.deploy = cur(deployC(PAL.uiGreen, '#a8f0a8'), 10, 10);
-  SPRITES.cursor.nodeploy = cur(stack(deployC(PAL.uiRed, PAL.nodRedLight), SLASH20), 10, 10);
+  SPRITES.cursor.nodeploy = cur(stack(deployC(PAL.uiRed, PAL.srpRedLight), SLASH20), 10, 10);
 
   // sell / nosell: coin with $ and a down arrow
   function coinCursor(main, hi, dark) {
@@ -1067,7 +1067,7 @@
     return outline(t.c);
   }
   SPRITES.cursor.sell = cur(coinCursor(PAL.uiGold, GOLD_L, '#6a4c10'), 10, 10);
-  SPRITES.cursor.nosell = cur(coinCursor(PAL.nod, PAL.nodLight, '#3a3a40'), 10, 10);
+  SPRITES.cursor.nosell = cur(coinCursor(PAL.srp, PAL.srpLight, '#3a3a40'), 10, 10);
 
   // repair / norepair: wrench
   function wrenchCursor(color, hi) {
@@ -1080,21 +1080,21 @@
     return outline(t.c);
   }
   SPRITES.cursor.repair = cur(wrenchCursor(PAL.uiGold, GOLD_L), 8, 8);
-  SPRITES.cursor.norepair = cur(wrenchCursor(PAL.nod, PAL.nodLight), 8, 8);
+  SPRITES.cursor.norepair = cur(wrenchCursor(PAL.srp, PAL.srpLight), 8, 8);
 
   // super: large red crosshair 24x24 with gold center tick
   {
     const t = mk(24, 24); const g = t.g;
     ring(g, 12, 12, 10, 8, PAL.uiRed);
     // rim light on the ring, upper-left
-    g.fillStyle = PAL.nodRedLight;
+    g.fillStyle = PAL.srpRedLight;
     for (let a = 3.4; a <= 4.6; a += 0.2) {
       g.fillRect(Math.round(12 + Math.cos(a) * 9), Math.round(12 + Math.sin(a) * 9), 1, 1);
     }
     g.fillStyle = PAL.uiRed;
     g.fillRect(11, 1, 2, 5); g.fillRect(11, 18, 2, 5);
     g.fillRect(1, 11, 5, 2); g.fillRect(18, 11, 5, 2);
-    g.fillStyle = PAL.nodRedLight;
+    g.fillStyle = PAL.srpRedLight;
     g.fillRect(11, 1, 1, 2); g.fillRect(1, 11, 2, 1);
     g.fillStyle = PAL.uiGold;
     g.fillRect(11, 11, 2, 2);
@@ -1259,7 +1259,7 @@
       g.fillRect(24 - i, 72 + i, 2, 1); g.fillRect(24 - i, 78 - i, 2, 1);
       g.fillRect(94 + i, 72 + i, 2, 1); g.fillRect(94 + i, 78 - i, 2, 1);
     }
-    SPRITES.logo.gdi = t.c;
+    SPRITES.logo.udc = t.c;
   }
 
   // --- Serpent Order crest: coiled red serpent inside a segmented ring, black field
@@ -1351,7 +1351,7 @@
 
     // wordmark
     drawWord(g, 'SERPENT', 18, 68, 2, RED, RED_L, '#1a0402');
-    SPRITES.logo.nod = t.c;
+    SPRITES.logo.srp = t.c;
   }
 
   // ==== SHROUD EDGES ===========================================================

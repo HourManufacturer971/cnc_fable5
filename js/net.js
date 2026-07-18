@@ -8,7 +8,7 @@
 // player ORDERS travel the wire. Every order a player issues is queued with
 // an execution tick DELAY ticks in the future and broadcast; a client may
 // only advance to tick T once it holds both sides' order batches for T, and
-// batches are applied in fixed side order (gdi first) so the sims stay in
+// batches are applied in fixed side order (udc first) so the sims stay in
 // lockstep. Fog, effects, audio and EVA remain per-client and are excluded
 // from the desync checksum.
 //
@@ -19,14 +19,14 @@
 // execution itself (NET.applying) go to the real implementations.
 
 const NET = (function () {
-  const PROTO = 14;         // bump when commands/handshake OR sim rules change shape
+  const PROTO = 15;         // bump when commands/handshake OR sim rules change shape
   const DELAY = 5;         // ticks between issuing and executing an order
   const CK_EVERY = 128;    // checksum exchange cadence (ticks)
 
   let active = false;      // lockstep engaged (game running)
   let applying = false;    // currently executing scheduled commands
   let inSim = false;       // inside the sim step (orders are sim-internal)
-  let side = 'gdi';        // the LOCAL player's side
+  let side = 'udc';        // the LOCAL player's side
   let isHost = false;
 
   let chan = null;         // {send(obj), close()} transport wrapper
@@ -49,7 +49,7 @@ const NET = (function () {
   // ---- tiny helpers ---------------------------------------------------------
 
   function _status(s) { if (onStatus) onStatus(s); }
-  function _other(s) { return s === 'gdi' ? 'nod' : 'gdi'; }
+  function _other(s) { return s === 'udc' ? 'srp' : 'udc'; }
 
   // ---- code packing: keep the copy-paste codes SHORT ------------------------
   // A datachannel-only SDP is ~95% boilerplate. We ship only the fields the
@@ -177,7 +177,7 @@ const NET = (function () {
   async function host(pickedSide, statusCb) {
     _teardown();               // drop any earlier attempt (re-host, host-after-join)
     onStatus = statusCb || null;
-    isHost = true; side = pickedSide === 'nod' ? 'nod' : 'gdi';
+    isHost = true; side = pickedSide === 'srp' ? 'srp' : 'udc';
     pc = _mkPeer();
     pc.onconnectionstatechange = () => {
       // 'disconnected' is transient (wifi blip, NAT rebind) and often
@@ -237,7 +237,7 @@ const NET = (function () {
   // any network, and gives the automated tests a deterministic wire
   function testLocal(name, asHost, pickedSide, statusCb) {
     onStatus = statusCb || null;
-    isHost = !!asHost; if (isHost) side = pickedSide === 'nod' ? 'nod' : 'gdi';
+    isHost = !!asHost; if (isHost) side = pickedSide === 'srp' ? 'srp' : 'udc';
     const bc = new BroadcastChannel('hw_mp_' + name);
     chan = { send: obj => bc.postMessage(obj), close: () => bc.close() };
     bc.onmessage = ev => {
@@ -382,7 +382,7 @@ const NET = (function () {
     lastAdvance = performance.now();
     applying = true;
     try {
-      for (const s of ['gdi', 'nod']) {           // fixed order: determinism
+      for (const s of ['udc', 'srp']) {           // fixed order: determinism
         const batch = (s === side ? localBatches : remoteBatches).get(t);
         if (batch) for (const c of batch) {
           // one malformed command must not abort the tick half-applied —
@@ -489,7 +489,7 @@ const NET = (function () {
 
   function initExplored(g) {
     const n = C.MAP_W * C.MAP_H;
-    g.mpExplored = { gdi: new Uint8Array(n), nod: new Uint8Array(n) };
+    g.mpExplored = { udc: new Uint8Array(n), srp: new Uint8Array(n) };
     _updateExplored(g);
   }
 

@@ -5,7 +5,7 @@
 // render.js (objective HUD line).
 //
 // CLASSIC STRUCTURE, ORIGINAL FICTION. Each faction fights its OWN ten-
-// mission campaign (MISSIONS.gdi / MISSIONS.nod, picked via MISSIONS.arc):
+// mission campaign (MISSIONS.udc / MISSIONS.srp, picked via MISSIONS.arc):
 // the UDC counter-offensive and the Serpent ascension are different wars
 // told from different sides, built from the classic mission archetypes —
 // beachhead, economy, holdout, commando raid, economy hunt, convoy escort,
@@ -46,7 +46,7 @@ const MISSIONS = {
 // =============================================================================
 // THE UDC CAMPAIGN — the Coalition counter-offensive
 // =============================================================================
-gdi: [
+udc: [
   {
     n: 1, title: 'FIRST FOOTHOLD',
     sector: 'THE VERDANT REACH — SOUTHERN FRONTIER', terr: [0.10, 0.82], seed: 8121,
@@ -74,9 +74,9 @@ gdi: [
       for (const id of [...g.ai.buildingIds]) { const b = g.buildings.get(id); if (b) removeBuilding(b); }
       for (const id of [...g.ai.unitIds]) { const u = g.units.get(id); if (u) removeUnit(u); }
       MISSIONS.placeB(g, o.aiSide, 'nuke', o.as.cx - 1, o.as.cy - 1);
-      MISSIONS.placeB(g, o.aiSide, o.aiSide === 'gdi' ? 'pyle' : 'hand', o.as.cx + 2, o.as.cy);
-      MISSIONS.placeB(g, o.aiSide, o.aiSide === 'gdi' ? 'gtwr' : 'gun', o.as.cx - 2, o.as.cy + 3);
-      MISSIONS.squad(g, o.aiSide, o.aiSide === 'gdi' ? ['e1', 'e1', 'e3'] : ['e1', 'e1', 'e4'],
+      MISSIONS.placeB(g, o.aiSide, o.aiSide === 'udc' ? 'pyle' : 'hand', o.as.cx + 2, o.as.cy);
+      MISSIONS.placeB(g, o.aiSide, o.aiSide === 'udc' ? 'gtwr' : 'gun', o.as.cx - 2, o.as.cy + 3);
+      MISSIONS.squad(g, o.aiSide, o.aiSide === 'udc' ? ['e1', 'e1', 'e3'] : ['e1', 'e1', 'e4'],
         { cx: o.as.cx + 1, cy: o.as.cy + 4 });
     },
     events: [
@@ -89,10 +89,10 @@ gdi: [
         reinforce: { types: ['mcv', 'e1', 'e1'], at: 'south' } },
       { at: 240,
         eva: 'Enemy scouts have found the beachhead. Expect a raid.',
-        attack: { types: { gdi: ['jeep', 'e1'], nod: ['bggy', 'e1'] }, target: 'base' } },
+        attack: { types: { udc: ['jeep', 'e1'], srp: ['bggy', 'e1'] }, target: 'base' } },
       { every: 300, from: 600, until: 1500,
         eva: 'The outpost is pushing patrols toward your line.',
-        attack: { types: { gdi: ['e1', 'e1', 'e3'], nod: ['e1', 'e1', 'e4'] }, target: 'base' } },
+        attack: { types: { udc: ['e1', 'e1', 'e3'], srp: ['e1', 'e1', 'e4'] }, target: 'base' } },
       { when: g => {
           let n = 0;
           for (const id of g.ai.buildingIds) { const b = g.buildings.get(id); if (b && !DATA.buildings[b.type].wall) n++; }
@@ -126,10 +126,10 @@ gdi: [
         } },
       { at: 260,
         eva: 'Raiders inbound — they are hunting your harvesters!',
-        attack: { types: { gdi: ['jeep', 'jeep', 'e1'], nod: ['bike', 'bggy', 'e1'] }, target: 'harv' } },
+        attack: { types: { udc: ['jeep', 'jeep', 'e1'], srp: ['bike', 'bggy', 'e1'] }, target: 'harv' } },
       { every: 210, from: 470, until: 1400,
         eva: 'Another raiding party is closing on the harvest line.',
-        attack: { types: { gdi: ['jeep', 'jeep', 'e3'], nod: ['bike', 'bike', 'e3'] }, target: 'harv' } },
+        attack: { types: { udc: ['jeep', 'jeep', 'e3'], srp: ['bike', 'bike', 'e3'] }, target: 'harv' } },
       { at: 430,
         eva: 'Command has diverted a spare harvester to your operation.',
         reinforce: { types: ['harv'] } },
@@ -151,22 +151,22 @@ gdi: [
       { at: 10, eva: 'Relief column ETA fifteen minutes. Seal the passes and dig in.' },
       { at: 175,
         eva: 'Armor column approaching from the NORTH!',
-        attack: { from: 'north', types: { gdi: ['mtnk', 'mtnk', 'jeep'], nod: ['ltnk', 'ltnk', 'bike'] } } },
+        attack: { from: 'north', types: { udc: ['mtnk', 'mtnk', 'jeep'], srp: ['ltnk', 'ltnk', 'bike'] } } },
       { at: 350,
         eva: 'Flame units moving in from the SOUTH-WEST!',
-        attack: { from: 'southwest', types: { gdi: ['mtnk', 'e2', 'e2', 'jeep'], nod: ['ftnk', 'e4', 'e4', 'bike'] } } },
+        attack: { from: 'southwest', types: { udc: ['mtnk', 'e2', 'e2', 'jeep'], srp: ['ftnk', 'e4', 'e4', 'bike'] } } },
       { at: 460, crates: 2, eva: 'Supply drop inbound — salvage crates at the perimeter.' },
       { at: 545,
         eva: 'Artillery sighted EAST — do not let them shell the walls!',
-        attack: { from: 'east', types: { gdi: ['msam', 'msam', 'mtnk'], nod: ['arty', 'arty', 'ltnk'] } } },
+        attack: { from: 'east', types: { udc: ['msam', 'msam', 'mtnk'], srp: ['arty', 'arty', 'ltnk'] } } },
       { at: 700,
         eva: 'The relief vanguard has broken through to your position!',
         reinforce: { types: ['mtnk', 'mtnk', 'e3', 'e3'] } },
       { at: 790,
         eva: 'FINAL ASSAULT — everything they have left is coming. Hold the line!',
         attack: [
-          { from: 'north', types: { gdi: ['mtnk', 'mtnk', 'e3', 'e1', 'e1'], nod: ['ltnk', 'ltnk', 'e4', 'e1', 'e1'] } },
-          { from: 'south', types: { gdi: ['mtnk', 'jeep', 'e3', 'e3'], nod: ['ftnk', 'bike', 'e3', 'e3'] } },
+          { from: 'north', types: { udc: ['mtnk', 'mtnk', 'e3', 'e1', 'e1'], srp: ['ltnk', 'ltnk', 'e4', 'e1', 'e1'] } },
+          { from: 'south', types: { udc: ['mtnk', 'jeep', 'e3', 'e3'], srp: ['ftnk', 'bike', 'e3', 'e3'] } },
         ] },
     ],
   },
@@ -186,13 +186,13 @@ gdi: [
       MISSIONS.squad(g, o.side, ['rmbo', 'e3', 'e3', 'apc'], o.hs);
       // the command hub, ringed by its garrison
       const hub = MISSIONS.placeB(g, o.aiSide, 'hq', o.as.cx + 3, o.as.cy + 2);
-      const twr = o.aiSide === 'gdi' ? 'gtwr' : 'gun';
+      const twr = o.aiSide === 'udc' ? 'gtwr' : 'gun';
       if (hub) {
         MISSIONS.placeB(g, o.aiSide, twr, hub.cx - 2, hub.cy + 2);
         MISSIONS.placeB(g, o.aiSide, twr, hub.cx + hub.w + 1, hub.cy);
       }
       // patrol pickets on the approaches
-      const picket = o.aiSide === 'gdi' ? ['e1', 'e3'] : ['e1', 'e4'];
+      const picket = o.aiSide === 'udc' ? ['e1', 'e3'] : ['e1', 'e4'];
       for (const t of [0.4, 0.65]) {
         const cx = Math.round(o.hs.cx + (o.as.cx - o.hs.cx) * t);
         const cy = Math.round(o.hs.cy + (o.as.cy - o.hs.cy) * t);
@@ -213,7 +213,7 @@ gdi: [
         } },
       { at: 150,
         eva: 'A patrol is sweeping your last known position. Keep moving.',
-        attack: { types: { gdi: ['jeep', 'e1'], nod: ['bggy', 'e1'] }, target: 'base' } },
+        attack: { types: { udc: ['jeep', 'e1'], srp: ['bggy', 'e1'] }, target: 'base' } },
       { when: g => {
           for (const b of g.buildings.values()) {
             if (b.type === 'hq' && b.owner !== g.humanSide) return b.hp < b.maxHp * 0.5;
@@ -247,7 +247,7 @@ gdi: [
         },
         repeat: true,
         eva: 'They felt that. Retaliation force inbound!',
-        attack: { types: { gdi: ['mtnk', 'jeep', 'e3'], nod: ['ltnk', 'bike', 'e3'] }, target: 'base' } },
+        attack: { types: { udc: ['mtnk', 'jeep', 'e3'], srp: ['ltnk', 'bike', 'e3'] }, target: 'base' } },
     ],
   },
   {
@@ -266,12 +266,12 @@ gdi: [
         const b = g.buildings.get(id);
         if (b) removeBuilding(b);
       }
-      const conv = o.side === 'gdi'
+      const conv = o.side === 'udc'
         ? ['apc', 'mtnk', 'mtnk', 'e3', 'e3', 'jeep']
         : ['apc', 'ltnk', 'ltnk', 'e3', 'e3', 'bggy'];
       MISSIONS.squad(g, o.side, conv, o.hs);
-      const twr = o.aiSide === 'gdi' ? 'gtwr' : 'gun';
-      const picket = o.aiSide === 'gdi' ? ['e1', 'e3', 'jeep'] : ['e1', 'e3', 'bggy'];
+      const twr = o.aiSide === 'udc' ? 'gtwr' : 'gun';
+      const picket = o.aiSide === 'udc' ? ['e1', 'e3', 'jeep'] : ['e1', 'e3', 'bggy'];
       for (const t of [0.35, 0.55, 0.78]) {
         const cx = Math.round(o.hs.cx + (o.as.cx - o.hs.cx) * t);
         const cy = Math.round(o.hs.cy + (o.as.cy - o.hs.cy) * t);
@@ -279,7 +279,7 @@ gdi: [
         MISSIONS.squad(g, o.aiSide, picket, { cx, cy });
       }
       MISSIONS.placeB(g, o.aiSide, twr, o.as.cx - 2, o.as.cy);
-      MISSIONS.squad(g, o.aiSide, o.aiSide === 'gdi' ? ['mtnk', 'e3'] : ['ltnk', 'e3'], o.as);
+      MISSIONS.squad(g, o.aiSide, o.aiSide === 'udc' ? ['mtnk', 'e3'] : ['ltnk', 'e3'], o.as);
     },
     events: [
       { at: 8, eva: 'Convoy is rolling. The transport MUST survive — screen it at all times.' },
@@ -315,7 +315,7 @@ gdi: [
     ],
     setup(g, o) {
       const b = MISSIONS.placeB(g, o.aiSide, 'tmpl', o.as.cx + 3, o.as.cy + 2);
-      const adv = o.aiSide === 'gdi' ? 'atwr' : 'obli';
+      const adv = o.aiSide === 'udc' ? 'atwr' : 'obli';
       if (b) {
         MISSIONS.placeB(g, o.aiSide, adv, b.cx - 2, b.cy + 2);
         MISSIONS.placeB(g, o.aiSide, adv, b.cx + b.w + 1, b.cy + 2);
@@ -356,9 +356,9 @@ gdi: [
       'It will be charging a nuclear strike the entire time you are on the ground, so you have a clock even though nobody set one. Fight through the garrison, but keep your guns OFF the Temple — the day an engineer walks through its door, the war changes.',
     ],
     setup(g, o) {
-      const bt = o.side === 'gdi' ? 'tmpl' : 'eye';
+      const bt = o.side === 'udc' ? 'tmpl' : 'eye';
       const b = MISSIONS.placeB(g, o.aiSide, bt, o.as.cx + 3, o.as.cy + 2);
-      const twr = o.aiSide === 'gdi' ? 'gtwr' : 'gun';
+      const twr = o.aiSide === 'udc' ? 'gtwr' : 'gun';
       if (b) {
         MISSIONS.placeB(g, o.aiSide, twr, b.cx - 2, b.cy + 2);
         MISSIONS.placeB(g, o.aiSide, twr, b.cx + b.w + 1, b.cy + 2);
@@ -433,11 +433,11 @@ gdi: [
     ],
     setup(g, o) {
       const A = o.aiSide, as = o.as;
-      const fac = A === 'gdi' ? 'weap' : 'afld';
-      const inf = A === 'gdi' ? 'pyle' : 'hand';
-      const sup = A === 'gdi' ? 'eye' : 'tmpl';
-      const twr = A === 'gdi' ? 'gtwr' : 'gun';
-      const adv = A === 'gdi' ? 'atwr' : 'obli';
+      const fac = A === 'udc' ? 'weap' : 'afld';
+      const inf = A === 'udc' ? 'pyle' : 'hand';
+      const sup = A === 'udc' ? 'eye' : 'tmpl';
+      const twr = A === 'udc' ? 'gtwr' : 'gun';
+      const adv = A === 'udc' ? 'atwr' : 'obli';
       MISSIONS.placeB(g, A, 'nuk2', as.cx - 4, as.cy - 2);
       MISSIONS.placeB(g, A, 'nuk2', as.cx + 4, as.cy - 2);
       MISSIONS.placeB(g, A, 'proc', as.cx - 3, as.cy + 3);
@@ -450,7 +450,7 @@ gdi: [
       MISSIONS.placeB(g, A, twr, as.cx + dx * 6, as.cy + dy * 2);
       MISSIONS.placeB(g, A, adv, as.cx + dx * 4, as.cy + dy * 5);
       MISSIONS.placeB(g, A, twr, as.cx + dx * 1, as.cy + dy * 7);
-      MISSIONS.squad(g, A, A === 'gdi' ? ['harv', 'mtnk', 'mtnk'] : ['harv', 'ltnk', 'ltnk'],
+      MISSIONS.squad(g, A, A === 'udc' ? ['harv', 'mtnk', 'mtnk'] : ['harv', 'ltnk', 'ltnk'],
         { cx: as.cx - 2, cy: as.cy + 4 });
     },
     events: [
@@ -469,7 +469,7 @@ gdi: [
 // =============================================================================
 // THE SERPENT CAMPAIGN — the ascension of the Order
 // =============================================================================
-nod: [
+srp: [
   {
     n: 1, title: 'FIRST SERMON',
     sector: 'THE VERDANT REACH — SOUTHERN FRONTIER', terr: [0.88, 0.30], seed: 8121,
@@ -554,10 +554,10 @@ nod: [
         } },
       { at: 260,
         eva: 'Raiders inbound — they are hunting your harvesters!',
-        attack: { types: { gdi: ['jeep', 'jeep', 'e1'], nod: ['bike', 'bggy', 'e1'] }, target: 'harv' } },
+        attack: { types: { udc: ['jeep', 'jeep', 'e1'], srp: ['bike', 'bggy', 'e1'] }, target: 'harv' } },
       { every: 210, from: 470, until: 1400,
         eva: 'Another raiding party is closing on the harvest line.',
-        attack: { types: { gdi: ['jeep', 'jeep', 'e3'], nod: ['bike', 'bike', 'e3'] }, target: 'harv' } },
+        attack: { types: { udc: ['jeep', 'jeep', 'e3'], srp: ['bike', 'bike', 'e3'] }, target: 'harv' } },
       { at: 430,
         eva: 'The Order has diverted a spare harvester to your tithe.',
         reinforce: { types: ['harv'] } },
@@ -579,22 +579,22 @@ nod: [
       { at: 10, eva: 'The faithful ride to relieve you — fifteen minutes. Seal the passes.' },
       { at: 175,
         eva: 'Armor column approaching from the NORTH!',
-        attack: { from: 'north', types: { gdi: ['mtnk', 'mtnk', 'jeep'], nod: ['ltnk', 'ltnk', 'bike'] } } },
+        attack: { from: 'north', types: { udc: ['mtnk', 'mtnk', 'jeep'], srp: ['ltnk', 'ltnk', 'bike'] } } },
       { at: 350,
         eva: 'Assault teams moving in from the SOUTH-WEST!',
-        attack: { from: 'southwest', types: { gdi: ['mtnk', 'e2', 'e2', 'jeep'], nod: ['ftnk', 'e4', 'e4', 'bike'] } } },
+        attack: { from: 'southwest', types: { udc: ['mtnk', 'e2', 'e2', 'jeep'], srp: ['ftnk', 'e4', 'e4', 'bike'] } } },
       { at: 460, crates: 2, eva: 'Supply drop inbound — salvage crates at the perimeter.' },
       { at: 545,
         eva: 'Artillery sighted EAST — do not let them shell the walls!',
-        attack: { from: 'east', types: { gdi: ['msam', 'msam', 'mtnk'], nod: ['arty', 'arty', 'ltnk'] } } },
+        attack: { from: 'east', types: { udc: ['msam', 'msam', 'mtnk'], srp: ['arty', 'arty', 'ltnk'] } } },
       { at: 700,
         eva: 'The vanguard of the faithful has broken through to your gates!',
         reinforce: { types: ['ltnk', 'ltnk', 'e4', 'e4'] } },
       { at: 790,
         eva: 'FINAL ASSAULT — everything they have left is coming. The sanctum holds!',
         attack: [
-          { from: 'north', types: { gdi: ['mtnk', 'mtnk', 'e3', 'e1', 'e1'], nod: ['ltnk', 'ltnk', 'e4', 'e1', 'e1'] } },
-          { from: 'south', types: { gdi: ['mtnk', 'jeep', 'e3', 'e3'], nod: ['ftnk', 'bike', 'e3', 'e3'] } },
+          { from: 'north', types: { udc: ['mtnk', 'mtnk', 'e3', 'e1', 'e1'], srp: ['ltnk', 'ltnk', 'e4', 'e1', 'e1'] } },
+          { from: 'south', types: { udc: ['mtnk', 'jeep', 'e3', 'e3'], srp: ['ftnk', 'bike', 'e3', 'e3'] } },
         ] },
     ],
   },
@@ -612,12 +612,12 @@ nod: [
     setup(g, o) {
       MISSIONS.squad(g, o.side, ['rmbo', 'e4', 'e4', 'apc'], o.hs);
       const hub = MISSIONS.placeB(g, o.aiSide, 'hq', o.as.cx + 3, o.as.cy + 2);
-      const twr = o.aiSide === 'gdi' ? 'gtwr' : 'gun';
+      const twr = o.aiSide === 'udc' ? 'gtwr' : 'gun';
       if (hub) {
         MISSIONS.placeB(g, o.aiSide, twr, hub.cx - 2, hub.cy + 2);
         MISSIONS.placeB(g, o.aiSide, twr, hub.cx + hub.w + 1, hub.cy);
       }
-      const picket = o.aiSide === 'gdi' ? ['e1', 'e3'] : ['e1', 'e4'];
+      const picket = o.aiSide === 'udc' ? ['e1', 'e3'] : ['e1', 'e4'];
       for (const t of [0.4, 0.65]) {
         const cx = Math.round(o.hs.cx + (o.as.cx - o.hs.cx) * t);
         const cy = Math.round(o.hs.cy + (o.as.cy - o.hs.cy) * t);
@@ -638,7 +638,7 @@ nod: [
         } },
       { at: 150,
         eva: 'A patrol is sweeping your last known position. Keep moving.',
-        attack: { types: { gdi: ['jeep', 'e1'], nod: ['bggy', 'e1'] }, target: 'base' } },
+        attack: { types: { udc: ['jeep', 'e1'], srp: ['bggy', 'e1'] }, target: 'base' } },
       { when: g => {
           for (const b of g.buildings.values()) {
             if (b.type === 'hq' && b.owner !== g.humanSide) return b.hp < b.maxHp * 0.5;
@@ -672,7 +672,7 @@ nod: [
         },
         repeat: true,
         eva: 'They felt that. Retaliation force inbound!',
-        attack: { types: { gdi: ['mtnk', 'jeep', 'e3'], nod: ['ltnk', 'bike', 'e3'] }, target: 'base' } },
+        attack: { types: { udc: ['mtnk', 'jeep', 'e3'], srp: ['ltnk', 'bike', 'e3'] }, target: 'base' } },
     ],
   },
   {
@@ -691,12 +691,12 @@ nod: [
         const b = g.buildings.get(id);
         if (b) removeBuilding(b);
       }
-      const conv = o.side === 'gdi'
+      const conv = o.side === 'udc'
         ? ['apc', 'mtnk', 'mtnk', 'e3', 'e3', 'jeep']
         : ['apc', 'ltnk', 'ltnk', 'e3', 'e3', 'bggy'];
       MISSIONS.squad(g, o.side, conv, o.hs);
-      const twr = o.aiSide === 'gdi' ? 'gtwr' : 'gun';
-      const picket = o.aiSide === 'gdi' ? ['e1', 'e3', 'jeep'] : ['e1', 'e3', 'bggy'];
+      const twr = o.aiSide === 'udc' ? 'gtwr' : 'gun';
+      const picket = o.aiSide === 'udc' ? ['e1', 'e3', 'jeep'] : ['e1', 'e3', 'bggy'];
       for (const t of [0.35, 0.55, 0.78]) {
         const cx = Math.round(o.hs.cx + (o.as.cx - o.hs.cx) * t);
         const cy = Math.round(o.hs.cy + (o.as.cy - o.hs.cy) * t);
@@ -704,7 +704,7 @@ nod: [
         MISSIONS.squad(g, o.aiSide, picket, { cx, cy });
       }
       MISSIONS.placeB(g, o.aiSide, twr, o.as.cx - 2, o.as.cy);
-      MISSIONS.squad(g, o.aiSide, o.aiSide === 'gdi' ? ['mtnk', 'e3'] : ['ltnk', 'e3'], o.as);
+      MISSIONS.squad(g, o.aiSide, o.aiSide === 'udc' ? ['mtnk', 'e3'] : ['ltnk', 'e3'], o.as);
     },
     events: [
       { at: 8, eva: 'The relic is rolling. The transport MUST survive — screen it at all times.' },
@@ -740,7 +740,7 @@ nod: [
     ],
     setup(g, o) {
       const b = MISSIONS.placeB(g, o.aiSide, 'eye', o.as.cx + 3, o.as.cy + 2);
-      const adv = o.aiSide === 'gdi' ? 'atwr' : 'obli';
+      const adv = o.aiSide === 'udc' ? 'atwr' : 'obli';
       if (b) {
         MISSIONS.placeB(g, o.aiSide, adv, b.cx - 2, b.cy + 2);
         MISSIONS.placeB(g, o.aiSide, adv, b.cx + b.w + 1, b.cy + 2);
@@ -781,9 +781,9 @@ nod: [
       'Their orbital lance will hunt you the whole while, so move with purpose. Break the garrison, spare the prize — one stray shell and the uplink is ash and the mission with it. Deliver an engineer to its door and the sky itself changes sides.',
     ],
     setup(g, o) {
-      const bt = o.side === 'gdi' ? 'tmpl' : 'eye';
+      const bt = o.side === 'udc' ? 'tmpl' : 'eye';
       const b = MISSIONS.placeB(g, o.aiSide, bt, o.as.cx + 3, o.as.cy + 2);
-      const twr = o.aiSide === 'gdi' ? 'gtwr' : 'gun';
+      const twr = o.aiSide === 'udc' ? 'gtwr' : 'gun';
       if (b) {
         MISSIONS.placeB(g, o.aiSide, twr, b.cx - 2, b.cy + 2);
         MISSIONS.placeB(g, o.aiSide, twr, b.cx + b.w + 1, b.cy + 2);
@@ -858,11 +858,11 @@ nod: [
     ],
     setup(g, o) {
       const A = o.aiSide, as = o.as;
-      const fac = A === 'gdi' ? 'weap' : 'afld';
-      const inf = A === 'gdi' ? 'pyle' : 'hand';
-      const sup = A === 'gdi' ? 'eye' : 'tmpl';
-      const twr = A === 'gdi' ? 'gtwr' : 'gun';
-      const adv = A === 'gdi' ? 'atwr' : 'obli';
+      const fac = A === 'udc' ? 'weap' : 'afld';
+      const inf = A === 'udc' ? 'pyle' : 'hand';
+      const sup = A === 'udc' ? 'eye' : 'tmpl';
+      const twr = A === 'udc' ? 'gtwr' : 'gun';
+      const adv = A === 'udc' ? 'atwr' : 'obli';
       MISSIONS.placeB(g, A, 'nuk2', as.cx - 4, as.cy - 2);
       MISSIONS.placeB(g, A, 'nuk2', as.cx + 4, as.cy - 2);
       MISSIONS.placeB(g, A, 'proc', as.cx - 3, as.cy + 3);
@@ -875,7 +875,7 @@ nod: [
       MISSIONS.placeB(g, A, twr, as.cx + dx * 6, as.cy + dy * 2);
       MISSIONS.placeB(g, A, adv, as.cx + dx * 4, as.cy + dy * 5);
       MISSIONS.placeB(g, A, twr, as.cx + dx * 1, as.cy + dy * 7);
-      MISSIONS.squad(g, A, A === 'gdi' ? ['harv', 'mtnk', 'mtnk'] : ['harv', 'ltnk', 'ltnk'],
+      MISSIONS.squad(g, A, A === 'udc' ? ['harv', 'mtnk', 'mtnk'] : ['harv', 'ltnk', 'ltnk'],
         { cx: as.cx - 2, cy: as.cy + 4 });
     },
     events: [
@@ -894,7 +894,7 @@ nod: [
 
 // the arc for a faction (campaigns exist for the two root factions only)
 MISSIONS.arc = function (side) {
-  return MISSIONS[side === 'nod' ? 'nod' : 'gdi'];
+  return MISSIONS[side === 'srp' ? 'srp' : 'udc'];
 };
 
 // ---- mission event engine ------------------------------------------------
@@ -907,7 +907,7 @@ MISSIONS.arc = function (side) {
 //   at: seconds                      — fires once at a fixed time
 //   every: seconds [, from, until]   — repeats on a cadence
 //   when: g => bool [, repeat: true] — fires on a rising edge (re-arms if repeat)
-// Event actions (any combination; side-keyed {gdi:…, nod:…} values resolve
+// Event actions (any combination; side-keyed {udc:…, srp:…} values resolve
 // against the HUMAN side for eva/reinforce and the AI side for attack):
 //   eva: text            — radio line (HUD banner + synthesized voice)
 //   reinforce: {types[, at]}          — friendly column arrives at the map edge
@@ -1116,9 +1116,9 @@ MISSIONS.arc = function (side) {
 // throwing setItem can never break the win flow or the mission menu.
 
 const MissionProgress = {
-  _mem: { gdi: 0, nod: 0 },
-  _key(side) { return 'hw_progress_' + (side === 'nod' ? 'nod' : 'gdi'); },
-  _norm(side) { return side === 'nod' ? 'nod' : 'gdi'; },
+  _mem: { udc: 0, srp: 0 },
+  _key(side) { return 'hw_progress_' + (side === 'srp' ? 'srp' : 'udc'); },
+  _norm(side) { return side === 'srp' ? 'srp' : 'udc'; },
   get(side) {
     const s = this._norm(side);
     let v = this._mem[s];

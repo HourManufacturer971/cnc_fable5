@@ -44,28 +44,28 @@ DATA.weapons = {
 };
 
 // units. speed = px/tick. sight in cells. armor: none/light/heavy.
-// side: 'gdi' | 'nod' | null (both). prereq: extra buildings required beyond the factory.
+// side: 'udc' | 'srp' | null (both). prereq: extra buildings required beyond the factory.
 DATA.units = {
   // infantry
   e1:   { name: 'Minigunner', cost: 100, hp: 50, speed: 1.1, sight: 3, armor: 'none', weapon: 'm16', infantry: true, side: null, factory: 'infantry', prereq: [] },
-  e2:   { name: 'Grenadier', cost: 160, hp: 50, speed: 1.3, sight: 3, armor: 'none', weapon: 'grenade', infantry: true, side: 'gdi', factory: 'infantry', prereq: [] },
+  e2:   { name: 'Grenadier', cost: 160, hp: 50, speed: 1.3, sight: 3, armor: 'none', weapon: 'grenade', infantry: true, side: 'udc', factory: 'infantry', prereq: [] },
   e3:   { name: 'Rocket Soldier', cost: 300, hp: 45, speed: 0.9, sight: 3, armor: 'none', weapon: 'dragon', infantry: true, side: null, factory: 'infantry', prereq: [] },
-  e4:   { name: 'Flamethrower', cost: 200, hp: 70, speed: 1.1, sight: 3, armor: 'none', weapon: 'flamer', infantry: true, side: 'nod', factory: 'infantry', prereq: [] },
-  e5:   { name: 'Chem Warrior', cost: 300, hp: 70, speed: 1.1, sight: 3, armor: 'none', weapon: 'chemspray', infantry: true, side: 'nod', factory: 'infantry', prereq: ['hq'], tibImmune: true },
+  e4:   { name: 'Flamethrower', cost: 200, hp: 70, speed: 1.1, sight: 3, armor: 'none', weapon: 'flamer', infantry: true, side: 'srp', factory: 'infantry', prereq: [] },
+  e5:   { name: 'Chem Warrior', cost: 300, hp: 70, speed: 1.1, sight: 3, armor: 'none', weapon: 'chemspray', infantry: true, side: 'srp', factory: 'infantry', prereq: ['hq'], tibImmune: true },
   e6:   { name: 'Engineer', cost: 500, hp: 25, speed: 1.1, sight: 2, armor: 'none', weapon: null, infantry: true, side: null, factory: 'infantry', prereq: [], engineer: true },
   rmbo: { name: 'Commando', cost: 1000, hp: 80, speed: 1.4, sight: 5, armor: 'none', weapon: 'sniper', infantry: true, side: null, factory: 'infantry', prereq: ['hq'], antiBuildingBonus: 4 },
   // vehicles
-  jeep: { name: 'Scout Truck', cost: 400, hp: 175, speed: 3.0, sight: 4, armor: 'light', weapon: 'mg50', side: 'gdi', factory: 'vehicle', prereq: [], turn: 2 },
-  bggy: { name: 'Raider Buggy', cost: 300, hp: 140, speed: 3.2, sight: 4, armor: 'light', weapon: 'mg50', side: 'nod', factory: 'vehicle', prereq: [], turn: 2 },
-  bike: { name: 'Recon Bike', cost: 500, hp: 130, speed: 3.8, sight: 4, armor: 'light', weapon: 'bikeRockets', side: 'nod', factory: 'vehicle', prereq: [], turn: 3 },
-  apc:  { name: 'APC', cost: 700, hp: 200, speed: 2.8, sight: 4, armor: 'heavy', weapon: 'mg50', side: 'gdi', factory: 'vehicle', prereq: ['pyle'], crush: true, turn: 2, transport: 5 },
-  ltnk: { name: 'Light Tank', cost: 550, hp: 330, speed: 2.2, sight: 4, armor: 'heavy', weapon: 'cannon75', side: 'nod', factory: 'vehicle', prereq: [], crush: true, turret: true, turn: 1 },
-  mtnk: { name: 'Medium Tank', cost: 800, hp: 400, speed: 2.0, sight: 4, armor: 'heavy', weapon: 'cannon90', side: 'gdi', factory: 'vehicle', prereq: [], crush: true, turret: true, turn: 1 },
-  htnk: { name: 'Behemoth Tank', cost: 1500, hp: 700, speed: 1.4, sight: 5, armor: 'heavy', weapon: 'cannon120', weapon2: 'mammothTusk', side: 'gdi', factory: 'vehicle', prereq: ['fix'], crush: true, turret: true, turn: 1, selfHeal: true, dualBarrel: true },
-  ftnk: { name: 'Flame Tank', cost: 800, hp: 300, speed: 2.2, sight: 4, armor: 'heavy', weapon: 'flameTank', side: 'nod', factory: 'vehicle', prereq: [], crush: true, turn: 1 },
-  stnk: { name: 'Stealth Tank', cost: 900, hp: 110, speed: 3.0, sight: 4, armor: 'light', weapon: 'stealthMissile', side: 'nod', factory: 'vehicle', prereq: ['hq'], stealth: true, turn: 2 },
-  arty: { name: 'Artillery', cost: 550, hp: 75, speed: 1.6, sight: 4, armor: 'light', weapon: 'arty155', side: 'nod', factory: 'vehicle', prereq: [], turn: 1 },
-  msam: { name: 'Rocket Launcher', cost: 800, hp: 100, speed: 1.8, sight: 4, armor: 'light', weapon: 'rocket227', side: 'gdi', factory: 'vehicle', prereq: ['hq'], turn: 1 },
+  jeep: { name: 'Scout Truck', cost: 400, hp: 175, speed: 3.0, sight: 4, armor: 'light', weapon: 'mg50', side: 'udc', factory: 'vehicle', prereq: [], turn: 2 },
+  bggy: { name: 'Raider Buggy', cost: 300, hp: 140, speed: 3.2, sight: 4, armor: 'light', weapon: 'mg50', side: 'srp', factory: 'vehicle', prereq: [], turn: 2 },
+  bike: { name: 'Recon Bike', cost: 500, hp: 130, speed: 3.8, sight: 4, armor: 'light', weapon: 'bikeRockets', side: 'srp', factory: 'vehicle', prereq: [], turn: 3 },
+  apc:  { name: 'APC', cost: 700, hp: 200, speed: 2.8, sight: 4, armor: 'heavy', weapon: 'mg50', side: 'udc', factory: 'vehicle', prereq: ['pyle'], crush: true, turn: 2, transport: 5 },
+  ltnk: { name: 'Light Tank', cost: 550, hp: 330, speed: 2.2, sight: 4, armor: 'heavy', weapon: 'cannon75', side: 'srp', factory: 'vehicle', prereq: [], crush: true, turret: true, turn: 1 },
+  mtnk: { name: 'Medium Tank', cost: 800, hp: 400, speed: 2.0, sight: 4, armor: 'heavy', weapon: 'cannon90', side: 'udc', factory: 'vehicle', prereq: [], crush: true, turret: true, turn: 1 },
+  htnk: { name: 'Behemoth Tank', cost: 1500, hp: 700, speed: 1.4, sight: 5, armor: 'heavy', weapon: 'cannon120', weapon2: 'mammothTusk', side: 'udc', factory: 'vehicle', prereq: ['fix'], crush: true, turret: true, turn: 1, selfHeal: true, dualBarrel: true },
+  ftnk: { name: 'Flame Tank', cost: 800, hp: 300, speed: 2.2, sight: 4, armor: 'heavy', weapon: 'flameTank', side: 'srp', factory: 'vehicle', prereq: [], crush: true, turn: 1 },
+  stnk: { name: 'Stealth Tank', cost: 900, hp: 110, speed: 3.0, sight: 4, armor: 'light', weapon: 'stealthMissile', side: 'srp', factory: 'vehicle', prereq: ['hq'], stealth: true, turn: 2 },
+  arty: { name: 'Artillery', cost: 550, hp: 75, speed: 1.6, sight: 4, armor: 'light', weapon: 'arty155', side: 'srp', factory: 'vehicle', prereq: [], turn: 1 },
+  msam: { name: 'Rocket Launcher', cost: 800, hp: 100, speed: 1.8, sight: 4, armor: 'light', weapon: 'rocket227', side: 'udc', factory: 'vehicle', prereq: ['hq'], turn: 1 },
   harv: { name: 'Harvester', cost: 1400, hp: 600, speed: 1.8, sight: 2, armor: 'light', weapon: null, side: null, factory: 'vehicle', prereq: ['proc'], harvester: true, turn: 1 },
   mcv:  { name: 'MCV', cost: 5000, hp: 600, speed: 1.4, sight: 2, armor: 'light', weapon: null, side: null, factory: 'vehicle', prereq: ['fix'], deploysTo: 'fact', turn: 1 },
   // creature — never buildable; spawns when infantry die on chrysalite
@@ -74,8 +74,8 @@ DATA.units = {
   c1:   { name: 'Civilian', cost: 0, hp: 25, speed: 1.0, sight: 2, armor: 'none', weapon: 'civgun', side: null, factory: null, prereq: [], infantry: true, civilian: true },
   c2:   { name: 'Civilian', cost: 0, hp: 25, speed: 1.0, sight: 2, armor: 'none', weapon: 'civgun', side: null, factory: null, prereq: [], infantry: true, civilian: true },
   // aircraft
-  orca: { name: 'Kestrel', cost: 1200, hp: 125, speed: 4.0, sight: 5, armor: 'light', weapon: 'orcaRockets', side: 'gdi', factory: 'air', prereq: [], air: true, ammo: 6 },
-  heli: { name: 'Gunship', cost: 1200, hp: 125, speed: 3.6, sight: 5, armor: 'light', weapon: 'heliMg', side: 'nod', factory: 'air', prereq: [], air: true, ammo: 15 },
+  orca: { name: 'Kestrel', cost: 1200, hp: 125, speed: 4.0, sight: 5, armor: 'light', weapon: 'orcaRockets', side: 'udc', factory: 'air', prereq: [], air: true, ammo: 6 },
+  heli: { name: 'Gunship', cost: 1200, hp: 125, speed: 3.6, sight: 5, armor: 'light', weapon: 'heliMg', side: 'srp', factory: 'air', prereq: [], air: true, ammo: 15 },
 };
 
 // buildings. w,h in cells. power +out, drain -.
@@ -85,22 +85,22 @@ DATA.buildings = {
   nuk2: { name: 'Adv. Power Plant', cost: 700, hp: 400, w: 2, h: 2, armor: 'wood', sight: 2, power: 200, drain: 0, side: null, prereq: ['nuke'] },
   proc: { name: 'Refinery', cost: 2000, hp: 450, w: 3, h: 2, armor: 'wood', sight: 4, power: 0, drain: 30, side: null, prereq: ['nuke'], storage: 1000, freeUnit: 'harv' },
   silo: { name: 'Storage Silo', cost: 150, hp: 150, w: 2, h: 1, armor: 'wood', sight: 2, power: 0, drain: 10, side: null, prereq: ['proc'], storage: 1500 },
-  pyle: { name: 'Barracks', cost: 300, hp: 400, w: 2, h: 2, armor: 'wood', sight: 3, power: 0, drain: 20, side: 'gdi', prereq: ['nuke'], factory: 'infantry' },
-  hand: { name: 'Serpent Hall', cost: 300, hp: 400, w: 2, h: 2, armor: 'wood', sight: 3, power: 0, drain: 20, side: 'nod', prereq: ['nuke'], factory: 'infantry' },
-  weap: { name: 'Weapons Factory', cost: 2000, hp: 300, w: 3, h: 2, armor: 'wood', sight: 3, power: 0, drain: 30, side: 'gdi', prereq: ['proc'], factory: 'vehicle' },
-  afld: { name: 'Airstrip', cost: 2000, hp: 500, w: 4, h: 2, armor: 'wood', sight: 4, power: 0, drain: 30, side: 'nod', prereq: ['proc'], factory: 'vehicle' },
+  pyle: { name: 'Barracks', cost: 300, hp: 400, w: 2, h: 2, armor: 'wood', sight: 3, power: 0, drain: 20, side: 'udc', prereq: ['nuke'], factory: 'infantry' },
+  hand: { name: 'Serpent Hall', cost: 300, hp: 400, w: 2, h: 2, armor: 'wood', sight: 3, power: 0, drain: 20, side: 'srp', prereq: ['nuke'], factory: 'infantry' },
+  weap: { name: 'Weapons Factory', cost: 2000, hp: 300, w: 3, h: 2, armor: 'wood', sight: 3, power: 0, drain: 30, side: 'udc', prereq: ['proc'], factory: 'vehicle' },
+  afld: { name: 'Airstrip', cost: 2000, hp: 500, w: 4, h: 2, armor: 'wood', sight: 4, power: 0, drain: 30, side: 'srp', prereq: ['proc'], factory: 'vehicle' },
   hq:   { name: 'Comm. Center', cost: 1000, hp: 500, w: 2, h: 2, armor: 'wood', sight: 5, power: 0, drain: 40, side: null, prereq: ['proc'], radar: true },
-  eye:  { name: 'Adv. Comm. Center', cost: 2800, hp: 500, w: 2, h: 2, armor: 'concrete', sight: 5, power: 0, drain: 200, side: 'gdi', prereq: ['hq', 'weap'], superweapon: 'ion' },
-  tmpl: { name: 'Serpent Temple', cost: 3000, hp: 1000, w: 3, h: 3, armor: 'concrete', sight: 4, power: 0, drain: 150, side: 'nod', prereq: ['hq', 'afld'], superweapon: 'nuke' },
+  eye:  { name: 'Adv. Comm. Center', cost: 2800, hp: 500, w: 2, h: 2, armor: 'concrete', sight: 5, power: 0, drain: 200, side: 'udc', prereq: ['hq', 'weap'], superweapon: 'ion' },
+  tmpl: { name: 'Serpent Temple', cost: 3000, hp: 1000, w: 3, h: 3, armor: 'concrete', sight: 4, power: 0, drain: 150, side: 'srp', prereq: ['hq', 'afld'], superweapon: 'nuke' },
   hpad: { name: 'Helipad', cost: 1500, hp: 400, w: 2, h: 2, armor: 'wood', sight: 3, power: 0, drain: 10, side: null, prereq: ['proc'], factory: 'air', freeUnitAir: true },
   fix:  { name: 'Repair Facility', cost: 1200, hp: 400, w: 3, h: 3, armor: 'wood', sight: 3, power: 0, drain: 30, side: null, prereq: ['weap', 'afld'], prereqAny: true, repairPad: true },
   brik: { name: 'Concrete Wall', cost: 100, hp: 300, w: 1, h: 1, armor: 'concrete', sight: 1, power: 0, drain: 0, side: null, prereq: [], defense: true, wall: true },
   gate: { name: 'Wall Gate', cost: 250, hp: 600, w: 1, h: 1, armor: 'concrete', sight: 1, power: 0, drain: 0, side: null, prereq: [], defense: true, wall: true, gate: true }, // placed as a 3-cell span (w/h set at placement)
-  gtwr: { name: 'Guard Tower', cost: 500, hp: 400, w: 1, h: 1, armor: 'wood', sight: 4, power: 0, drain: 10, side: 'gdi', prereq: ['pyle'], weapon: 'gtwrMg', defense: true, threat: 0.4 },
-  atwr: { name: 'Adv. Guard Tower', cost: 1000, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 60, side: 'gdi', prereq: ['hq'], weapon: 'atwrMissile', needsPower: true, defense: true, threat: 0.9 },
-  gun:  { name: 'Gun Turret', cost: 600, hp: 400, w: 1, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 20, side: 'nod', prereq: ['hand'], weapon: 'gunTurret', turret: true, defense: true, threat: 0.5 },
-  obli: { name: 'Beam Spire', cost: 1500, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 150, side: 'nod', prereq: ['hq'], weapon: 'obelisk', needsPower: true, defense: true, threat: 0.9 },
-  sam:  { name: 'SAM Site', cost: 550, hp: 300, w: 2, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 25, side: 'nod', prereq: ['hand'], weapon: 'samMissile', needsPower: true, defense: true, threat: 0.3 },
+  gtwr: { name: 'Guard Tower', cost: 500, hp: 400, w: 1, h: 1, armor: 'wood', sight: 4, power: 0, drain: 10, side: 'udc', prereq: ['pyle'], weapon: 'gtwrMg', defense: true, threat: 0.4 },
+  atwr: { name: 'Adv. Guard Tower', cost: 1000, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 60, side: 'udc', prereq: ['hq'], weapon: 'atwrMissile', needsPower: true, defense: true, threat: 0.9 },
+  gun:  { name: 'Gun Turret', cost: 600, hp: 400, w: 1, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 20, side: 'srp', prereq: ['hand'], weapon: 'gunTurret', turret: true, defense: true, threat: 0.5 },
+  obli: { name: 'Beam Spire', cost: 1500, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 150, side: 'srp', prereq: ['hq'], weapon: 'obelisk', needsPower: true, defense: true, threat: 0.9 },
+  sam:  { name: 'SAM Site', cost: 550, hp: 300, w: 2, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 25, side: 'srp', prereq: ['hand'], weapon: 'samMissile', needsPower: true, defense: true, threat: 0.3 },
   // neutral village structures — never buildable, owned by 'civ'.
   // `garrison`: armed infantry can occupy and fire from inside (capacity).
   vil1: { name: 'Farmhouse', cost: 0, hp: 250, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true, garrison: 3 },
@@ -113,11 +113,11 @@ DATA.buildings = {
 
 // sidebar ordering (filtered by prereqOk at runtime)
 DATA.buildList = {
-  gdi: {
+  udc: {
     buildings: ['nuke', 'proc', 'pyle', 'nuk2', 'silo', 'brik', 'gate', 'weap', 'hq', 'gtwr', 'fix', 'hpad', 'atwr', 'eye'],
     units: ['e1', 'e2', 'e3', 'e6', 'rmbo', 'jeep', 'apc', 'mtnk', 'harv', 'msam', 'htnk', 'orca', 'mcv'],
   },
-  nod: {
+  srp: {
     buildings: ['nuke', 'proc', 'hand', 'nuk2', 'silo', 'brik', 'gate', 'afld', 'hq', 'gun', 'sam', 'fix', 'hpad', 'obli', 'tmpl'],
     units: ['e1', 'e3', 'e4', 'e6', 'e5', 'rmbo', 'bggy', 'bike', 'ltnk', 'harv', 'arty', 'ftnk', 'stnk', 'heli', 'mcv'],
   },

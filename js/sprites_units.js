@@ -2,8 +2,8 @@
 // sprites_units.js — procedurally drawn VEHICLE and AIRCRAFT sprites + sidebar cameos.
 // Fills SPRITES.units[key][side] ({body:[16], turret?:[16], anim?:[...]}) and
 // SPRITES.cameo[key] for: jeep bggy bike apc ltnk mtnk htnk ftnk stnk arty msam
-// harv mcv orca heli. Every unit is generated for BOTH sides ('gdi' gold/tan,
-// 'nod' grey+red) since captures/spawns can mix ownership.
+// harv mcv orca heli. Every unit is generated for BOTH sides ('udc' gold/tan,
+// 'srp' grey+red) since captures/spawns can mix ownership.
 //
 // PERSPECTIVE: tilted-top-down 3/4 camera. Each canonical 24x24 canvas is a TRUE
 // TOP view facing NORTH with neutral/radial lighting only (bright forward panels
@@ -32,21 +32,21 @@
 
   // ---- per-side palettes (tones from PAL + local ramps, one set look) --------
   const SIDE_PAL = {
-    gdi: {
-      side: 'gdi',
-      hull: PAL.gdi, dark: PAL.gdiDark, light: PAL.gdiLight, shadow: PAL.gdiShadow,
+    udc: {
+      side: 'udc',
+      hull: PAL.udc, dark: PAL.udcDark, light: PAL.udcLight, shadow: PAL.udcShadow,
       hi: '#f8ecc0', mid: '#ac8e3e',
       track: TRK, tread: TRK_M,
       accent: PAL.uiGold, accent2: PAL.fire1,
       glass: GLASS, glint: GLASS_L,
       metal: GUN, metalL: GUN_L,
     },
-    nod: {
-      side: 'nod',
-      hull: PAL.nod, dark: PAL.nodDark, light: PAL.nodLight, shadow: PAL.nodShadow,
+    srp: {
+      side: 'srp',
+      hull: PAL.srp, dark: PAL.srpDark, light: PAL.srpLight, shadow: PAL.srpShadow,
       hi: '#d8d8e2', mid: '#70707a',
       track: TRK, tread: TRK_M,
-      accent: PAL.nodRed, accent2: PAL.nodRedLight,
+      accent: PAL.srpRed, accent2: PAL.srpRedLight,
       glass: GLASS, glint: GLASS_L,
       metal: GUN, metalL: GUN_L,
     },
@@ -101,16 +101,16 @@
     px(g, x + (w >> 1), y + (h >> 1), HUB);
   }
 
-  // faction insignia: GDI = tiny gold star w/ white core, Nod = crimson chevron
+  // faction insignia: UDC = tiny gold star w/ white core, Serpent = crimson chevron
   function emblem(g, P, x, y) {
-    if (P.side === 'gdi') {
+    if (P.side === 'udc') {
       R(g, x - 1, y, 3, 1, PAL.uiGold);
       R(g, x, y - 1, 1, 3, PAL.uiGold);
       px(g, x, y, WHITE);
     } else {
-      px(g, x - 1, y - 1, PAL.nodRed);
-      px(g, x + 1, y - 1, PAL.nodRed);
-      px(g, x, y, PAL.nodRedLight);
+      px(g, x - 1, y - 1, PAL.srpRed);
+      px(g, x + 1, y - 1, PAL.srpRed);
+      px(g, x, y, PAL.srpRedLight);
     }
   }
 
@@ -149,7 +149,7 @@
       R(g, 11, 7, 2, 1, GUN_D); px(g, 11, 11, GUN_L);
     },
 
-    // Nod Buggy: fat rear tires, narrow tapered hull, cage MG, vented engine.
+    // Serpent Buggy: fat rear tires, narrow tapered hull, cage MG, vented engine.
     bggy(g, P) {
       R(g, 6, 5, 4, 2, GUN_D); R(g, 14, 5, 4, 2, GUN_D);   // front axles
       R(g, 6, 15, 4, 2, GUN_D); R(g, 14, 15, 4, 2, GUN_D); // rear axles
@@ -605,7 +605,7 @@
 
   for (const key of KEYS) {
     const entry = {};
-    for (const side of ['gdi', 'nod']) {
+    for (const side of ['udc', 'srp']) {
       const P = SIDE_PAL[side];
       const bodyOpts = AIR[key]
         ? { height: 1, squash: SQ, shadow: 0 }           // render draws air shadows
@@ -639,7 +639,7 @@
   // ---- cameos (64x48) — mini "portraits": unit at 2x on a diagonal slate ------
   function makeCameo(key) {
     const d = DATA.units[key];
-    const side = d.side || 'gdi';          // side-null units use the GDI palette
+    const side = d.side || 'udc';          // side-null units use the UDC palette
     const spr = SPRITES.units[key][side];
     const F = 2;                            // ~NE facing
 
@@ -746,5 +746,5 @@
   const entry = { body: [], anim: [f0, f1] }; // anim overlay pulses while it moves
   for (let i = 0; i < 16; i++) entry.body.push(f0);
   // same sprite for every owner palette slot (creatures have no faction colors)
-  SPRITES.units.vice = { gdi: entry, nod: entry, mut: entry };
+  SPRITES.units.vice = { udc: entry, srp: entry, mut: entry };
 })();

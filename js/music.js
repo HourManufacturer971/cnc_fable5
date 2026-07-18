@@ -491,7 +491,7 @@ const MUSIC = (function () {
   const TRACKS = [T1, T2, T3, T4, T5, T6, T7, T8];
   // faction playlists: the Coalition marches to the original eight; the
   // Serpent Order plays only its own liturgy
-  const PLAYLISTS = { gdi: TRACKS, nod: [S1, S2, S3, S4] };
+  const PLAYLISTS = { udc: TRACKS, srp: [S1, S2, S3, S4] };
   let list = TRACKS;
 
   // ---- sequencer -----------------------------------------------------------------
@@ -562,7 +562,7 @@ const MUSIC = (function () {
     // opens on the faction theme (track 0); later starts re-roll. When the
     // sequencer is already running (music plays through menus), it simply
     // picks up the new playlist at its next scheduled step.
-    if (side) list = PLAYLISTS[side === 'nod' ? 'nod' : 'gdi'];
+    if (side) list = PLAYLISTS[side === 'srp' ? 'srp' : 'udc'];
     step = 0; pos = 0; loops = 0;
     trackIdx = startedOnce ? (Math.random() * list.length) | 0 : 0;
     startedOnce = true;
