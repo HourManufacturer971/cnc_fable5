@@ -463,3 +463,15 @@ button:active {
   .briefCols { flex-direction: column-reverse; align-items: center; }
   .briefLeft { width: 100%; }
 }
+
+/* ---- theater of war: the campaign map ---- */
+#missions .panel { max-width: 740px; }
+#theaterMap {
+  display: block; margin: 0 auto 6px; max-width: 100%;
+  border: 1px solid #6a5a28; background: #070b12;
+  box-shadow: inset 0 0 28px rgba(0,0,0,0.65), 0 0 18px -6px var(--accent);
+}
+#theaterCap {
+  color: #8a836e; font-size: 10px; letter-spacing: 2px;
+  margin: 0 0 10px; text-align: center; min-height: 13px;
+}

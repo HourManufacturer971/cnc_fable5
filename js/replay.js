@@ -28,7 +28,9 @@ const REPLAY = (function () {
   function arm(m) {
     recording = true;
     playing = false;
-    meta = Object.assign({ v: VER }, m);
+    // the sim PROTO rides in the meta from the start: a replay from another
+    // game version would silently re-simulate a different battle
+    meta = Object.assign({ v: VER, p: NET.PROTO }, m);
     log = [];
     cursor = 0;
     resumeAt = -1;
@@ -99,6 +101,9 @@ const REPLAY = (function () {
     const d = JSON.parse(json);
     if (!d || !d.meta || d.meta.v !== VER || !Array.isArray(d.log)) {
       throw new Error('Not a Harvest War replay file.');
+    }
+    if (d.meta.p !== NET.PROTO) {
+      throw new Error('Replay is from an older game version.');
     }
     _start(d);
   }

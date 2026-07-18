@@ -30,12 +30,16 @@ python3 -m http.server 8000
 (Opening `index.html` directly with `file://` also works in most browsers.)
 
 Pick your side — United Defense Coalition or The Serpent Order — then pick
-your battle: a **skirmish** on a random map, or one of eight **campaign
-operations**, each with its own briefing, fixed battlefield, objective and
-scripted mission events (annihilation, a harvest quota, a timed last stand,
-an economy hunt, a stronghold assault, a no-base convoy escort, a
-capture-it-intact heist, and a fortress finale). Winning an operation
-unlocks the next; progress is saved in your browser. You start with an MCV:
+your battle: a **skirmish** on a random map, or your faction's **campaign**.
+In the classic style, each faction fights its own ten-operation war with its
+own original storyline, chosen from a **Theater of War** map where secured
+territories fill with your colors and the frontline is always marked. The
+arcs are built from the classic mission archetypes: a beachhead, a harvest
+quota, a timed last stand, a no-base **commando raid**, an economy hunt, a
+convoy escort, a **superweapon sabotage**, a capture-it-intact heist, a
+stronghold assault, and a fortress finale — every one with its own briefing,
+fixed battlefield and scripted mission events. Winning an operation pushes
+the front forward; progress is saved per faction in your browser. You start with an MCV:
 click it twice to deploy your Construction Yard.
 
 Handy URL parameters for testing: `?side=gdi&seed=42&nomenu=1&mute=1&mission=2`.
@@ -289,6 +293,10 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   difficulty grabs convenient crates, held supply depots pay a trickle
   that's actually worth capturing, and river bridges are two lanes wide so
   harvester traffic stops wedging head-to-head
+- **Two campaigns, one war** — the UDC counter-offensive and the Serpent
+  ascension are separate ten-mission arcs with their own stories, fought
+  across a Theater of War map in the classic style — all of it original
+  Harvest War fiction
 - **Proper war-room briefings** — every operation opens on a full sitrep:
   a sector stamp and faction classification bar, the situation report
   teletyped onto the screen (click to skip ahead), explicit objectives,

@@ -2013,6 +2013,14 @@ const Render = (function () {
       const bt = typeof ob.btype === 'object' ? ob.btype[g.humanSide] : ob.btype;
       return 'CAPTURE THE ' + DATA.buildings[bt].name.toUpperCase() + ' — INTACT';
     }
+    if (ob.type === 'demolish') {
+      const bt = typeof ob.btype === 'object' ? ob.btype[g.humanSide] : ob.btype;
+      let standing = 0;
+      for (const b of g.buildings.values()) if (b.type === bt) standing++;
+      return standing > 0
+        ? 'DESTROY THE ' + DATA.buildings[bt].name.toUpperCase() + ' — ' + standing + ' STANDING'
+        : 'DESTROY THE ' + DATA.buildings[bt].name.toUpperCase();
+    }
     if (ob.type === 'escort') {
       const d = ob.dest === 'ai' ? g.startPos.ai : ob.dest;
       let esc = null;

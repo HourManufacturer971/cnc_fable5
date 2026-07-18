@@ -447,22 +447,46 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   dressing: pre-built enemy works, convoys, checkpoints). Helpers exported on the
   MISSIONS array: `MISSIONS.placeB(g, side, type, cx, cy)` (spiral-search finished
   building placement), `MISSIONS.squad(g, side, types, at)`, `MISSIONS.openNear`.
-- The campaign is EIGHT ops: 1 LANDFALL (annihilate + scripted probe/reinforcement),
-  2 GREEN GOLD (harvest 6000 + blue-lode reveal + harvester-hunting raids), 3 HOLD THE
-  LINE (survive 15 + announced directional waves, supply drops, relief vanguard, final
-  assault), 4 SCORCHED HARVEST (killEconomy + fleshling migrations + revenge waves on
-  each economy kill), 5 SEVERED HEAD (annihilate stronghold + heavy reinforcements +
-  superweapon-down beat), 6 THE LONG ROAD (escort: no base, convoy + checkpoints, AI
-  camp stripped in setup, pulsing beacon at `g.startPos.ai`), 7 INSIDE JOB (capture the
-  tmpl/eye INTACT, prize pre-built + revealed, damage warnings, engineer detachment),
-  8 AVALANCHE (annihilate a fully pre-built fortress; reinforcement/supply drip).
+- The campaign is TWO SEPARATE FACTION ARCS of ten ops each (`MISSIONS.gdi` /
+  `MISSIONS.nod`, fetched via `MISSIONS.arc(side)`) — classic structure, original
+  fiction. Mission defs are single-faction now (`brief` is a paragraph array,
+  `objText` a string) and carry `terr: [x,y]` territory coords for the THEATER
+  OF WAR screen (main.js `_drawTheater`): a procedurally drawn original continent
+  where secured territories fill with the faction color along the marching
+  front, the frontline territory is tagged NEXT OP (clickable → briefing), and
+  everything beyond is denied ground; the accessible "war ledger" rows remain
+  beneath it. `MissionProgress` is per faction (`hw_progress_gdi/nod`,
+  `get/unlockUpTo/unlocked` take a side) and records live at
+  `hw_rec_<side>_<n>`. New objective type `demolish {btype}` (arms while a
+  building of the type stands anywhere, wins when the last is rubble — capture
+  doesn't count) powers the new archetypes: the no-base COMMANDO RAIDS (UDC 4
+  BROKEN SPEAR / Serpent 4 FANGS IN THE DARK — `noHumanSpawn` + a
+  rmbo/fire-team/apc squad against a pre-built, garrisoned enemy `hq`) and the
+  SABOTAGE ops (UDC 7 SILENCE THE TEMPLE / Serpent 7 BLIND THE LANCE — a full
+  base game against a pre-built charging enemy superweapon). Replay meta now
+  carries `p: NET.PROTO` from `REPLAY.arm` and `watchData` refuses other
+  versions. UDC arc: 1 FIRST FOOTHOLD (annihilate beachhead), 2 THE GREEN ENGINE
+  (harvest 6000 + blue-lode reveal + harvester-hunting raids), 3 STATIC LINE
+  (survive 15, holdout: announced directional waves, supply drops, relief
+  vanguard, final assault), 4 BROKEN SPEAR (commando raid, demolish hq),
+  5 SCORCHED HARVEST (killEconomy + fleshling migrations + revenge waves),
+  6 THE LONG ROAD (escort: no base, convoy + checkpoints, AI camp stripped,
+  pulsing beacon at `g.startPos.ai`), 7 SILENCE THE TEMPLE (sabotage, demolish
+  tmpl), 8 INSIDE JOB (capture the tmpl INTACT, prize pre-built + revealed,
+  damage warnings, engineer detachment), 9 SEVERED HEAD (annihilate stronghold),
+  10 AVALANCHE (annihilate a fully pre-built fortress; reinforcement/supply
+  drip). Serpent arc mirrors the shapes with its own story: FIRST SERMON,
+  TITHES OF THE EARTH, THE SANCTUM HOLDS, FANGS IN THE DARK, STARVE THE
+  MACHINE, THE RELIC ROAD, BLIND THE LANCE (demolish eye), CHANGED VOICES
+  (capture eye), BREAK THE BASTION, AGE OF THE SERPENT.
 - AI difficulty knobs read from `game.mission` by ai.js: `aiCalm` multiplies wave-cadence
   delays (first strike + between waves), `aiWaveCap` caps units per strike wave.
   Campaign ops without an explicit `aiWaveCap` keep the classic 9; open skirmish
   defaults to 11 (`_waveCap`) so late strikes mass like offensives.
 - Render draws a small objective status chip at the top-left of the viewport
   (`TREASURY n / m`, `HOLD OUT mm:ss`, `ECONOMY TARGETS LEFT: n`, `CAPTURE THE X —
-  INTACT`, `DELIVER THE TRANSPORT — n CELLS TO THE BEACON`, or the annihilate line);
+  INTACT`, `DESTROY THE X — n STANDING`, `DELIVER THE TRANSPORT — n CELLS TO THE
+  BEACON`, or the annihilate line);
   skirmish shows none. Escort missions also draw a pulsing gold beacon at the goal
   (over the shroud — mission intel outranks fog) and a blinking radar marker.
 

@@ -224,6 +224,7 @@ const Main = (function () {
       });
     }
     _wireMpLobby();
+    _wireTheater();
     $('btnBriefBack').addEventListener('click', () => {
       _stopTeletype();
       $('briefing').classList.add('hidden');
@@ -414,7 +415,9 @@ const Main = (function () {
       AUDIO.init();
       startGame(q.get('side') === 'nod' ? 'nod' : 'gdi', {
         seed: q.get('seed') ? +q.get('seed') : undefined,
-        mission: q.get('mission') ? MISSIONS[+q.get('mission') - 1] : undefined,
+        mission: q.get('mission')
+          ? MISSIONS.arc(q.get('side') === 'nod' ? 'nod' : 'gdi')[+q.get('mission') - 1]
+          : undefined,
       });
     }
 
@@ -557,10 +560,12 @@ const Main = (function () {
   function _showMissions(side) {
     mySide = side;
     $('menu').classList.add('hidden');
-    $('missionsTitle').textContent = 'OPERATIONS — ' + C.SIDE_NAME[side];
+    $('missionsTitle').textContent = 'THEATER OF WAR — ' + C.SIDE_NAME[side];
     const list = $('missionList');
     list.innerHTML = '';
-    const done = MissionProgress.get();
+    const done = MissionProgress.get(side);
+    _drawTheater(side, done);
+    $('theaterCap').textContent = 'SELECT YOUR NEXT OPERATION ON THE MAP — OR FROM THE WAR LEDGER BELOW';
 
     // skirmish at three difficulties: the knobs the campaign already uses
     // (wave cadence, wave cap, AI war chest) exposed straight to the player
@@ -574,14 +579,14 @@ const Main = (function () {
       list.appendChild(skirm);
     }
 
-    for (const m of MISSIONS) {
+    for (const m of MISSIONS.arc(side)) {
       const btn = document.createElement('button');
-      const open = MissionProgress.unlocked(m);
+      const open = MissionProgress.unlocked(m, side);
       let tag = m.n <= done ? 'COMPLETE' : open ? 'READY' : 'LOCKED';
       // personal best for a completed op: fastest win + highest score
       if (m.n <= done) {
         let rec = null;
-        try { rec = JSON.parse(localStorage.getItem('hw_rec_' + m.n) || 'null'); } catch (e) {}
+        try { rec = JSON.parse(localStorage.getItem('hw_rec_' + side + '_' + m.n) || 'null'); } catch (e) {}
         if (rec && rec.t !== undefined) {
           const mm = String(Math.floor(rec.t / 60)).padStart(2, '0');
           const ss = String(rec.t % 60).padStart(2, '0');
@@ -595,6 +600,144 @@ const Main = (function () {
       list.appendChild(btn);
     }
     $('missions').classList.remove('hidden');
+  }
+
+  // ---- theater of war: the campaign map ------------------------------------------
+  // A procedurally drawn ORIGINAL continent; each arc's territories sit on
+  // it as a marching front. Secured ground fills with the faction color, the
+  // frontline territory pulses ready, everything past it is denied ground.
+
+  let theaterNodes = [];
+
+  function _drawTheater(side, done) {
+    const cv = $('theaterMap');
+    if (!cv) return;
+    const q = cv.getContext('2d');
+    const W = cv.width, H = cv.height;
+    const accent = side === 'nod' ? '#e05038' : '#e0b840';
+    const rng = mulberry(0xC0FFEE);
+    q.fillStyle = '#070b12';
+    q.fillRect(0, 0, W, H);
+    // the landmass: a smoothed ragged blob — an original continent
+    const ccx = W * 0.5, ccy = H * 0.52;
+    const spokes = 44, rad = [];
+    for (let i = 0; i < spokes; i++) rad.push(0.62 + rng() * 0.38);
+    for (let p = 0; p < 2; p++) {
+      for (let i = 0; i < spokes; i++) {
+        rad[i] = (rad[i] + rad[(i + 1) % spokes] + rad[(i + spokes - 1) % spokes]) / 3;
+      }
+    }
+    q.beginPath();
+    for (let i = 0; i <= spokes; i++) {
+      const a = (i % spokes) / spokes * Math.PI * 2;
+      const r = rad[i % spokes];
+      const x = ccx + Math.cos(a) * W * 0.47 * r;
+      const y = ccy + Math.sin(a) * H * 0.46 * r;
+      if (i) q.lineTo(x, y); else q.moveTo(x, y);
+    }
+    q.closePath();
+    q.fillStyle = '#131b11';
+    q.fill();
+    q.strokeStyle = '#2e3c27';
+    q.lineWidth = 2;
+    q.stroke();
+    // interior relief: a few seeded ridges and lakes for texture
+    q.globalAlpha = 0.5;
+    for (let k = 0; k < 7; k++) {
+      const x = W * (0.2 + rng() * 0.6), y = H * (0.2 + rng() * 0.6);
+      q.fillStyle = k & 1 ? '#1a2416' : '#0d141c';
+      q.beginPath();
+      q.ellipse(x, y, 14 + rng() * 26, 8 + rng() * 14, rng() * Math.PI, 0, Math.PI * 2);
+      q.fill();
+    }
+    q.globalAlpha = 1;
+    // survey grid + scanlines
+    q.globalAlpha = 0.08;
+    q.strokeStyle = '#9fae7a';
+    q.lineWidth = 1;
+    for (let x = 0; x <= W; x += 60) { q.beginPath(); q.moveTo(x + 0.5, 0); q.lineTo(x + 0.5, H); q.stroke(); }
+    for (let y = 0; y <= H; y += 60) { q.beginPath(); q.moveTo(0, y + 0.5); q.lineTo(W, y + 0.5); q.stroke(); }
+    q.fillStyle = '#000';
+    for (let y = 0; y < H; y += 3) q.fillRect(0, y, W, 1);
+    q.globalAlpha = 1;
+
+    const arc = MISSIONS.arc(side);
+    const P = m => ({ x: m.terr[0] * W, y: m.terr[1] * H });
+    // the marching front: secured legs solid, the next leg dashed
+    for (let i = 1; i < arc.length; i++) {
+      const a = P(arc[i - 1]), b = P(arc[i]);
+      const litUp = arc[i].n <= done + 1;
+      q.strokeStyle = litUp ? 'rgba(224,184,64,0.55)' : 'rgba(130,130,120,0.18)';
+      q.lineWidth = litUp ? 2 : 1;
+      q.setLineDash(arc[i].n === done + 1 ? [5, 4] : arc[i].n <= done ? [] : [2, 5]);
+      q.beginPath(); q.moveTo(a.x, a.y); q.lineTo(b.x, b.y); q.stroke();
+    }
+    q.setLineDash([]);
+    theaterNodes = [];
+    q.textAlign = 'center';
+    for (const m of arc) {
+      const p = P(m);
+      const state = m.n <= done ? 'done' : m.n === done + 1 ? 'next' : 'locked';
+      if (state === 'done') {
+        q.fillStyle = accent;
+        q.fillRect(p.x - 5, p.y - 5, 10, 10);
+        q.strokeStyle = 'rgba(255,255,255,0.5)';
+        q.lineWidth = 1;
+        q.strokeRect(p.x - 6.5, p.y - 6.5, 13, 13);
+      } else if (state === 'next') {
+        q.strokeStyle = accent;
+        q.lineWidth = 2;
+        q.strokeRect(p.x - 7, p.y - 7, 14, 14);
+        q.fillStyle = accent;
+        q.fillRect(p.x - 3, p.y - 3, 6, 6);
+        q.font = 'bold 9px monospace';
+        q.fillStyle = '#fff2b0';
+        q.fillText('NEXT OP', p.x, p.y - 13);
+      } else {
+        q.fillStyle = '#2a2a26';
+        q.fillRect(p.x - 4, p.y - 4, 8, 8);
+        q.strokeStyle = '#494940';
+        q.lineWidth = 1;
+        q.beginPath();
+        q.moveTo(p.x - 4, p.y - 4); q.lineTo(p.x + 4, p.y + 4);
+        q.moveTo(p.x + 4, p.y - 4); q.lineTo(p.x - 4, p.y + 4);
+        q.stroke();
+      }
+      q.font = '9px monospace';
+      q.fillStyle = state === 'locked' ? '#55554c' : '#c8c0a0';
+      const name = state === 'locked' ? '· · ·' : m.title;
+      q.fillText(name, Math.max(34, Math.min(W - 34, p.x)), Math.min(H - 4, p.y + 19));
+      theaterNodes.push({ x: p.x, y: p.y, m, state });
+    }
+    q.textAlign = 'left';
+  }
+
+  function _wireTheater() {
+    const cv = $('theaterMap');
+    if (!cv) return;
+    const toMap = ev => {
+      const r = cv.getBoundingClientRect();
+      return { x: (ev.clientX - r.left) * cv.width / r.width,
+               y: (ev.clientY - r.top) * cv.height / r.height };
+    };
+    const hit = ev => {
+      const p = toMap(ev);
+      for (const nd of theaterNodes) {
+        if ((nd.x - p.x) ** 2 + (nd.y - p.y) ** 2 < 15 * 15 && nd.state !== 'locked') return nd;
+      }
+      return null;
+    };
+    cv.addEventListener('click', ev => {
+      const nd = hit(ev);
+      if (nd) _showBriefing(nd.m);
+    });
+    cv.addEventListener('mousemove', ev => {
+      const nd = hit(ev);
+      cv.style.cursor = nd ? 'pointer' : 'default';
+      $('theaterCap').textContent = nd
+        ? 'OP ' + nd.m.n + ': ' + nd.m.title + ' · ' + nd.m.sector
+        : 'SELECT YOUR NEXT OPERATION ON THE MAP — OR FROM THE WAR LEDGER BELOW';
+    });
   }
 
   let briefTimer = 0;
@@ -667,6 +810,7 @@ const Main = (function () {
     if (ot === 'escort') out.push('Logistics: no base, no production — the convoy is everything you have');
     if (ot === 'capture') out.push('Rules of engagement: the prize must be taken INTACT — engineers, not artillery');
     if (ot === 'killEconomy') out.push('Targets: the harvest chain — refineries and harvesters; nothing else wins this');
+    if (ot === 'demolish') out.push('Rules of engagement: kill the marked target and get out — the garrison is not the mission');
     return out;
   }
 
@@ -790,9 +934,9 @@ const Main = (function () {
     $('briefSector').textContent = 'SECTOR ' + m.seed + ' · ' + (m.sector || 'UNCHARTED');
     $('briefClass').textContent = mySide === 'gdi'
       ? 'UDC TACTICAL NET — EYES ONLY' : 'SERPENT WHISPERS — FOR THE FAITHFUL';
-    _teletype($('briefBody'), m.brief[mySide]);
+    _teletype($('briefBody'), m.brief);
     $('briefBody').scrollTop = 0;   // the element persists across briefings
-    $('briefObjective').textContent = 'OBJECTIVE: ' + m.objText[mySide];
+    $('briefObjective').textContent = 'OBJECTIVE: ' + m.objText;
     $('briefIntel').innerHTML =
       _briefIntel(m).map(s => `<div>◈ ${s}</div>`).join('');
     _drawBriefMap(m);
@@ -1134,6 +1278,17 @@ const Main = (function () {
       if (dist(esc.x, esc.y, cellCenterX(d2.cx), cellCenterY(d2.cy)) <=
           (ob.radius || 2) * C.CELL) return endGame(true);
     }
+    if (ob.type === 'demolish') {
+      // arms while the target stands; wins when the LAST standing copy of
+      // the type is rubble (capturing it doesn't count — destroy means destroy)
+      const bt = typeof ob.btype === 'object' ? ob.btype[g.humanSide] : ob.btype;
+      let standing = 0;
+      for (const b of g.buildings.values()) {
+        if (b.type === bt) standing++;
+      }
+      if (standing > 0) g._demArmed = true;
+      else if (g._demArmed) return endGame(true);
+    }
   }
 
   function _aiEconomyCount(g) {
@@ -1158,7 +1313,9 @@ const Main = (function () {
     $('pause').classList.add('hidden');
     $('controls').classList.add('hidden');
     game.status = won ? 'won' : 'lost';
-    if (won && game.mission && game.mission.n) MissionProgress.unlockUpTo(game.mission.n);
+    if (won && game.mission && game.mission.n) {
+      MissionProgress.unlockUpTo(game.mission.n, baseSide(game.humanSide));
+    }
     AUDIO.eva(won ? 'missionAccomplished' : 'missionFailed');
     const watched = typeof REPLAY !== 'undefined' && REPLAY.playing;
     if (typeof REPLAY !== 'undefined') {
@@ -1197,7 +1354,7 @@ const Main = (function () {
       // campaign records: fastest win and highest score per operation
       // (genuine wins only — watching an old replay must not set records)
       if (won && !watched && g.mission && g.mission.n) {
-        const key = 'hw_rec_' + g.mission.n;
+        const key = 'hw_rec_' + baseSide(g.humanSide) + '_' + g.mission.n;
         let rec = null;
         try { rec = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) {}
         const newBest = !rec || rec.t === undefined || secs < rec.t || score > rec.s;
@@ -1295,7 +1452,7 @@ const Main = (function () {
   // REPLAY module then feeds the recorded orders at their original ticks
   function startReplay(meta) {
     AUDIO.init();
-    const mission = meta.mission ? MISSIONS[meta.mission - 1] : null;
+    const mission = meta.mission ? MISSIONS.arc(meta.side)[meta.mission - 1] : null;
     const skirm = meta.skirmish ? DIFF_PRESETS[meta.skirmish] : null;
     startGame(meta.side, { seed: meta.seed, mission, skirmish: skirm, sk: meta.sk || undefined });
   }
