@@ -718,50 +718,77 @@ const TERRAINPAINT = (function () {
       }
     }
 
-    // bridge decks over the water (planks run with the world grid, so decks
-    // join seamlessly across cells; rails and end aprons mark the crossings)
+    // bridge decks: a stone military crossing. The deck runs seam-free
+    // across cells (joints and ruts follow the WORLD grid); parapets sit
+    // only on true outer edges; flared abutments and wing walls spill onto
+    // the bank cells at both ends so the span meets the land like a built
+    // thing; contact shadows over the water tie the deck to the river.
     for (let cy = 0; cy < H; cy++) {
       for (let cx = 0; cx < W; cx++) {
         if (g.terrain[cellIdx(cx, cy)] !== T_BRIDGE) continue;
         const bx = cx * CS, by = cy * CS;
         const up = inMap(cx, cy - 1) && g.terrain[cellIdx(cx, cy - 1)] === T_BRIDGE;
         const dn = inMap(cx, cy + 1) && g.terrain[cellIdx(cx, cy + 1)] === T_BRIDGE;
-        // two-lane decks: rails and beams only on true OUTER edges, the deck
-        // itself runs seam-free into a neighboring bridge cell
         const lf = inMap(cx - 1, cy) && g.terrain[cellIdx(cx - 1, cy)] === T_BRIDGE;
         const rt = inMap(cx + 1, cy) && g.terrain[cellIdx(cx + 1, cy)] === T_BRIDGE;
-        // under-deck shade on the visible waterline slivers
-        if (!lf) P(q, bx + 1, by, 1, CS, 'rgba(6,10,16,0.4)');
-        if (!rt) P(q, bx + 22, by, 1, CS, 'rgba(6,10,16,0.4)');
-        // timber deck
-        const x0 = lf ? 0 : 2, x1 = rt ? CS : 22;
-        P(q, bx + x0, by, x1 - x0, CS, '#7d5f3c');
+        const wL = inMap(cx - 1, cy) && g.terrain[cellIdx(cx - 1, cy)] === T_WATER;
+        const wR = inMap(cx + 1, cy) && g.terrain[cellIdx(cx + 1, cy)] === T_WATER;
+
+        // the deck sits ON something: contact shadow over the water (sun
+        // from the NW, so the east side carries the weight)
+        if (wL) P(q, bx - 2, by, 2, CS, 'rgba(5,9,14,0.3)');
+        if (wR) {
+          P(q, bx + CS, by, 3, CS, 'rgba(5,9,14,0.45)');
+          P(q, bx + CS + 3, by, 1, CS, 'rgba(5,9,14,0.2)');
+        }
+
+        // stone deck: weathered slab with broad mottling + fine flecks
+        P(q, bx, by, CS, CS, '#868173');
+        for (let k = 0; k < 4; k++) {
+          const mx = (h2(cx + k, cy, seed ^ 0xb10) * 16) | 0;
+          const my = (h2(cy + k, cx, seed ^ 0xb1f) * 17) | 0;
+          P(q, bx + mx, by + my, 5 + (k & 3), 4, k & 1 ? 'rgba(120,115,101,0.5)' : 'rgba(145,140,127,0.4)');
+        }
+        for (let k = 0; k < 10; k++) {
+          const fx2 = (h2(cx * 3 + k, cy, seed ^ 0xb11) * 22) | 0;
+          const fy2 = (h2(cy * 5 + k, cx, seed ^ 0xb12) * 22) | 0;
+          P(q, bx + 1 + fx2, by + 1 + fy2, 1 + (k & 1), 1, k & 2 ? '#918b7e' : '#787264');
+        }
+        // transverse expansion joints, world-aligned so they run across lanes
         for (let y = 0; y < CS; y++) {
-          if ((by + y) % 4 === 3) {
-            const sx0 = lf ? 0 : 3, sx1 = rt ? CS : 21;
-            P(q, bx + sx0, by + y, sx1 - sx0, 1, '#67492c');   // plank seams
-          }
+          if ((by + y) % 6 === 5) P(q, bx, by + y, CS, 1, '#767061');
         }
-        for (let k = 0; k < 6; k++) {                                       // worn grain
-          const gy2 = by + ((h2(cx * 7 + k, cy, seed ^ 0xbd1) * 22) | 0);
-          P(q, bx + 4 + ((h2(k, cx + cy, seed ^ 0xbd2) * 14) | 0), gy2, 2 + (k & 1), 1, '#8d6d46');
+        // wheel-worn ruts down the lane
+        P(q, bx + 8, by, 2, CS, 'rgba(74,68,58,0.5)');
+        P(q, bx + 15, by, 2, CS, 'rgba(74,68,58,0.35)');
+
+        // parapets on the true outer edges, with drainage crenels
+        if (!lf) {
+          P(q, bx, by, 3, CS, '#6e685c');
+          P(q, bx, by, 1, CS, '#a19a8b');
+          for (let y = 2; y < CS; y += 7) P(q, bx, by + y, 3, 2, '#59544a');
         }
-        // edge beams + rail posts
-        if (!lf) P(q, bx + 2, by, 2, CS, '#5b452a');
-        if (!rt) P(q, bx + 20, by, 2, CS, '#4e3a23');
-        for (let y = 1; y < CS; y += 6) {
-          if (!lf) {
-            P(q, bx + 1, by + y, 2, 3, '#3d2e1c');
-            P(q, bx + 1, by + y, 2, 1, '#5b452a');
-          }
-          if (!rt) {
-            P(q, bx + 21, by + y, 2, 3, '#3d2e1c');
-            P(q, bx + 21, by + y, 2, 1, '#5b452a');
-          }
+        if (!rt) {
+          P(q, bx + CS - 3, by, 3, CS, '#645e53');
+          P(q, bx + CS - 1, by, 1, CS, '#4f4a41');
+          for (let y = 2; y < CS; y += 7) P(q, bx + CS - 3, by + y, 3, 2, '#59544a');
         }
-        // end aprons flare onto the banks
-        if (!up) { P(q, bx, by, CS, 2, '#8a6a42'); P(q, bx, by, CS, 1, '#9c7a4e'); }
-        if (!dn) { P(q, bx, by + CS - 2, CS, 2, '#8a6a42'); P(q, bx, by + CS - 1, CS, 1, '#6a4f31'); }
+
+        // abutments: a stone threshold slab on the bank plus flared wing
+        // walls, painted ONTO the neighboring land cell so deck and ground
+        // meet seamlessly (the mapgen road approach carries on from here)
+        const apron = (edgeY, dirUp) => {
+          const oy = dirUp ? edgeY - 4 : edgeY;
+          const ex0 = lf ? 0 : -3, ex1 = rt ? CS : CS + 3;
+          P(q, bx + ex0, oy, ex1 - ex0, 4, '#847e6f');
+          P(q, bx + ex0, oy + (dirUp ? 3 : 0), ex1 - ex0, 1, '#968f7f');
+          P(q, bx + ex0, oy + (dirUp ? 0 : 3), ex1 - ex0, 1, 'rgba(48,44,38,0.45)');
+          const wy = oy + (dirUp ? -3 : 1);
+          if (!lf) { P(q, bx - 4, wy, 4, 6, '#6e685c'); P(q, bx - 4, wy, 1, 6, '#a19a8b'); }
+          if (!rt) { P(q, bx + CS, wy, 4, 6, '#645e53'); P(q, bx + CS + 3, wy, 1, 6, '#4f4a41'); }
+        };
+        if (!up) apron(by, true);
+        if (!dn) apron(by + CS, false);
       }
     }
 

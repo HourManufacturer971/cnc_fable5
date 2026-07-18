@@ -974,14 +974,20 @@ MISSIONS.arc = function (side) {
 
   function _reinforce(g, spec) {
     const hp = g.startPos.human;
-    const org = _edgeSpot(g, spec.at, hp);
+    const shore = !!(g.mission && g.mission.shore);
+    // shore landings put in EAST of the base column — the home chrysalite
+    // field grows on the far side of the start, and boats grounding beside
+    // it had squads wading crystal on their way up the beach
+    const anchor = shore ? { cx: hp.cx + 6, cy: hp.cy } : hp;
+    const org = _edgeSpot(g, spec.at, anchor);
     const types = _side(spec.types, g.humanSide) || [];
     const units = _spawnSquad(g, g.humanSide, types, org);
     // the column gathers south of the base pad — except on shore maps, where
     // south is the surf: there it forms up on the landward side, so a landed
     // MCV has honest ground to deploy on instead of a strip of wet sand
-    const gy = g.mission && g.mission.shore ? hp.cy - 4 : hp.cy + 3;
-    units.forEach((u, i) => orderMove(u, hp.cx + (i % 3) - 1, gy + ((i / 3) | 0)));
+    const gx = shore ? hp.cx + 4 : hp.cx;
+    const gy = shore ? hp.cy - 3 : hp.cy + 3;
+    units.forEach((u, i) => orderMove(u, gx + (i % 3) - 1, gy + ((i / 3) | 0)));
     if (units.length) {
       _ping(g, cellCenterX(org.cx), cellCenterY(org.cy), 'reinforce');
       AUDIO.eva('reinforcements');

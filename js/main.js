@@ -616,9 +616,21 @@ const Main = (function () {
     const W = cv.width, H = cv.height;
     const accent = side === 'nod' ? '#e05038' : '#e0b840';
     const rng = mulberry(0xC0FFEE);
-    q.fillStyle = '#070b12';
+    // --- the sea: deep water with lapping wave dashes -----------------------
+    q.fillStyle = '#081019';
     q.fillRect(0, 0, W, H);
-    // the landmass: a smoothed ragged blob — an original continent
+    q.strokeStyle = 'rgba(120,160,200,0.05)';
+    q.lineWidth = 1;
+    for (let y = 6; y < H; y += 9) {
+      q.beginPath();
+      for (let x = 0; x < W; x += 26) {
+        const j = ((x * 13 + y * 7) % 11) - 5;
+        q.moveTo(x + j, y + 0.5); q.lineTo(x + j + 12, y + 0.5);
+      }
+      q.stroke();
+    }
+    // --- the landmass: the same original continent, kept as a Path2D so
+    // geography and the war overlay can clip to the coast -------------------
     const ccx = W * 0.5, ccy = H * 0.52;
     const spokes = 44, rad = [];
     for (let i = 0; i < spokes; i++) rad.push(0.62 + rng() * 0.38);
@@ -627,30 +639,117 @@ const Main = (function () {
         rad[i] = (rad[i] + rad[(i + 1) % spokes] + rad[(i + spokes - 1) % spokes]) / 3;
       }
     }
-    q.beginPath();
+    const blob = new Path2D();
     for (let i = 0; i <= spokes; i++) {
       const a = (i % spokes) / spokes * Math.PI * 2;
       const r = rad[i % spokes];
       const x = ccx + Math.cos(a) * W * 0.47 * r;
       const y = ccy + Math.sin(a) * H * 0.46 * r;
-      if (i) q.lineTo(x, y); else q.moveTo(x, y);
+      if (i) blob.lineTo(x, y); else blob.moveTo(x, y);
     }
-    q.closePath();
-    q.fillStyle = '#131b11';
-    q.fill();
-    q.strokeStyle = '#2e3c27';
-    q.lineWidth = 2;
-    q.stroke();
-    // interior relief: a few seeded ridges and lakes for texture
-    q.globalAlpha = 0.5;
-    for (let k = 0; k < 7; k++) {
+    blob.closePath();
+    q.strokeStyle = 'rgba(110,150,190,0.10)';   // coastal shelf glow
+    q.lineWidth = 7;
+    q.stroke(blob);
+    const landG = q.createLinearGradient(0, 0, 0, H);
+    landG.addColorStop(0, '#161f15');
+    landG.addColorStop(1, '#1e2517');
+    q.fillStyle = landG;
+    q.fill(blob);
+    q.strokeStyle = '#4a5340';
+    q.lineWidth = 1.5;
+    q.stroke(blob);
+    // --- interior geography, clipped to the coast ---------------------------
+    q.save();
+    q.clip(blob);
+    for (let k = 0; k < 7; k++) {               // lowland / marsh tints
       const x = W * (0.2 + rng() * 0.6), y = H * (0.2 + rng() * 0.6);
-      q.fillStyle = k & 1 ? '#1a2416' : '#0d141c';
+      q.globalAlpha = 0.4;
+      q.fillStyle = k & 1 ? '#20291a' : '#141d12';
       q.beginPath();
       q.ellipse(x, y, 14 + rng() * 26, 8 + rng() * 14, rng() * Math.PI, 0, Math.PI * 2);
       q.fill();
     }
     q.globalAlpha = 1;
+    q.strokeStyle = 'rgba(90,130,180,0.5)';     // rivers run to the coast
+    q.lineWidth = 1.3;
+    for (let r = 0; r < 3; r++) {
+      let x = W * (0.3 + rng() * 0.4), y = H * (0.3 + rng() * 0.35);
+      const dx = x < ccx ? -1 : 1, dy = y < ccy ? -0.4 : 0.7;
+      q.beginPath(); q.moveTo(x, y);
+      for (let s = 0; s < 26; s++) {
+        x += dx * (6 + rng() * 9);
+        y += dy * (3 + rng() * 6) + (rng() - 0.5) * 8;
+        q.lineTo(x, y);
+      }
+      q.stroke();
+    }
+    for (let c = 0; c < 3; c++) {               // mountain chains
+      const x0 = W * (0.22 + rng() * 0.5), y0 = H * (0.2 + rng() * 0.45);
+      const ang = rng() * Math.PI;
+      const peaks = 6 + ((rng() * 6) | 0);
+      for (let i = 0; i < peaks; i++) {
+        const px = x0 + Math.cos(ang) * i * 11 + (rng() - 0.5) * 8;
+        const py = y0 + Math.sin(ang) * i * 5 + (rng() - 0.5) * 6;
+        q.fillStyle = '#39422f';
+        q.beginPath();
+        q.moveTo(px - 4, py + 3); q.lineTo(px, py - 4); q.lineTo(px + 4, py + 3);
+        q.closePath(); q.fill();
+        q.strokeStyle = 'rgba(200,210,190,0.3)';
+        q.lineWidth = 1;
+        q.beginPath(); q.moveTo(px, py - 4); q.lineTo(px + 2, py - 1); q.stroke();
+      }
+    }
+    q.fillStyle = 'rgba(46,66,38,0.8)';         // forest stipple
+    for (let f = 0; f < 6; f++) {
+      const x = W * (0.18 + rng() * 0.64), y = H * (0.2 + rng() * 0.6);
+      for (let i = 0; i < 12; i++) {
+        q.fillRect(x + (rng() - 0.5) * 30, y + (rng() - 0.5) * 16, 2, 2);
+      }
+    }
+    // towns with original names, threaded by supply roads — a lived-in
+    // country, not an empty blob (kept clear of the op markers)
+    const NAMES = ['VELMOR', 'KARSA POINT', 'OSTHOLM', 'FERNGATE', 'MARROWICK',
+      'SALTMERE', 'CINDER HALT', 'HALVEN', 'GREYFORD', 'THORNVAL'];
+    const arcPts = MISSIONS.arc(side).map(m2 => ({ x: m2.terr[0] * W, y: m2.terr[1] * H }));
+    const towns = [];
+    for (let t = 0; t < NAMES.length && towns.length < 8; t++) {
+      for (let a = 0; a < 14; a++) {
+        const x = W * (0.12 + rng() * 0.76), y = H * (0.14 + rng() * 0.7);
+        if (!q.isPointInPath(blob, x, y)) continue;
+        let ok = true;
+        for (const n2 of arcPts) if (Math.hypot(x - n2.x, y - n2.y) < 34) { ok = false; break; }
+        for (const tw of towns) if (Math.hypot(x - tw.x, y - tw.y) < 46) { ok = false; break; }
+        if (ok) { towns.push({ x, y, name: NAMES[t] }); break; }
+      }
+    }
+    q.strokeStyle = 'rgba(150,150,130,0.16)';
+    q.lineWidth = 1;
+    q.setLineDash([2, 3]);
+    for (let i = 1; i < towns.length; i++) {
+      let nearest = 0, nd = Infinity;
+      for (let j2 = 0; j2 < i; j2++) {
+        const d2 = Math.hypot(towns[i].x - towns[j2].x, towns[i].y - towns[j2].y);
+        if (d2 < nd) { nd = d2; nearest = j2; }
+      }
+      q.beginPath();
+      q.moveTo(towns[i].x, towns[i].y);
+      q.lineTo(towns[nearest].x, towns[nearest].y);
+      q.stroke();
+    }
+    q.setLineDash([]);
+    q.textAlign = 'center';
+    for (const tw of towns) {
+      q.fillStyle = '#8f957c';
+      q.fillRect(tw.x - 1.5, tw.y - 1.5, 3, 3);
+      q.strokeStyle = 'rgba(143,149,124,0.5)';
+      q.lineWidth = 1;
+      q.strokeRect(tw.x - 3, tw.y - 3, 6, 6);
+      q.font = '7px monospace';
+      q.fillStyle = 'rgba(150,156,130,0.7)';
+      q.fillText(tw.name, tw.x, tw.y - 6);
+    }
+    q.restore();
     // survey grid + scanlines
     q.globalAlpha = 0.08;
     q.strokeStyle = '#9fae7a';
@@ -663,6 +762,50 @@ const Main = (function () {
 
     const arc = MISSIONS.arc(side);
     const P = m => ({ x: m.terr[0] * W, y: m.terr[1] * H });
+    // --- the state of the war: home ground shaded in the faction color, a
+    // toothed front line at the frontier between secured and enemy country --
+    if (done < arc.length && arc.length > 1) {
+      const nxt = P(arc[done]);
+      const prv = done > 0 ? P(arc[done - 1]) : null;
+      const ax = prv ? nxt.x - prv.x : P(arc[1]).x - P(arc[0]).x;
+      const ay = prv ? nxt.y - prv.y : P(arc[1]).y - P(arc[0]).y;
+      const al = Math.hypot(ax, ay) || 1;
+      const ux = ax / al, uy = ay / al;
+      const M = prv
+        ? { x: (nxt.x + prv.x) / 2, y: (nxt.y + prv.y) / 2 }
+        : { x: nxt.x - ux * 26, y: nxt.y - uy * 26 };
+      q.save();
+      q.clip(blob);
+      q.translate(M.x, M.y);
+      q.rotate(Math.atan2(uy, ux));
+      q.fillStyle = accent;                      // liberated / faithful ground
+      q.globalAlpha = 0.07;
+      q.fillRect(-900, -900, 900, 1800);
+      q.globalAlpha = 0.05;
+      q.strokeStyle = accent;
+      q.lineWidth = 1;
+      for (let k = -880; k < 0; k += 14) {
+        q.beginPath(); q.moveTo(k, -900); q.lineTo(k + 500, 900); q.stroke();
+      }
+      q.globalAlpha = 0.85;                      // the front itself
+      q.strokeStyle = accent;
+      q.lineWidth = 2;
+      q.setLineDash([8, 5]);
+      q.beginPath();
+      for (let fy = -420; fy <= 420; fy += 16) {
+        const jx = (((fy * 37) | 0) % 7) - 3;
+        if (fy === -420) q.moveTo(jx, fy); else q.lineTo(jx, fy);
+      }
+      q.stroke();
+      q.setLineDash([]);
+      q.lineWidth = 1;
+      for (let ty = -400; ty <= 400; ty += 26) { // teeth point at the enemy
+        const jx = (((ty * 37) | 0) % 7) - 3;
+        q.beginPath(); q.moveTo(jx, ty); q.lineTo(jx + 6, ty); q.stroke();
+      }
+      q.globalAlpha = 1;
+      q.restore();
+    }
     // the marching front: secured legs solid, the next leg dashed
     for (let i = 1; i < arc.length; i++) {
       const a = P(arc[i - 1]), b = P(arc[i]);
@@ -880,6 +1023,15 @@ const Main = (function () {
     };
     const you = fake.startPos[mySide] || fake.startPos.human;
     const foe = fake.startPos[mySide === 'gdi' ? 'nod' : 'gdi'] || fake.startPos.ai;
+    // markers wear FACTION colors: a Serpent commander is RED on their own
+    // survey and the Coalition enemy is gold — never the other way around
+    const meRed = baseSide(mySide) === 'nod';
+    const YOU = meRed
+      ? { fill: '#ff2418', edge: '#ffb4a4', label: '#ff9c88', ring: 'rgba(255,60,40,0.5)' }
+      : { fill: '#ffd23c', edge: '#fff2b0', label: '#ffe28a', ring: 'rgba(255,210,60,0.5)' };
+    const FOE = meRed
+      ? { line: '#ffd23c', label: '#ffe28a' }
+      : { line: '#ff4030', label: '#ff6a50' };
     // neutral prizes: supply depots + the village
     q.fillStyle = '#e8e6da';
     if (fake.decor && fake.decor.depots) {
@@ -901,23 +1053,23 @@ const Main = (function () {
       q.strokeRect(X(foe.cx) - 4, X(foe.cy) - 4, 8, 8);
       label(X(foe.cx), X(foe.cy) - 8, 'BEACON', '#ffe28a');
     } else {
-      q.strokeStyle = '#ff4030';
+      q.strokeStyle = FOE.line;
       q.lineWidth = 2;
       q.beginPath();
       q.moveTo(X(foe.cx) - 6, X(foe.cy)); q.lineTo(X(foe.cx) + 6, X(foe.cy));
       q.moveTo(X(foe.cx), X(foe.cy) - 6); q.lineTo(X(foe.cx), X(foe.cy) + 6);
       q.stroke();
       q.strokeRect(X(foe.cx) - 4, X(foe.cy) - 4, 8, 8);
-      label(X(foe.cx), X(foe.cy) - 9, 'ENEMY', '#ff6a50');
+      label(X(foe.cx), X(foe.cy) - 9, 'ENEMY', FOE.label);
     }
-    q.fillStyle = '#ffd23c';
+    q.fillStyle = YOU.fill;
     q.fillRect(X(you.cx) - 3, X(you.cy) - 3, 6, 6);
-    q.strokeStyle = '#fff2b0';
+    q.strokeStyle = YOU.edge;
     q.lineWidth = 1;
     q.strokeRect(X(you.cx) - 4.5, X(you.cy) - 4.5, 9, 9);
-    label(X(you.cx), X(you.cy) + 14, m.holdout ? 'HOLD HERE' : 'YOUR FORCE', '#ffe28a');
+    label(X(you.cx), X(you.cy) + 14, m.holdout ? 'HOLD HERE' : 'YOUR FORCE', YOU.label);
     if (m.holdout) {
-      q.strokeStyle = 'rgba(255,210,60,0.5)';
+      q.strokeStyle = YOU.ring;
       q.beginPath(); q.arc(X(you.cx), X(you.cy), 11 * P, 0, Math.PI * 2); q.stroke();
     }
     if (m.objective.type === 'harvest') {

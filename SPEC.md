@@ -83,7 +83,7 @@ define **exactly** the globals listed and may freely call any global listed for 
 | audio.js | `AUDIO` (`init, play, eva, ack, setEnabled, enabled, setVoiceEnabled, voiceEnabled, tickCredits`) |
 | music.js | `MUSIC` (`start(side), stop, setEnabled, enabled` — original procedural soundtrack, twelve tracks in faction playlists: Coalition T1–T8, Serpent Order S1–S4 ritual tracks; the session's first battle opens on the faction theme, later starts re-roll; rotates after two loops) |
 | missions.js | `MISSIONS` (campaign definitions: seed, credits, AI knobs, objective, per-side briefings), `MissionProgress` (localStorage `hw_progress` unlock tracking) |
-| map.js | `MAPGEN` (`generate(game, seed, opts?)` — `opts.holdout` centers the human start inside a three-gated rock fortress ring with thin chrysalite inside and rich fields beyond; `opts.shore` floods the southern edge with a rolling 3-7 row sea under a two-row bare-sand beach (own rng stream, carved after fields so nothing recolonizes the waterline; home/mid fields are held above it, and the waterfall scan stops short of the sea)) |
+| map.js | `MAPGEN` (`generate(game, seed, opts?)` — `opts.holdout` centers the human start inside a three-gated rock fortress ring (gate mouths stashed on `g.decor.gates`); the plateau interior is scrubbed after field placement to ONE finite pocket hugging the wall away from the enemy — no other crystal, no blossom trees, bare gate mouths — so the base is buildable and the passes defensible; the midfield fallback goes to the hs/as midpoint, never the map center (which IS the fortress). `opts.shore` floods the southern edge with a rolling 3-7 row sea under a two-row bare-sand beach (own rng stream, carved after fields so nothing recolonizes the waterline; home/mid fields are held above it, and the waterfall scan stops short of the sea). Bridges get short worn dirt-road approaches stamped off both ends) |
 | path.js | `findPath(unit, destCx, destCy, opts?) -> [{cx,cy},...]` |
 | fog.js | `Fog` (`init, revealCircle, update, isExplored`) |
 | sim.js | `Sim` (`tick`), `orderMove`, `orderAttack`, `orderHarvest`, `orderDeploy`, `orderEnter`, `orderBoard`, `unloadCargo`, `stopUnit`, `killEntity`, `fireIon`, `fireNuke`, `spawnEffect`, `spawnBullet` |
@@ -467,11 +467,17 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `MISSIONS.nod`, fetched via `MISSIONS.arc(side)`) — classic structure, original
   fiction. Mission defs are single-faction now (`brief` is a paragraph array,
   `objText` a string) and carry `terr: [x,y]` territory coords for the THEATER
-  OF WAR screen (main.js `_drawTheater`): a procedurally drawn original continent
-  where secured territories fill with the faction color along the marching
-  front, the frontline territory is tagged NEXT OP (clickable → briefing), and
-  everything beyond is denied ground; the accessible "war ledger" rows remain
-  beneath it. `MissionProgress` is per faction (`hw_progress_gdi/nod`,
+  OF WAR screen (main.js `_drawTheater`): a procedurally drawn original country
+  at war — sea with wave dashes and a coastal shelf around a Path2D coastline,
+  rivers running to the coast, mountain chains, forest stipple, and eight
+  towns with ORIGINAL names (VELMOR, KARSA POINT, OSTHOLM, …) threaded by
+  dashed supply roads; the war state reads at a glance: home ground behind the
+  front is tinted + hatched in the faction color and a bold toothed FRONT LINE
+  (teeth toward the enemy) crosses the country at the frontier between the
+  last secured op and the next, which is tagged NEXT OP (clickable →
+  briefing); the accessible "war ledger" rows remain beneath it. The briefing
+  tactical survey (`_drawBriefMap`) wears FACTION colors: a Serpent commander
+  is RED and the Coalition enemy GOLD, never the seat-based inverse. `MissionProgress` is per faction (`hw_progress_gdi/nod`,
   `get/unlockUpTo/unlocked` take a side) and records live at
   `hw_rec_<side>_<n>`. New objective type `demolish {btype}` (arms while a
   building of the type stands anywhere, wins when the last is rubble — capture
@@ -559,8 +565,10 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_handshake()` — the host rolls a FRESH seed and the match relaunches over the
   same connection, sides kept, no new code exchange. `NET.onRematch('remote'|'gone')`
   drives the button labels ("opponent is ready" / hide when the peer leaves);
-  `_peerGone` outside a live game only tears down + notifies. PROTO = 13 (bumped
-  for the landing coastline: `shore` map gen, crystal-free reinforcement
+  `_peerGone` outside a live game only tears down + notifies. PROTO = 14 (bumped
+  for the holdout interior scrub + gate clearing, midfield fallback off the
+  map center, bridge road approaches, and the shore landing shifted east; 13
+  covered the landing coastline: `shore` map gen, crystal-free reinforcement
   spawns, landward rally on shore maps; 12 covered the classic first-mission
   redesigns: per-mission `allow` tech gates,
   `aiNoSell`, honored `aiCredits: 0`, objective-building sale protection; 11

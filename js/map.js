@@ -395,6 +395,15 @@ const MAPGEN = (function () {
         if (g.terrain[idx] === T_WATER) { g.terrain[idx] = T_BRIDGE; cells.push({ cx: bx, cy: y }); }
       }
     }
+    // a crossing carries traffic: short worn dirt approaches run off both
+    // ends onto the banks, so the deck reads as part of a road, not a plank
+    // floating on the river
+    if (cells.length) {
+      let yTop = Infinity, yBot = -Infinity;
+      for (const c of cells) { yTop = Math.min(yTop, c.cy); yBot = Math.max(yBot, c.cy); }
+      road(g, pick.x, Math.max(1, yTop - 3), pick.x, yTop - 1);
+      road(g, pick.x, yBot + 1, pick.x, Math.min(H - 2, yBot + 3));
+    }
     return cells.length ? cells : null;
   }
 
@@ -468,6 +477,12 @@ const MAPGEN = (function () {
         if (!inGate) g.terrain[cellIdx(x, y)] = T_ROCK;
       }
     }
+    // the gate mouths are load-bearing gameplay: missions and cleanup passes
+    // need to know where they are (walls, guns and clear footing go here)
+    g.decor.gates = gates.map(ga => ({
+      cx: clamp(Math.round(c.cx + Math.cos(ga) * 10.5), 1, C.MAP_W - 2),
+      cy: clamp(Math.round(c.cy + Math.sin(ga) * 10.5), 1, C.MAP_H - 2),
+    }));
   }
 
   // ---- constraint passes -----------------------------------------------------
@@ -909,7 +924,10 @@ const MAPGEN = (function () {
         const score = openN - elev[ti] * 8;
         if (!bestC || score > bestC.score) bestC = { x: mx, y: my, score };
       }
-      if (!bestC) bestC = { x: W >> 1, y: H >> 1, score: 0 };
+      // fallback goes to the hs/as MIDPOINT, not the map center — on holdout
+      // maps the center IS the player's fortress, and the old fallback parked
+      // a blue field (blossom and all) in the middle of the base
+      if (!bestC) bestC = { x: (hs.cx + as.cx) >> 1, y: (hs.cy + as.cy) >> 1, score: 0 };
       fieldCenters.push(bestC);
       // 50..80 classic; large maps grow each field a quarter richer — the
       // longer haul across a big map has to pay for itself
@@ -917,6 +935,44 @@ const MAPGEN = (function () {
       // the first (most contested) midfield is BLUE chrysalite — worth double
       // at the refinery; big maps hide a second blue pocket out in the wilds
       placeField(g, rng, bestC.x, bestC.y, count, starts, reach, isBlue);
+    }
+
+    // holdout: the plateau interior is a BASE, not a mine. One modest pocket
+    // hugging the wall away from the enemy is all the crystal inside; every
+    // other vein — and any blossom tree that would regrow one — is scrubbed,
+    // and the three gate mouths are kept bare so walls and guns have footing.
+    if (opts.holdout) {
+      const pa = Math.atan2(hs.cy - as.cy, hs.cx - as.cx);
+      const pc = {
+        x: clamp(Math.round(hs.cx + Math.cos(pa) * 6), 2, W - 3),
+        y: clamp(Math.round(hs.cy + Math.sin(pa) * 6), 2, H - 3),
+      };
+      for (let cy2 = Math.max(1, hs.cy - 13); cy2 <= Math.min(H - 2, hs.cy + 13); cy2++) {
+        for (let cx2 = Math.max(1, hs.cx - 13); cx2 <= Math.min(W - 2, hs.cx + 13); cx2++) {
+          if (distC(cx2, cy2, hs.cx, hs.cy) > 12.5) continue;
+          const i2 = cellIdx(cx2, cy2);
+          // NO blossom survives inside — a regrowing heart would slowly
+          // recarpet the build space the scrub just reclaimed. The pocket
+          // is finite by design ("it will not carry you fifteen minutes").
+          if (g.terrain[i2] === T_BLOSSOM) g.terrain[i2] = T_GRASS;
+          if (distC(cx2, cy2, pc.x, pc.y) <= 4.2) continue;   // the pocket's crystal survives
+          g.tib[i2] = 0;
+          if (g.tibType) g.tibType[i2] = 0;
+        }
+      }
+      for (const gt of (g.decor.gates || [])) {
+        for (let dy = -4; dy <= 4; dy++) {
+          for (let dx = -4; dx <= 4; dx++) {
+            if (dx * dx + dy * dy > 18) continue;
+            const x2 = gt.cx + dx, y2 = gt.cy + dy;
+            if (x2 < 1 || y2 < 1 || x2 >= W - 1 || y2 >= H - 1) continue;
+            const i2 = cellIdx(x2, y2);
+            g.tib[i2] = 0;
+            if (g.tibType) g.tibType[i2] = 0;
+            if (g.terrain[i2] === T_BLOSSOM || g.terrain[i2] === T_TREE) g.terrain[i2] = T_GRASS;
+          }
+        }
+      }
     }
 
     // guaranteed tiberium-free route between the bases (mirrors the always-

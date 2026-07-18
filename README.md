@@ -296,8 +296,10 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   harvester traffic stops wedging head-to-head
 - **Two campaigns, one war** — the UDC counter-offensive and the Serpent
   ascension are separate ten-mission arcs with their own stories, fought
-  across a Theater of War map in the classic style — all of it original
-  Harvest War fiction
+  across a Theater of War map drawn like a real country under invasion:
+  a coastline, rivers, mountain ranges, named towns on supply roads, your
+  liberated ground shaded in faction colors, and a toothed front line
+  marching op by op — all of it original Harvest War fiction
 - **First missions the classic way** — the UDC opens with a staged shore
   landing on a real coastline: open sea spans the southern edge, your
   rifle team starts on the sand, and the second boat and the MCV come in
