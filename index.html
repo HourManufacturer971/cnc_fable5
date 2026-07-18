@@ -86,8 +86,27 @@
   <div id="missions" class="overlay hidden">
     <div class="panel">
       <h2 id="missionsTitle">OPERATIONS</h2>
+      <canvas id="theaterMap" width="620" height="280"></canvas>
+      <div id="theaterCap"></div>
+      <div id="missionList"></div>
+      <button id="btnMissionsBack" class="backBtn">Back</button>
+    </div>
+  </div>
+
+  <div id="skirmish" class="overlay hidden">
+    <div class="panel">
+      <h2>SKIRMISH SETUP</h2>
+      <p class="hint">One battle, your rules &mdash; pick a side and shape the fight.</p>
+      <div id="skSideRow">
+        <button id="skSideGdi" class="sel">UDC</button>
+        <button id="skSideNod">Serpent Order</button>
+      </div>
       <div id="skOpts">
-        <span class="skTitle">SKIRMISH SETUP</span>
+        <label>Difficulty <select id="skDiff">
+          <option value="EASY">Easy</option>
+          <option value="NORMAL" selected>Normal</option>
+          <option value="HARD">Hard</option>
+        </select></label>
         <label>Combatants <select id="skPlayers">
           <option value="1v1" selected>You vs AI</option>
           <option value="1v2">You vs 2 AI</option>
@@ -116,10 +135,8 @@
         </select></label>
         <label>Seed <input id="skSeed" type="text" inputmode="numeric" maxlength="10" placeholder="random" spellcheck="false"></label>
       </div>
-      <canvas id="theaterMap" width="620" height="280"></canvas>
-      <div id="theaterCap"></div>
-      <div id="missionList"></div>
-      <button id="btnMissionsBack" class="backBtn">Back</button>
+      <button id="btnSkLaunch">Commence Battle</button>
+      <button id="btnSkBack" class="backBtn">Back</button>
     </div>
   </div>
 

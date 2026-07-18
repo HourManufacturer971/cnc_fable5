@@ -1074,8 +1074,12 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   with `Render.frame`. Pause when menu open (`game.paused`).
 - Menu DOM (#menu overlays in index.html): title screen with the two faction emblems
   (canvas-drawn logos injected), faction buttons UDC / Serpent Order → Operations
-  (a SKIRMISH SETUP strip `#skOpts`, three SKIRMISH difficulty rows, then the campaign
-  ops) → Briefing → game. The briefing is a full sitrep screen (main.js
+  (the theater map, ONE accent-highlighted SKIRMISH link row, then the campaign
+  ops) → Briefing → game. The skirmish link opens the dedicated `#skirmish`
+  window (`_showSkirmish`): a settings sheet with a UDC/Serpent side toggle,
+  a DIFFICULTY select (Easy/Normal/Hard — the old three ledger rows), the
+  full `#skOpts` option set, `#btnSkLaunch` (Commence Battle) and Back (which
+  returns to the theater that opened it, tracked in `skFrom`). The briefing is a full sitrep screen (main.js
   `_showBriefing`): OP title + a per-mission `sector` stamp, a faction-styled
   classification bar, the brief paragraphs TELETYPED (the untyped tail lives in
   `visibility:hidden` spans so `textContent` is always complete — click the body
@@ -1090,16 +1094,18 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   Restart mission, Abort mission, a `#seedLine` "Map seed N" footer for sharing);
   score screen (+ Rematch in MP). The main menu shows Resume Battle when a compatible
   `hw_save` exists. Esc toggles.
-- **Skirmish setup** (`#skOpts`, skirmish only — missions/MP ignore it): COMBATANTS
-  (`You vs AI` / `You vs 2 AI` / `You vs 3 AI` free-for-alls, or `Watch 2-4 AI`
-  spectator battles), MAP (Classic 64×64 / Large 88×88), starting funds
-  3000/5000/8000/12000 (applies to EVERY war chest, then the EASY/HARD preset still
-  overrides the AIs'), crates ON/OFF (`game._noCrates` gates only the random-drop roll
-  in `_tickCrates`; pickup/expiry sweeps and mission `crates:` events still run),
-  superweapons ON/OFF (`game._noSupers` → `Production.prereqOk` refuses any building
-  with `superweapon:`, hiding it from the sidebar and the AI's build plan — the AI's
-  defense cap then stays at the pre-tech 4), and a numeric seed field (blank = random)
-  for refighting a shared battlefield. Choices persist in `hw_sk` (seed excluded);
+- **Skirmish setup** (the `#skirmish` window, skirmish only — missions/MP ignore
+  it): SIDE toggle (UDC/Serpent), DIFFICULTY (Easy/Normal/Hard presets),
+  COMBATANTS (`You vs AI` / `You vs 2 AI` / `You vs 3 AI` free-for-alls, or
+  `Watch 2-4 AI` spectator battles), MAP (Classic 64×64 / Large 88×88), starting
+  funds 3000/5000/8000/12000 (applies to EVERY war chest, then the EASY/HARD
+  preset still overrides the AIs'), crates ON/OFF (`game._noCrates` gates only
+  the random-drop roll in `_tickCrates`; pickup/expiry sweeps and mission
+  `crates:` events still run), superweapons ON/OFF (`game._noSupers` →
+  `Production.prereqOk` refuses any building with `superweapon:`, hiding it from
+  the sidebar and the AI's build plan — the AI's defense cap then stays at the
+  pre-tech 4), and a numeric seed field (blank = random) for refighting a shared
+  battlefield. Choices persist in `hw_sk` (seed excluded, difficulty included);
   all of it rides `opts.sk` into flags + the REPLAY meta so replays/saves reconstruct.
 - **Multi-AI combat model**: `SIDE_ORDER = ['gdi','nod','gd2','nd2']` (core.js);
   `g.sides` lists the combat sides in play in canonical order and EVERY sim loop over

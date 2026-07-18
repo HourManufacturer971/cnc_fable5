@@ -355,25 +355,36 @@ button:active {
   .ckey { font-size: 10px; }
 }
 
-/* skirmish setup strip (top of the operations panel) */
+/* the skirmish window: a settings sheet of labeled rows */
+#skirmish .panel { max-width: 420px; }
+#skSideRow { display: flex; gap: 10px; justify-content: center; margin: 4px 0 12px; }
+#skSideRow button { opacity: 0.55; }
+#skSideRow button.sel {
+  opacity: 1; border-color: var(--accent); color: var(--accent);
+  box-shadow: 0 0 12px -2px var(--accent), inset 0 1px 0 var(--hw-edge-hi);
+}
 #skOpts {
-  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
-  gap: 5px 14px;
-  margin: 0 0 12px; padding: 7px 10px 8px;
+  display: flex; flex-direction: column;
+  gap: 7px;
+  margin: 0 0 14px; padding: 10px 14px 12px;
   background: rgba(0, 0, 0, 0.28);
   border: 1px solid var(--hw-edge-lo);
   border-radius: 4px;
-  font-size: 10px; color: #b8b09a; letter-spacing: 1px;
+  font-size: 11px; color: #b8b09a; letter-spacing: 1px;
 }
-#skOpts .skTitle { flex-basis: 100%; font-size: 9px; letter-spacing: 3px; color: #9a9280; }
-#skOpts label { display: flex; align-items: center; gap: 5px; }
+#skOpts label { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 #skOpts select, #skOpts input {
-  font-family: inherit; font-size: 10px;
+  font-family: inherit; font-size: 11px;
   background: #0b1108; color: #7fe07f;
   border: 1px solid var(--hw-edge-lo); border-radius: 3px;
-  padding: 3px 4px;
+  padding: 3px 6px;
+  min-width: 130px;
 }
-#skOpts input { width: 84px; }
+#skOpts input { width: 130px; }
+#btnSkLaunch { width: 100%; }
+/* the ledger's doorway to the skirmish window */
+#missionList button.skLink { border-left: 3px solid var(--accent); }
+#missionList button.skLink .tag { color: var(--accent); }
 
 /* mission select + briefing */
 #missionList button {

@@ -254,11 +254,12 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   its army — focus-firing your weakest units and pulling wounded armor back
   to the repair pad. And no AI goes quietly anymore: a bankrupt army sells
   its buildings to fund one last push — then sells everything and rushes
-- **Skirmish setup** — dial a skirmish in before you launch: combatants
-  (classic duel, free-for-alls against 2 or 3 AIs, or sit back and **watch
-  2–4 AI armies fight each other**), map size (classic or large), starting
-  funds (3000–12000), crates on/off, superweapons on/off, and a battlefield
-  seed you can type in to refight a favorite map — the pause menu shows the
+- **Skirmish setup window** — skirmish gets its own screen, one click from
+  the Theater of War: pick your side, difficulty, combatants (classic duel,
+  free-for-alls against 2 or 3 AIs, or sit back and **watch 2–4 AI armies
+  fight each other**), map size (classic or large), starting funds
+  (3000–12000), crates on/off, superweapons on/off, and a battlefield seed
+  you can type in to refight a favorite map — the pause menu shows the
   current seed so you can share it
 - **Four armies on one field** — the extra combatants fly recolored
   faction banners: UDC Azure in steel blue and the Serpent Amethyst in

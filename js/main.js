@@ -208,9 +208,10 @@ const Main = (function () {
         if (s.sw !== undefined) $('skSupers').value = s.sw ? '1' : '0';
         if (s.p) $('skPlayers').value = s.p;
         if (s.m) $('skMap').value = s.m;
+        if (s.d) $('skDiff').value = s.d;
       }
     } catch (e) {}
-    for (const id of ['skCredits', 'skCrates', 'skSupers', 'skPlayers', 'skMap']) {
+    for (const id of ['skCredits', 'skCrates', 'skSupers', 'skPlayers', 'skMap', 'skDiff']) {
       $(id).addEventListener('change', () => {
         try {
           localStorage.setItem('hw_sk', JSON.stringify({
@@ -219,10 +220,29 @@ const Main = (function () {
             sw: $('skSupers').value === '1',
             p: $('skPlayers').value,
             m: $('skMap').value,
+            d: $('skDiff').value,
           }));
         } catch (e) {}
       });
     }
+    // the skirmish window: its own screen with EVERYTHING — side, difficulty,
+    // combatants, map, funds, crates, superweapons, seed
+    const skSideSync = () => {
+      $('skSideGdi').classList.toggle('sel', skSide === 'gdi');
+      $('skSideNod').classList.toggle('sel', skSide === 'nod');
+    };
+    $('skSideGdi').addEventListener('click', () => { skSide = 'gdi'; skSideSync(); });
+    $('skSideNod').addEventListener('click', () => { skSide = 'nod'; skSideSync(); });
+    $('btnSkBack').addEventListener('click', () => {
+      $('skirmish').classList.add('hidden');
+      _showMissions(skFrom);
+    });
+    $('btnSkLaunch').addEventListener('click', () => {
+      const d = $('skDiff').value;
+      const preset = d === 'EASY' ? DIFF_PRESETS.EASY : d === 'HARD' ? DIFF_PRESETS.HARD : null;
+      $('skirmish').classList.add('hidden');
+      startGame(skSide, { skirmish: preset, sk: _skOptions() });
+    });
     _wireMpLobby();
     _wireTheater();
     $('btnBriefBack').addEventListener('click', () => {
@@ -557,6 +577,20 @@ const Main = (function () {
     w2: { n: 2, spectate: true }, w3: { n: 3, spectate: true }, w4: { n: 4, spectate: true },
   };
 
+  // the skirmish window remembers which theater opened it (Back returns
+  // there) and which side is toggled for the next battle
+  let skSide = 'gdi', skFrom = 'gdi';
+
+  function _showSkirmish(side) {
+    skFrom = baseSide(side || mySide || 'gdi');
+    skSide = skFrom;
+    $('skSideGdi').classList.toggle('sel', skSide === 'gdi');
+    $('skSideNod').classList.toggle('sel', skSide === 'nod');
+    $('menu').classList.add('hidden');
+    $('missions').classList.add('hidden');
+    $('skirmish').classList.remove('hidden');
+  }
+
   function _showMissions(side) {
     mySide = side;
     $('menu').classList.add('hidden');
@@ -567,15 +601,13 @@ const Main = (function () {
     _drawTheater(side, done);
     $('theaterCap').textContent = 'SELECT YOUR NEXT OPERATION ON THE MAP — OR FROM THE WAR LEDGER BELOW';
 
-    // skirmish at three difficulties: the knobs the campaign already uses
-    // (wave cadence, wave cap, AI war chest) exposed straight to the player
-    for (const [tag, diff] of [['EASY', DIFF_PRESETS.EASY], ['NORMAL', null], ['HARD', DIFF_PRESETS.HARD]]) {
+    // skirmish lives in its own setup window now — the ledger keeps ONE
+    // doorway to it, and the campaign rows get room to breathe
+    {
       const skirm = document.createElement('button');
-      skirm.innerHTML = `<span>SKIRMISH — ${tag}</span><span class="tag">RANDOM BATTLEFIELD</span>`;
-      skirm.addEventListener('click', () => {
-        $('missions').classList.add('hidden');
-        startGame(mySide, { skirmish: diff, sk: _skOptions() });
-      });
+      skirm.className = 'skLink';
+      skirm.innerHTML = '<span>SKIRMISH</span><span class="tag">OPEN BATTLE SETUP »</span>';
+      skirm.addEventListener('click', () => _showSkirmish(side));
       list.appendChild(skirm);
     }
 
@@ -1141,6 +1173,7 @@ const Main = (function () {
     $('missions').classList.add('hidden');
     $('briefing').classList.add('hidden');
     $('mplobby').classList.add('hidden');
+    $('skirmish').classList.add('hidden');
 
     const mission = myMission;
     // skirmish setup options (credits/crates/superweapons/combatants/map size/
