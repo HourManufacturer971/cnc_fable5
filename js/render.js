@@ -1398,6 +1398,14 @@ const Render = (function () {
     // air units on top
     for (const u of units) if (DATA.units[u.type].air && _unitSeen(g, u)) _drawUnit(g, u, X, Y);
 
+    // atmosphere: grade the scene, bloom the emissives on top, then vignette.
+    // The SHROUD comes after all of it: the grade's screen pass and the
+    // grain baked into the vignette were lifting the unexplored black into
+    // textured dark grey — the void stays a true, untextured #000
+    _drawGrade();
+    _drawGlow(g, X, Y, c0x, c1x, c0y, c1y, cs);
+    _drawVignette();
+
     // shroud (skipped entirely for the replay spectator). Cells merge into
     // horizontal RUNS drawn with a half-pixel bleed: on fractional
     // device-pixel scales, abutting per-cell rects antialias into hairline
@@ -1448,11 +1456,6 @@ const Render = (function () {
       ctx.fillStyle = (g.tick >> 3) & 1 ? '#ffe28a' : '#c8a030';
       ctx.fillRect(bx + 2, by - 18, 8, 6);
     }
-
-    // atmosphere: grade the scene, bloom the emissives on top, then vignette
-    _drawGrade();
-    _drawGlow(g, X, Y, c0x, c1x, c0y, c1y, cs);
-    _drawVignette();
 
     // selection brackets + health bars
     for (const id of g.selection) {
