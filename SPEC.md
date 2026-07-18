@@ -83,7 +83,7 @@ define **exactly** the globals listed and may freely call any global listed for 
 | audio.js | `AUDIO` (`init, play, eva, ack, setEnabled, enabled, setVoiceEnabled, voiceEnabled, tickCredits`) |
 | music.js | `MUSIC` (`start(side), stop, setEnabled, enabled` — original procedural soundtrack, twelve tracks in faction playlists: Coalition T1–T8, Serpent Order S1–S4 ritual tracks; the session's first battle opens on the faction theme, later starts re-roll; rotates after two loops) |
 | missions.js | `MISSIONS` (campaign definitions: seed, credits, AI knobs, objective, per-side briefings), `MissionProgress` (localStorage `hw_progress` unlock tracking) |
-| map.js | `MAPGEN` (`generate(game, seed, opts?)` — `opts.holdout` centers the human start inside a three-gated rock fortress ring with thin chrysalite inside and rich fields beyond) |
+| map.js | `MAPGEN` (`generate(game, seed, opts?)` — `opts.holdout` centers the human start inside a three-gated rock fortress ring with thin chrysalite inside and rich fields beyond; `opts.shore` floods the southern edge with a rolling 3-7 row sea under a two-row bare-sand beach (own rng stream, carved after fields so nothing recolonizes the waterline; home/mid fields are held above it, and the waterfall scan stops short of the sea)) |
 | path.js | `findPath(unit, destCx, destCy, opts?) -> [{cx,cy},...]` |
 | fog.js | `Fog` (`init, revealCircle, update, isExplored`) |
 | sim.js | `Sim` (`tick`), `orderMove`, `orderAttack`, `orderHarvest`, `orderDeploy`, `orderEnter`, `orderBoard`, `unloadCargo`, `stopUnit`, `killEntity`, `fireIon`, `fireNuke`, `spawnEffect`, `spawnBullet` |
@@ -435,7 +435,11 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   with ONE trigger — `at: seconds`, `every: seconds [,from][,until]`, or
   `when: g=>bool [,repeat]` (rising edge) — and any mix of actions: `eva` (radio line
   via `AUDIO.evaText`, side-keyed strings allowed), `reinforce {types[,at]}` (friendly
-  column spawns at the map edge and rolls to base; types side-keyed vs HUMAN side),
+  column spawns at the map edge and rolls to base — gathering LANDWARD of the
+  base on shore maps, since the usual south-side rally would be in the surf;
+  spawn spots (`_openNear`) prefer crystal-free cells everywhere, so landings
+  and columns never materialize inside a chrysalite field; types side-keyed
+  vs HUMAN side),
   `attack {types[,from][,target:'base'|'harv']}` (raid spawns at a compass edge and
   attack-moves in; types keyed vs AI side; arrays of specs allowed), `crates: n`
   (supply drop on the base perimeter), `creatures: n` (fleshlings in the fields),
@@ -477,9 +481,11 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   SABOTAGE ops (UDC 7 SILENCE THE TEMPLE / Serpent 7 BLIND THE LANCE — a full
   base game against a pre-built charging enemy superweapon). Replay meta now
   carries `p: NET.PROTO` from `REPLAY.arm` and `watchData` refuses other
-  versions. UDC arc: 1 FIRST FOOTHOLD (STAGED LANDING — `noHumanSpawn` rifle
-  team ashore at tick 0, second boat at 45s, the MCV by scripted reinforcement
-  at 75s; restricted `allow` tech tree of power/refinery/silo/barracks/infantry;
+  versions. UDC arc: 1 FIRST FOOTHOLD (STAGED LANDING — `shore: true` puts a
+  real sea and landing beach on the southern map edge; `noHumanSpawn` rifle
+  team ashore ON the sand at tick 0, second boat at 45s, the MCV by scripted
+  reinforcement at 75s, both with `at: 'south'` so they come in over the surf;
+  restricted `allow` tech tree of power/refinery/silo/barracks/infantry;
   the enemy is a hand-placed camp — power, barracks, one gun, `aiNoSell`, a
   2500-credit purse that dribbles riflemen until it runs dry), 2 THE GREEN ENGINE
   (harvest 6000 + blue-lode reveal + harvester-hunting raids), 3 STATIC LINE
@@ -553,8 +559,10 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_handshake()` — the host rolls a FRESH seed and the match relaunches over the
   same connection, sides kept, no new code exchange. `NET.onRematch('remote'|'gone')`
   drives the button labels ("opponent is ready" / hide when the peer leaves);
-  `_peerGone` outside a live game only tears down + notifies. PROTO = 12 (bumped
-  for the classic first-mission redesigns: per-mission `allow` tech gates,
+  `_peerGone` outside a live game only tears down + notifies. PROTO = 13 (bumped
+  for the landing coastline: `shore` map gen, crystal-free reinforcement
+  spawns, landward rally on shore maps; 12 covered the classic first-mission
+  redesigns: per-mission `allow` tech gates,
   `aiNoSell`, honored `aiCredits: 0`, objective-building sale protection; 11
   covered the two-arc campaign rebuild; 10 covered value-based waves, faction
   balance retune, ltnk/nuke stats, poverty-trap fix; 9 covered depot capture

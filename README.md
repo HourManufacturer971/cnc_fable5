@@ -299,12 +299,13 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   across a Theater of War map in the classic style — all of it original
   Harvest War fiction
 - **First missions the classic way** — the UDC opens with a staged shore
-  landing: your rifle team lands first, the MCV arrives by boat, and only
-  the early tech tree (power, refinery, barracks, infantry) is on the
-  menu; the Serpent opens with a pure squad op — no base, no production
-  for anyone, just your cell, reinforcement cells on the road, and a
-  listening post to erase. Missions can now carry a tech whitelist, so
-  the arsenal grows one operation at a time
+  landing on a real coastline: open sea spans the southern edge, your
+  rifle team starts on the sand, and the second boat and the MCV come in
+  over the surf; only the early tech tree (power, refinery, barracks,
+  infantry) is on the menu. The Serpent opens with a pure squad op — no
+  base, no production for anyone, just your cell, reinforcement cells on
+  the road, and a listening post to erase. Missions can now carry a tech
+  whitelist, so the arsenal grows one operation at a time
 - **Proper war-room briefings** — every operation opens on a full sitrep:
   a sector stamp and faction classification bar, the situation report
   teletyped onto the screen (click to skip ahead), explicit objectives,

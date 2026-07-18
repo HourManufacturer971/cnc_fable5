@@ -3,9 +3,11 @@
 // discrete feature counts scale with map area so big maps stay busy).
 // Defines exactly one global: MAPGEN. See SPEC.md "Map generation".
 //
-// MAPGEN.generate(game, seed):
+// MAPGEN.generate(game, seed, opts):
 //   - fills game.terrain / game.tvar / game.tib
 //   - sets game.startPos = { human:{cx,cy}, ai:{cx,cy} }
+//   - opts.holdout: walled center plateau; opts.shore: sea + landing beach
+//     along the southern edge (the staged-landing missions)
 // All randomness comes from a local mulberry(seed) stream so the same seed
 // always produces the same map regardless of prior game.rng() consumption.
 //
@@ -851,8 +853,10 @@ const MAPGEN = (function () {
         const len = Math.sqrt(dx * dx + dy * dy) || 1;
         dx /= len; dy /= len;
         const off = 7 + rng() * 2; // 7..9
+        // shore maps: "away from the enemy" points the SW start's field at
+        // the future sea — hold every home field above the waterline
         const fx = clamp(Math.round(st.cx + dx * off), 2, W - 3);
-        const fy = clamp(Math.round(st.cy + dy * off), 2, H - 3);
+        const fy = clamp(Math.round(st.cy + dy * off), 2, opts.shore ? H - 13 : H - 3);
         // 130..170 classic — the opening field carries the early game; on a
         // large map the next field is a longer trek, so home pockets run deeper
         const count = Math.round((130 + ((rng() * 41) | 0)) * (area > 1.5 ? 1.2 : 1));
@@ -875,7 +879,8 @@ const MAPGEN = (function () {
       let bestC = null;
       for (let a = 0; a < 40; a++) {
         const mx = i === 0 ? (W >> 1) + ((rng() * 25) | 0) - 12 : 6 + ((rng() * (W - 12)) | 0);
-        const my = i === 0 ? (H >> 1) + ((rng() * 25) | 0) - 12 : 6 + ((rng() * (H - 12)) | 0);
+        const my = i === 0 ? (H >> 1) + ((rng() * 25) | 0) - 12
+          : 6 + ((rng() * (H - 12 - (opts.shore ? 9 : 0))) | 0);
         // the field's heart must be open, reachable ground — a heart in a
         // pond or forest pocket gives placeField no cells and the "field"
         // shrivels to a speck
@@ -935,6 +940,34 @@ const MAPGEN = (function () {
       }
     }
 
+    // --- shore missions: a SEA along the whole southern edge -------------------
+    // The staged-landing ops come ashore here: a rolling coastline of open
+    // water below a two-row sand beach, kept bare of crystal, rock and trees
+    // so boats have somewhere honest to land. Carved late (after fields) so
+    // nothing creeps back over the waterline; its own rng stream leaves every
+    // other feature of the seed untouched. The connectivity/reach passes
+    // below run AFTER the flood, so they respect the new coast.
+    if (opts.shore) {
+      const srng = mulberry((hseed ^ 0x5eaf00d) >>> 0);
+      let depth = 4 + ((srng() * 3) | 0);           // 4..6 rows of water
+      for (let x = 0; x < W; x++) {
+        const roll = srng();
+        depth = clamp(depth + (roll < 0.3 ? -1 : roll > 0.7 ? 1 : 0), 3, 7);
+        const top = H - depth;                       // first water row
+        for (let y = top; y < H; y++) {
+          const idx = cellIdx(x, y);
+          g.terrain[idx] = T_WATER;
+          g.tib[idx] = 0; g.tibType[idx] = 0;
+        }
+        for (let y = Math.max(1, top - 2); y < top; y++) {
+          const idx = cellIdx(x, y);
+          if (g.terrain[idx] !== T_WATER) g.terrain[idx] = T_DIRT;   // the beach
+          g.tib[idx] = 0; g.tibType[idx] = 0;
+        }
+      }
+      smoothShores(g);
+    }
+
     // --- validate connectivity; widen the corridor if something snuck in --------
     for (const st of starts) {
       if (st === hs) continue;
@@ -953,9 +986,12 @@ const MAPGEN = (function () {
     // --- waterfall: the westmost surviving river column, where the water
     // spills out of the rocky rim (the fringe plugs the columns behind it)
     if (hasRiver) {
+      // on shore maps the scan stops above the sea band, or the "waterfall"
+      // would pour out of the ocean
+      const yMax = opts.shore ? H - 10 : H - 1;
       outer:
       for (let x = 1; x < 10; x++) {
-        for (let y = 1; y < H - 1; y++) {
+        for (let y = 1; y < yMax; y++) {
           if (g.terrain[cellIdx(x, y)] === T_WATER &&
               (g.terrain[cellIdx(x - 1, y)] === T_ROCK || x === 1)) {
             g.decor.waterfall = { cx: x, cy: y };

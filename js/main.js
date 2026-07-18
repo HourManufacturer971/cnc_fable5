@@ -805,6 +805,7 @@ const Main = (function () {
       : calm <= 1 ? 'Expected pressure: STEADY — probing raids building into offensives'
         : 'Expected pressure: LIGHT — time is on your side; use it');
     if (m.holdout) out.push('Terrain: a walled plateau with three gated passes — the rich crystal lies OUTSIDE');
+    if (m.shore) out.push('Terrain: open sea to the south — the landing beach is your lifeline, and the boats come in over it');
     // per-mission tech gates read as supply lines in the field
     if (m.allow) {
       out.push(m.allow.length === 0
@@ -836,7 +837,7 @@ const Main = (function () {
       startPos: null, decor: null,
     };
     try {
-      MAPGEN.generate(fake, m.seed, { holdout: m.holdout });
+      MAPGEN.generate(fake, m.seed, { holdout: m.holdout, shore: m.shore });
     } finally {
       C.MAP_W = W0; C.MAP_H = H0;
     }
@@ -1031,7 +1032,8 @@ const Main = (function () {
       : 'SKIRMISH — ' + ((mySkirmish && mySkirmish.skirmish) || 'NORMAL');
     window.game = game;
     MUSIC.start(side);   // faction playlist: the Serpent Order has its own score
-    MAPGEN.generate(game, game.seed, mission && mission.holdout ? { holdout: true } : undefined);
+    MAPGEN.generate(game, game.seed,
+      mission ? { holdout: mission.holdout, shore: mission.shore } : undefined);
     Fog.init(game);
 
     const hp = game.startPos.human, ap = game.startPos.ai;

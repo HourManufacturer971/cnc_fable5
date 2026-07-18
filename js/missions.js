@@ -25,6 +25,8 @@
 //   aiWaveCap  ceiling on units per AI strike wave (default 9)
 //   holdout    true = fortress scenario: the player starts at the center of
 //              the map inside a rock ring with three gated passes (map.js)
+//   shore      true = a sea with a landing beach spans the southern map edge
+//              (map.js); reinforce events with at:'south' come in over the sand
 //   noHumanSpawn  true = no MCV/escort — the mission's setup() spawns your force
 //   setup(g,o) bespoke staging; o = { side, aiSide, hs, as }
 //   objective  { type: 'annihilate' }
@@ -49,7 +51,7 @@ gdi: [
     n: 1, title: 'FIRST FOOTHOLD',
     sector: 'THE VERDANT REACH — SOUTHERN FRONTIER', terr: [0.10, 0.82], seed: 8121,
     credits: 3000, aiCredits: 2500, aiCalm: 2.2, aiWaveCap: 3, aiNoSell: true,
-    noHumanSpawn: true,
+    noHumanSpawn: true, shore: true,
     // the classic opening kit: power, refining, barracks, boots. No radar, no
     // armor, no air — the tech tree grows one operation at a time. (Both
     // factions' infantry keys are listed: `allow` binds every player in the
@@ -62,8 +64,10 @@ gdi: [
       'You land first: one rifle team to hold the shore while the boats cycle. The MCV comes in behind you — deploy it, raise power and a refinery, and train infantry. Heavy equipment cannot come ashore this far south, so rifles and rockets will have to do. This is your proving ground, Commander — burn that outpost off the map.',
     ],
     setup(g, o) {
-      // the landing team goes in ahead of the MCV — the shore must hold
-      MISSIONS.squad(g, o.side, ['e1', 'e1', 'e1', 'e3'], o.hs);
+      // the landing team goes in ahead of the MCV — put them ON the sand,
+      // just up from the surf (the shore map keeps this ground bare)
+      MISSIONS.squad(g, o.side, ['e1', 'e1', 'e1', 'e3'],
+        { cx: o.hs.cx, cy: Math.min(o.hs.cy + 5, C.MAP_H - 9) });
       // the outpost is a camp, not a war machine: no conyard, no refinery.
       // A barracks dribbles riflemen from a fixed purse until it runs dry —
       // the classic first-mission enemy
@@ -79,10 +83,10 @@ gdi: [
       { at: 12, eva: 'Landing team ashore. Hold the beach — the MCV is close behind you.' },
       { at: 45,
         eva: 'Second boat is in. Riflemen moving up the beach.',
-        reinforce: { types: ['e1', 'e1', 'e3'] } },
+        reinforce: { types: ['e1', 'e1', 'e3'], at: 'south' } },
       { at: 75,
         eva: 'The MCV has made landfall. Deploy it and dig in.',
-        reinforce: { types: ['mcv', 'e1', 'e1'] } },
+        reinforce: { types: ['mcv', 'e1', 'e1'], at: 'south' } },
       { at: 240,
         eva: 'Enemy scouts have found the beachhead. Expect a raid.',
         attack: { types: { gdi: ['jeep', 'e1'], nod: ['bggy', 'e1'] }, target: 'base' } },
@@ -920,19 +924,25 @@ MISSIONS.arc = function (side) {
 
   function _side(v, side) { return (v && !Array.isArray(v) && typeof v === 'object') ? v[side] : v; }
 
-  // open, passable, unoccupied cells spiralling out from (cx, cy)
+  // open, passable, unoccupied cells spiralling out from (cx, cy). Crystal
+  // cells are a last resort — reinforcements materialising inside a chrysalite
+  // field wade out through it (infantry take damage, and it looks absurd)
   function _openNear(g, cx, cy, n, rMax) {
-    const out = [];
+    const out = [], dusty = [];
     for (let r = 1; r <= (rMax || 14) && out.length < n; r++) {
       for (let dy = -r; dy <= r && out.length < n; dy++) {
         for (let dx = -r; dx <= r && out.length < n; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
           const x = cx + dx, y = cy + dy;
-          if (inMap(x, y) && terrainPassable(g.terrain[cellIdx(x, y)]) &&
-              !g.occ[cellIdx(x, y)]) out.push({ cx: x, cy: y });
+          if (!inMap(x, y)) continue;
+          const i = cellIdx(x, y);
+          if (!terrainPassable(g.terrain[i]) || g.occ[i]) continue;
+          if (g.tib[i] > 0) { dusty.push({ cx: x, cy: y }); continue; }
+          out.push({ cx: x, cy: y });
         }
       }
     }
+    while (out.length < n && dusty.length) out.push(dusty.shift());
     return out;
   }
 
@@ -967,7 +977,11 @@ MISSIONS.arc = function (side) {
     const org = _edgeSpot(g, spec.at, hp);
     const types = _side(spec.types, g.humanSide) || [];
     const units = _spawnSquad(g, g.humanSide, types, org);
-    units.forEach((u, i) => orderMove(u, hp.cx + (i % 3) - 1, hp.cy + 3 + ((i / 3) | 0)));
+    // the column gathers south of the base pad — except on shore maps, where
+    // south is the surf: there it forms up on the landward side, so a landed
+    // MCV has honest ground to deploy on instead of a strip of wet sand
+    const gy = g.mission && g.mission.shore ? hp.cy - 4 : hp.cy + 3;
+    units.forEach((u, i) => orderMove(u, hp.cx + (i % 3) - 1, gy + ((i / 3) | 0)));
     if (units.length) {
       _ping(g, cellCenterX(org.cx), cellCenterY(org.cy), 'reinforce');
       AUDIO.eva('reinforcements');
