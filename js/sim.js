@@ -1175,6 +1175,14 @@ function _engineer(u, d) {
     if (t.owner !== u.owner) {
       // capture!
       _transferBuilding(g, t, u.owner);
+      // a supply depot opens its strongroom for the new landlord: a one-time
+      // haul on top of the trickle, so the capture pays for the engineer
+      if (DATA.buildings[t.type].depot) {
+        g.players[u.owner].credits += 300;
+        if (u.owner === g.humanSide) {
+          spawnEffect('cash', _entX(t), _entY(t) - 10, { ttl: 24, vy: -0.9, amount: 300 });
+        }
+      }
       if (u.owner === g.humanSide) {
         _evaOnce(DATA.buildings[t.type].depot ? 'depotSecured' : 'buildingCaptured', 30);
       }
@@ -1381,9 +1389,9 @@ function _tickDepots(g) {
     for (const id of p.buildingIds) {
       const b = g.buildings.get(id);
       if (!b || !DATA.buildings[b.type].depot || b.buildProgress < 1) continue;
-      p.credits += 60;
+      p.credits += 100;
       if (side === g.humanSide) {
-        spawnEffect('cash', _entX(b), _entY(b) - 10, { ttl: 20, vy: -0.9, amount: 60 });
+        spawnEffect('cash', _entX(b), _entY(b) - 10, { ttl: 20, vy: -0.9, amount: 100 });
       }
     }
   }

@@ -865,8 +865,13 @@ const MAPGEN = (function () {
     // the rest scatter across the whole interior so the far country is worth
     // harvesting (and expanding toward) on any map size.
     const fieldCenters = [];
-    const mids = Math.round((2 + ((rng() * 2) | 0)) * area); // 2..3 classic, 4..6 large
+    const mids = Math.round((3 + ((rng() * 2) | 0)) * area); // 3..4 classic, 6..8 large
     for (let i = 0; i < mids; i++) {
+      // blue pockets are a PRIZE, never a doorstep: worth double, they hand
+      // whoever spawns beside one the game — so they keep real distance
+      // from every base and must be sought out
+      const isBlue = i === 0 || (area > 1.5 && i === 3);
+      const minStartD = isBlue ? 24 : 15;
       let bestC = null;
       for (let a = 0; a < 40; a++) {
         const mx = i === 0 ? (W >> 1) + ((rng() * 25) | 0) - 12 : 6 + ((rng() * (W - 12)) | 0);
@@ -878,7 +883,7 @@ const MAPGEN = (function () {
         if ((g.terrain[ti] !== T_GRASS && g.terrain[ti] !== T_DIRT) || !reach[ti]) continue;
         let ok = true;
         for (const st of starts) {
-          if (distC(mx, my, st.cx, st.cy) < 15) { ok = false; break; }
+          if (distC(mx, my, st.cx, st.cy) < minStartD) { ok = false; break; }
         }
         for (const fc of fieldCenters) {
           if (distC(mx, my, fc.x, fc.y) < 12) { ok = false; break; }
@@ -906,8 +911,7 @@ const MAPGEN = (function () {
       const count = Math.round((50 + ((rng() * 31) | 0)) * (area > 1.5 ? 1.25 : 1));
       // the first (most contested) midfield is BLUE chrysalite — worth double
       // at the refinery; big maps hide a second blue pocket out in the wilds
-      placeField(g, rng, bestC.x, bestC.y, count, starts, reach,
-        i === 0 || (area > 1.5 && i === 3));
+      placeField(g, rng, bestC.x, bestC.y, count, starts, reach, isBlue);
     }
 
     // guaranteed tiberium-free route between the bases (mirrors the always-
@@ -966,24 +970,35 @@ const MAPGEN = (function () {
     {
       let best = null, bestScore = -Infinity;
       const bx = g.decor.bridge ? g.decor.bridge[(g.decor.bridge.length / 2) | 0] : null;
-      for (let a = 0; a < 90; a++) {
-        const vx = 4 + ((rng() * (W - 16)) | 0), vy = 4 + ((rng() * (H - 15)) | 0);
-        let nearBase = false;
-        for (const st of starts) {
-          if (distC(vx + 4, vy + 3, st.cx, st.cy) < 18) { nearBase = true; break; }
-        }
-        if (nearBase) continue;
-        let ok = true;
-        for (let dy = 0; dy < 7 && ok; dy++) {
-          for (let dx = 0; dx < 8; dx++) {
-            const idx = cellIdx(vx + dx, vy + dy);
-            const t = g.terrain[idx];
-            if ((t !== T_GRASS && t !== T_DIRT) || g.tib[idx] > 0 || !reach2[idx]) { ok = false; break; }
+      // two passes: the strict one wants virgin ground; on crystal-crowded
+      // maps (fields multiplied) the fallback may claim a fielded patch —
+      // the settlers clear it (tib zeroed under the hamlet)
+      for (const allowTib of [false, true]) {
+        for (let a = 0; a < 90; a++) {
+          const vx = 4 + ((rng() * (W - 16)) | 0), vy = 4 + ((rng() * (H - 15)) | 0);
+          let nearBase = false;
+          for (const st of starts) {
+            if (distC(vx + 4, vy + 3, st.cx, st.cy) < 18) { nearBase = true; break; }
           }
+          if (nearBase) continue;
+          let ok = true;
+          for (let dy = 0; dy < 7 && ok; dy++) {
+            for (let dx = 0; dx < 8; dx++) {
+              const idx = cellIdx(vx + dx, vy + dy);
+              const t = g.terrain[idx];
+              if ((t !== T_GRASS && t !== T_DIRT) || (!allowTib && g.tib[idx] > 0) || !reach2[idx]) { ok = false; break; }
+            }
+          }
+          if (!ok) continue;
+          const score = bx ? -distC(vx + 4, vy + 3, bx.cx, bx.cy) : -Math.abs(vx - (W >> 1)) - Math.abs(vy - (H >> 1));
+          if (score > bestScore) { bestScore = score; best = { vx, vy }; }
         }
-        if (!ok) continue;
-        const score = bx ? -distC(vx + 4, vy + 3, bx.cx, bx.cy) : -Math.abs(vx - (W >> 1)) - Math.abs(vy - (H >> 1));
-        if (score > bestScore) { bestScore = score; best = { vx, vy }; }
+        if (best) break;
+      }
+      if (best) {
+        for (let dy = 0; dy < 7; dy++) {
+          for (let dx = 0; dx < 8; dx++) g.tib[cellIdx(best.vx + dx, best.vy + dy)] = 0;
+        }
       }
       if (best) {
         const { vx, vy } = best;
