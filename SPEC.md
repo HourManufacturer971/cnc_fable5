@@ -509,10 +509,11 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_handshake()` — the host rolls a FRESH seed and the match relaunches over the
   same connection, sides kept, no new code exchange. `NET.onRematch('remote'|'gone')`
   drives the button labels ("opponent is ready" / hide when the peer leaves);
-  `_peerGone` outside a live game only tears down + notifies. PROTO = 7 (bumped for
-  sim-visible changes: path lane noise, two-lane bridges, depot rate, AI air/expansion/
-  crate behavior; PROTO 6 covered mapgen area scaling, superweapon auto-repair and
-  wave massing).
+  `_peerGone` outside a live game only tears down + notifies. PROTO = 8 (bumped for
+  sim-visible changes: conyard repair exemption, AI spacing/economy/air-cap/expansion
+  discipline; 7 covered path lane noise, two-lane bridges, depot rate, AI air/
+  expansion/crate behavior; 6 covered mapgen area scaling, superweapon auto-repair
+  and wave massing).
 - **Determinism rules all future sim changes must respect**: sim randomness
   only via `game.rng`; sim behavior must never read `g.shroud`/`g.visible`,
   `g.humanSide`, or `p.isAI` (for fog filtering use `_exploredFor(g, side)` —
@@ -770,7 +771,24 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - **Building repair** (sim, all owners incl. AI): hostile OR unattributed damage
   (superweapon splash passes `attacker=null`) flips `repairing` on any finished
   building whose owner holds >100 credits — the AI patches up after a nuke/ion
-  strike instead of bleeding out; a broke AI leaves the wreck alone.
+  strike instead of bleeding out; a broke AI leaves the wreck alone. The CONYARD
+  is exempt from the credits gate (a stalled repair just waits for money), and
+  the AI's main cadence re-toggles any damaged unrepairing conyard as a backstop.
+- **Base discipline** (ai.js): `_findSpot` scores −3 for any spot whose footprint
+  touches another own building (ADJACENCY 1 permits a clear cell between
+  footprints) — splash from one superweapon shouldn't gut three structures, and
+  a hugged base walls its own traffic in. `_pickUnit` puts a dead economy first
+  (0 harvesters + a refinery → 'harv' with no credit bar; the unit-start gate
+  drops from 400 to 100 for that purchase) and caps the AIR WING at
+  `max(2, min(elite?5:3, ground/4))` — air is a scalpel, not the army.
+- **Expansion discipline** (elite): `wantMcv` clears the moment the MCV exists
+  (it used to stay set for the whole trek, so the factory turned out MCV after
+  MCV); `_richFarField` skips pockets within 25 cells of the current enemy's
+  base; the anchor sits ~4 cells on the AWAY side of the field (behind its own
+  crystal moat) and `_deploySpotNear` demands ≥60% of the surrounding ring
+  buildable (elbow room for the refinery); `_escortTo` pickets 4 cells out on
+  the threat side and never assigns a spot within 2 cells of the anchor — an
+  escort parked on the pad would block the very unfold it came to guard.
   Defend: units near base intercept intruders. If AI has no conyard but has money+weap →
   build mcv? (skip — too fancy; just keep fighting).
 - AI places buildings on a spiral search around its conyard obeying `Production.canPlace`.

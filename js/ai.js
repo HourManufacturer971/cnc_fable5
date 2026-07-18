@@ -219,6 +219,15 @@ const AI = (function () {
         if (_crowdsRefinery(g, p, key, cx, cy, d.w, d.h)) continue;
         const nx = dx / r, ny = dy / r;
         let score = g.rng() * 0.6;
+        // splash + traffic spacing: one nuke shouldn't gut three packed
+        // structures, and a fully hugged base walls its own units in —
+        // prefer a clear cell between footprints (ADJACENCY 1 allows it)
+        for (const bid of p.buildingIds) {
+          const b = g.buildings.get(bid);
+          if (!b || DATA.buildings[b.type].wall) continue;
+          if (cx <= b.cx + b.w && cx + d.w >= b.cx &&
+              cy <= b.cy + b.h && cy + d.h >= b.cy) { score -= 3; break; }
+        }
         if (role === 'power') {
           // tucked behind the yard, away from the shooting
           score += (-(nx * threat.x + ny * threat.y)) * 4 - Math.abs(r - 4) * 0.8;
@@ -370,9 +379,24 @@ const AI = (function () {
       // eagerly — a starved AI stops doing anything interesting)
       const procs = _planned(g, p, 'proc');
       const harvs = _unitCount(g, p, 'harv');
+      // a DEAD economy outranks every credit bar: with zero harvesters the
+      // treasury only shrinks, so the first vehicle is always the harvester
+      if (procs > 0 && harvs === 0 && Production.prereqOk(p, 'harv')) return 'harv';
       const fleet = _elite(g) ? Math.min(8, procs * 2 + 2) : Math.min(6, procs * 2 + 1);
       if (procs > 0 && harvs < fleet && p.credits > (_elite(g) ? 700 : 900) &&
           Production.prereqOk(p, 'harv')) return 'harv';
+    }
+    if (kind === 'air') {
+      // air is a scalpel, not the army: cap the wing well below the ground
+      // force so the factories keep feeding the front line
+      let wing = 0;
+      for (const id of p.unitIds) {
+        const u = g.units.get(id);
+        if (u && DATA.units[u.type].air) wing++;
+      }
+      const ground = _military(g, p).length - wing;
+      const cap = Math.max(2, Math.min(_elite(g) ? 5 : 3, (ground / 4) | 0));
+      if (wing >= cap) return null;
     }
     const opts = WEIGHTS[baseSide(p.side)].filter(([k]) => DATA.units[k].factory === kind && Production.prereqOk(p, k));
     if (!opts.length) return null;
@@ -456,6 +480,8 @@ const AI = (function () {
   // nearest anchor to `at` where an MCV can actually unfold: a conyard-sized
   // footprint of clear, crystal-free, unoccupied ground. Aiming the MCV at
   // the middle of a rich field parks it on crystal where deploy always fails.
+  // The ring around the footprint must be mostly open too — the new yard
+  // needs elbow room for a refinery and the rest of a working base.
   function _deploySpotNear(g, at, rMax) {
     const d = DATA.buildings.fact;
     const fits = (mcx, mcy) => {
@@ -467,7 +493,19 @@ const AI = (function () {
           if (!terrainPassable(g.terrain[i]) || g.tib[i] > 0 || g.occ[i]) return false;
         }
       }
-      return true;
+      // elbow room: most of the surrounding ring buildable as well
+      let open = 0, ring = 0;
+      for (let y = -2; y <= d.h; y++) {
+        for (let x = -2; x <= d.w; x++) {
+          if (y >= 0 && y < d.h && x >= 0 && x < d.w) continue;   // footprint itself
+          const cx = mcx - 1 + x, cy = mcy - 1 + y;
+          ring++;
+          if (!inMap(cx, cy)) continue;
+          const i = cellIdx(cx, cy);
+          if (terrainPassable(g.terrain[i]) && g.tib[i] === 0) open++;
+        }
+      }
+      return open >= ring * 0.6;
     };
     for (let r = 0; r <= (rMax || 7); r++) {
       for (let dy = -r; dy <= r; dy++) {
@@ -781,6 +819,12 @@ const AI = (function () {
 
     const conyard = _conyard(g, p);
 
+    // the yard is the war machine's heart: any damage, repairs go on (the
+    // damaged-event auto-repair covers most cases; this catches the rest)
+    for (const cyd of _conyards(g, p)) {
+      if (cyd.hp < cyd.maxHp && !cyd.repairing) Production.toggleRepair(g, p, cyd);
+    }
+
     // place any ready building by role
     if (p.ready.building && conyard) {
       const key = p.ready.building;
@@ -810,8 +854,12 @@ const AI = (function () {
     // would defeat the whole point of saving).
     if (p.queues.building || p.ready.building) st.savingFor = null;
     const armyFloor = _military(g, p).length < 9;   // never save yourself defenseless
+    // a dead economy restarts below the normal credit gate: the harvester is
+    // the only purchase that ever brings the number back up
+    const ecoDead = _unitCount(g, p, 'harv') === 0;
     for (const kind of ['infantry', 'vehicle', 'air']) {
-      if (p.queues[kind] || p.credits <= 400) continue;
+      if (p.queues[kind]) continue;
+      if (p.credits <= (kind === 'vehicle' && ecoDead ? 100 : 400)) continue;
       const want = _pickUnit(g, p, kind, st);
       if (!want) continue;
       if (st.savingFor && want !== 'harv' && want !== 'e6' && want !== 'mcv' && !armyFloor) continue;
@@ -953,6 +1001,10 @@ const AI = (function () {
       }
       const yards = _conyards(g, p);
       if (mcv && st.expandAt) {
+        // the convoy exists: the vehicle line goes straight back to tanks.
+        // (wantMcv used to stay true for the whole trek, so the factory
+        // quietly turned out MCV after MCV after MCV.)
+        st.wantMcv = false;
         const d = dist(mcv.x, mcv.y, cellCenterX(st.expandAt.cx), cellCenterY(st.expandAt.cy));
         if (d <= C.CELL * 2.5) {
           if (orderDeploy(mcv)) {
@@ -971,12 +1023,23 @@ const AI = (function () {
         }
       } else if (!mcv && yards.length === 1 && p.credits > 2500 &&
                  Production.prereqOk(p, 'mcv')) {
-        // is there a field worth trekking to — with buildable ground beside it?
-        const field = _richFarField(g, yards[0]);
-        const spot = field && _deploySpotNear(g, field, 7);
-        if (spot) {
-          st.expandAt = spot;
-          st.wantMcv = true;      // the vehicle line's next slot builds it
+        // is there a SAFE field worth trekking to — with buildable ground on
+        // its far side? Anchor on the end of the field facing away from the
+        // enemy, so the new yard grows behind its own crystal moat.
+        const field = _richFarField(g, yards[0], st);
+        if (field) {
+          const es = (st.enemy && g.startPos[st.enemy]) || g.startPos.human;
+          let ax = field.cx - es.cx, ay = field.cy - es.cy;
+          const al = Math.max(1, Math.sqrt(ax * ax + ay * ay));
+          const at = {
+            cx: clamp(Math.round(field.cx + ax / al * 4), 2, C.MAP_W - 3),
+            cy: clamp(Math.round(field.cy + ay / al * 4), 2, C.MAP_H - 3),
+          };
+          const spot = _deploySpotNear(g, at, 7);
+          if (spot) {
+            st.expandAt = spot;
+            st.wantMcv = true;      // the vehicle line's next slot builds it
+          }
         }
       } else if (mcv) {
         st.wantMcv = false;
@@ -984,26 +1047,36 @@ const AI = (function () {
     }
   }
 
-  // a few idle guns ride along and hold the ground at the destination
+  // a few idle guns ride along and hold the ground at the destination —
+  // picketing 4 cells out on the threat side, NEVER inside the deploy
+  // footprint (an escort parked on the pad blocks the unfold it came to guard)
   function _escortTo(g, p, st, cell) {
+    const t = _threatDir(g, p, st);
+    const px = clamp(Math.round(cell.cx + t.x * 4), 1, C.MAP_W - 2);
+    const py = clamp(Math.round(cell.cy + t.y * 4), 1, C.MAP_H - 2);
+    const spots = formationCells(g, px, py, 6);
     let sent = 0;
     for (const u of _military(g, p)) {
       if (sent >= 3) break;
       if (u.state !== 'idle' || DATA.units[u.type].air) continue;
       if (st.staging && st.staging.ids.includes(u.id)) continue;
-      const spots = formationCells(g, cell.cx, cell.cy, 4);
-      const s = spots[Math.min(1 + sent, spots.length - 1)];
+      const s = spots[Math.min(sent, spots.length - 1)];
+      if (Math.abs(s.cx - cell.cx) <= 2 && Math.abs(s.cy - cell.cy) <= 2) continue;
       orderAttackMove(u, s.cx, s.cy);
       sent++;
     }
   }
 
-  // richest tiberium pocket further than 20 cells from the given yard
-  function _richFarField(g, cyd) {
+  // richest tiberium pocket further than 20 cells from the given yard —
+  // and a SAFE one: pockets in the enemy's lap are a harvester graveyard,
+  // so anything within 25 cells of the current enemy's base is skipped
+  function _richFarField(g, cyd, st) {
+    const es = (st && st.enemy && g.startPos[st.enemy]) || g.startPos.human;
     let best = null, bestRich = 500;   // must be a REAL field to bother
     for (let cy = 3; cy < C.MAP_H - 3; cy += 3) {
       for (let cx = 3; cx < C.MAP_W - 3; cx += 3) {
         if (_cellDist(cx, cy, cyd.cx, cyd.cy) < 20) continue;
+        if (es && _cellDist(cx, cy, es.cx, es.cy) < 25) continue;
         let rich = 0;
         for (let dy = -2; dy <= 2; dy++) {
           for (let dx = -2; dx <= 2; dx++) {

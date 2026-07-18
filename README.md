@@ -264,6 +264,14 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 - **Armies, not patrols** — the AI masses its attacks: fresh units join a
   gathering wave instead of loitering at home, skirmish waves run bigger,
   and buildings hit by superweapons get repaired when the treasury allows
+- **Base discipline** — the AI always keeps the wrench on a damaged
+  Construction Yard (even flat broke), leaves breathing room between its
+  buildings so one nuke can't gut three and its own traffic isn't walled
+  in, treats a dead economy as the first purchase to fix, keeps its air
+  wing small and surgical, builds one expansion MCV at a time, sites the
+  forward base on the safe end of a crystal field facing away from the
+  enemy with room to grow — and its escorts picket outside the deploy
+  pad instead of standing on it
 - **Field discipline** — group orders fan out into cluster formations
   instead of single-file conga lines (yours and the AI's), gunships strike
   refineries and factories rather than sandbags — and fly home instead of

@@ -1769,8 +1769,10 @@ EV.on('damaged', function (target, attacker, dmg) {
     // (costs credits per hp as usual; the repair toggle can still switch it
     // off). Fires for unattributed damage too — an ion bolt or nuke passes
     // no attacker, and the AI especially must patch up after one lands.
+    // The CONYARD skips the credits gate entirely: it is the war machine's
+    // heart, and a stalled repair just waits for money instead of draining.
     if (target.buildProgress >= 1 && !target.repairing && target.hp < target.maxHp &&
-        g.players[target.owner].credits > 100) {
+        (g.players[target.owner].credits > 100 || target.type === 'fact')) {
       target.repairing = true;
     }
     return;
