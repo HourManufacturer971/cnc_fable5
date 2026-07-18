@@ -197,12 +197,13 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 - **P2P multiplayer** — 1v1 deterministic-lockstep netcode over a WebRTC data
   channel with copy-paste matchmaking codes: serverless, accountless, and
   checksummed against desyncs (see the Multiplayer section above)
-- **A campaign** — eight operations per side with in-universe briefings,
+- **A campaign** — ten operations per side with in-universe briefings,
   distinct objectives, and **scripted mission events**: timed and
   conditional radio calls, reinforcement columns rolling in off the map
   edge, enemy raids announced by direction, supply drops, fleshling
   migrations, and revenge waves when you hit what the enemy loves.
-  Annihilate an outpost; amass a 6000-credit war chest (held at once —
+  Land a rifle team ahead of your MCV and dig in with the early tech
+  tree; amass a 6000-credit war chest (held at once —
   build silos) while raiders hunt your harvesters; survive fifteen minutes
   of announced, escalating assaults on a walled plateau, through to a
   final all-out wave; hunt down an economy that punches back; crack a
@@ -297,6 +298,13 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   ascension are separate ten-mission arcs with their own stories, fought
   across a Theater of War map in the classic style — all of it original
   Harvest War fiction
+- **First missions the classic way** — the UDC opens with a staged shore
+  landing: your rifle team lands first, the MCV arrives by boat, and only
+  the early tech tree (power, refinery, barracks, infantry) is on the
+  menu; the Serpent opens with a pure squad op — no base, no production
+  for anyone, just your cell, reinforcement cells on the road, and a
+  listening post to erase. Missions can now carry a tech whitelist, so
+  the arsenal grows one operation at a time
 - **Proper war-room briefings** — every operation opens on a full sitrep:
   a sector stamp and faction classification bar, the situation report
   teletyped onto the screen (click to skip ahead), explicit objectives,

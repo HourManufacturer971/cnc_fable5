@@ -292,10 +292,13 @@ const AI = (function () {
       if (Production.prereqOk(p, 'nuke') && !blocked('nuke')) return 'nuke';
       return null;
     }
-    if (_planned(g, p, 'proc') < 1 && !blocked('proc')) return 'proc';
-    if (_planned(g, p, inf) < 1 && !blocked(inf)) return inf;
+    // every goal checks prereqOk: campaign missions may carry an `allow`
+    // whitelist, and a goal returning a gated key forever would freeze the
+    // whole build queue at that rung
+    if (_planned(g, p, 'proc') < 1 && Production.prereqOk(p, 'proc') && !blocked('proc')) return 'proc';
+    if (_planned(g, p, inf) < 1 && Production.prereqOk(p, inf) && !blocked(inf)) return inf;
     // vehicle factory before hq/defense: tanks matter more than walls
-    if (_planned(g, p, veh) < 1 && !blocked(veh)) return pick(veh, 1200);
+    if (_planned(g, p, veh) < 1 && Production.prereqOk(p, veh) && !blocked(veh)) return pick(veh, 1200);
     // ...but a base with NO guns at all is an invitation: the first two
     // defenses jump the big-ticket savings queue (which can otherwise starve
     // them out forever while combat losses churn the treasury)
@@ -309,8 +312,8 @@ const AI = (function () {
       }
     }
     // second refinery EARLY — the whole midgame stalls on a one-proc economy
-    if (_planned(g, p, 'proc') < 2 && !blocked('proc')) return pick('proc', 1000);
-    if (_planned(g, p, 'hq') < 1 && !blocked('hq')) return pick('hq', 900);
+    if (_planned(g, p, 'proc') < 2 && Production.prereqOk(p, 'proc') && !blocked('proc')) return pick('proc', 1000);
+    if (_planned(g, p, 'hq') < 1 && Production.prereqOk(p, 'hq') && !blocked('hq')) return pick('hq', 900);
 
     // defense line grows with the war — with the war CLOCK as well as the
     // wave count. Until the superweapon tech building exists the perimeter
@@ -354,13 +357,15 @@ const AI = (function () {
         Production.prereqOk(p, 'fix') && !blocked('fix')) return pick('fix', 1500);
     if (!st.builtHpad && Production.prereqOk(p, 'hpad') && !blocked('hpad')) return pick('hpad', 2000);
     // late-game economy keeps pace with the growing army bill
-    if (_planned(g, p, 'proc') < 3 && g.tick > (_elite(g) ? 3800 : 5000) && !blocked('proc')) return pick('proc', 1500);
+    if (_planned(g, p, 'proc') < 3 && g.tick > (_elite(g) ? 3800 : 5000) &&
+        Production.prereqOk(p, 'proc') && !blocked('proc')) return pick('proc', 1500);
     if (!techDone && Production.prereqOk(p, tech) && g.tick > 6000 && !blocked(tech)) return pick(tech, 2200);
     if (defHave < defWant) {
       const want = DEF_PLAN[side][Math.min(defHave, DEF_PLAN[side].length - 1)];
       if (Production.prereqOk(p, want) && !blocked(want)) return pick(want, 500);
     }
-    if (_planned(g, p, 'proc') < 4 && g.tick > (_elite(g) ? 8500 : 12000) && !blocked('proc')) return pick('proc', 2500);
+    if (_planned(g, p, 'proc') < 4 && g.tick > (_elite(g) ? 8500 : 12000) &&
+        Production.prereqOk(p, 'proc') && !blocked('proc')) return pick('proc', 2500);
     if (p.storage - p.credits < 400 && Production.prereqOk(p, 'silo') &&
         _planned(g, p, 'silo') < 4 && !blocked('silo')) return pick('silo', 500);
     return null;
@@ -708,6 +713,17 @@ const AI = (function () {
   // war machine survives: never the conyard, refinery, factories, or the
   // last power plant.
   const SALE_ORDER = ['silo', 'hpad', 'fix', 'eye', 'tmpl', 'hq', 'sam', 'gtwr', 'gun', 'atwr', 'obli', 'nuk2', 'nuke'];
+
+  // campaign: the mission's objective building is never for sale — a bankrupt
+  // garrison cashing out the raid target would end the mission by ledger
+  // entry (demolish would auto-win, capture would auto-fail)
+  function _saleForbidden(g, b) {
+    const ob = g.mission && g.mission.objective;
+    if (!ob || (ob.type !== 'demolish' && ob.type !== 'capture')) return false;
+    const bt = typeof ob.btype === 'object' ? ob.btype[g.humanSide] : ob.btype;
+    return b.type === bt;
+  }
+
   function _pickSale(g, p) {
     let power = 0;
     for (const id of p.buildingIds) {
@@ -718,7 +734,7 @@ const AI = (function () {
       if ((type === 'nuke' || type === 'nuk2') && power <= 1) continue;
       for (const id of p.buildingIds) {
         const b = g.buildings.get(id);
-        if (b && b.type === type && b.buildProgress >= 1) return b;
+        if (b && b.type === type && b.buildProgress >= 1 && !_saleForbidden(g, b)) return b;
       }
     }
     return null;
@@ -730,7 +746,7 @@ const AI = (function () {
     // cash out every structure...
     for (const id of p.buildingIds.slice()) {
       const b = g.buildings.get(id);
-      if (b && !b._dead) Production.sell(g, p, b);
+      if (b && !b._dead && !_saleForbidden(g, b)) Production.sell(g, p, b);
     }
     // ...and march everything that moves at the enemy
     const tgt = _nearestEnemyTarget(g, ep, { x: p.side && g.startPos[p.side] ? cellCenterX(g.startPos[p.side].cx) : 0, y: p.side && g.startPos[p.side] ? cellCenterY(g.startPos[p.side].cy) : 0 });
@@ -810,7 +826,10 @@ const AI = (function () {
     // war. When nothing can restore an income — or there is nothing left
     // worth selling — sell EVERYTHING and throw the whole army at the
     // enemy. No more quietly going docile in a corner.
-    if (p.credits < 150 && _unitCount(g, p, 'harv') === 0 && !st.rushed) {
+    // scripted garrisons hold their ground: a mission may pin the AI in
+    // place (aiNoSell) — a listening post does not liquidate itself
+    if (!(g.mission && g.mission.aiNoSell) &&
+        p.credits < 150 && _unitCount(g, p, 'harv') === 0 && !st.rushed) {
       if (st.brokeSince < 0) st.brokeSince = g.tick;
       const canRebuild = _conyard(g, p) || Production.prereqOk(p, 'harv');
       if (g.tick - st.brokeSince > 450) {

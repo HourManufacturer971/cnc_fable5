@@ -447,6 +447,18 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   dressing: pre-built enemy works, convoys, checkpoints). Helpers exported on the
   MISSIONS array: `MISSIONS.placeB(g, side, type, cx, cy)` (spiral-search finished
   building placement), `MISSIONS.squad(g, side, types, at)`, `MISSIONS.openNear`.
+- **Per-mission tech gates**: `mission.allow` is a whitelist of building/unit
+  keys — `Production.prereqOk` checks it FIRST (`_missionAllows`), so the
+  sidebar, `tryStart` and the AI all obey it for EVERY player in the mission
+  (list both factions' keys). `allow: []` locks production entirely (the squad
+  missions). ai.js `_nextBuilding` guards every goal with `prereqOk` so a gated
+  key can never wedge the build queue, and `_pickUnit` filters its weighted mix
+  the same way. `mission.aiNoSell` pins scripted garrisons in place: the
+  bankruptcy liquidation/final-rush block is skipped, so a fixed-purse camp
+  goes quiet when the money runs out instead of selling itself and rushing.
+  `_pickSale`/`_finalRush` also never sell the mission's demolish/capture
+  objective building (`_saleForbidden`) — a fire sale must not end a mission.
+  `mission.aiCredits: 0` is honored (checked `!== undefined`, not truthiness).
 - The campaign is TWO SEPARATE FACTION ARCS of ten ops each (`MISSIONS.gdi` /
   `MISSIONS.nod`, fetched via `MISSIONS.arc(side)`) — classic structure, original
   fiction. Mission defs are single-faction now (`brief` is a paragraph array,
@@ -465,7 +477,11 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   SABOTAGE ops (UDC 7 SILENCE THE TEMPLE / Serpent 7 BLIND THE LANCE — a full
   base game against a pre-built charging enemy superweapon). Replay meta now
   carries `p: NET.PROTO` from `REPLAY.arm` and `watchData` refuses other
-  versions. UDC arc: 1 FIRST FOOTHOLD (annihilate beachhead), 2 THE GREEN ENGINE
+  versions. UDC arc: 1 FIRST FOOTHOLD (STAGED LANDING — `noHumanSpawn` rifle
+  team ashore at tick 0, second boat at 45s, the MCV by scripted reinforcement
+  at 75s; restricted `allow` tech tree of power/refinery/silo/barracks/infantry;
+  the enemy is a hand-placed camp — power, barracks, one gun, `aiNoSell`, a
+  2500-credit purse that dribbles riflemen until it runs dry), 2 THE GREEN ENGINE
   (harvest 6000 + blue-lode reveal + harvester-hunting raids), 3 STATIC LINE
   (survive 15, holdout: announced directional waves, supply drops, relief
   vanguard, final assault), 4 BROKEN SPEAR (commando raid, demolish hq),
@@ -475,7 +491,11 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   tmpl), 8 INSIDE JOB (capture the tmpl INTACT, prize pre-built + revealed,
   damage warnings, engineer detachment), 9 SEVERED HEAD (annihilate stronghold),
   10 AVALANCHE (annihilate a fully pre-built fortress; reinforcement/supply
-  drip). Serpent arc mirrors the shapes with its own story: FIRST SERMON,
+  drip). Serpent arc mirrors the shapes with its own story: FIRST SERMON
+  (the classic NO-BASE SQUAD OP — `allow: []` locks production for both seats,
+  `credits/aiCredits: 0`, setup strips the stock enemy spawn down to a
+  hand-built listening post (hq + power + infantry pickets) and hands the
+  player a five-strong cell; reinforcement cells at 150s/340s; annihilate),
   TITHES OF THE EARTH, THE SANCTUM HOLDS, FANGS IN THE DARK, STARVE THE
   MACHINE, THE RELIC ROAD, BLIND THE LANCE (demolish eye), CHANGED VOICES
   (capture eye), BREAK THE BASTION, AGE OF THE SERPENT.
@@ -533,12 +553,15 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_handshake()` — the host rolls a FRESH seed and the match relaunches over the
   same connection, sides kept, no new code exchange. `NET.onRematch('remote'|'gone')`
   drives the button labels ("opponent is ready" / hide when the peer leaves);
-  `_peerGone` outside a live game only tears down + notifies. PROTO = 10 (bumped
-  for sim-visible changes: value-based waves, faction balance retune, ltnk/nuke
-  stats, poverty-trap fix; 9 covered depot capture bonus + $100 trickle and
-  mapgen field spread; 8 covered conyard repair exemption and AI base
-  discipline; 7 covered path lane noise, two-lane bridges, depot rate; 6
-  covered mapgen area scaling, superweapon auto-repair and wave massing).
+  `_peerGone` outside a live game only tears down + notifies. PROTO = 12 (bumped
+  for the classic first-mission redesigns: per-mission `allow` tech gates,
+  `aiNoSell`, honored `aiCredits: 0`, objective-building sale protection; 11
+  covered the two-arc campaign rebuild; 10 covered value-based waves, faction
+  balance retune, ltnk/nuke stats, poverty-trap fix; 9 covered depot capture
+  bonus + $100 trickle and mapgen field spread; 8 covered conyard repair
+  exemption and AI base discipline; 7 covered path lane noise, two-lane
+  bridges, depot rate; 6 covered mapgen area scaling, superweapon auto-repair
+  and wave massing).
 - **Determinism rules all future sim changes must respect**: sim randomness
   only via `game.rng`; sim behavior must never read `g.shroud`/`g.visible`,
   `g.humanSide`, or `p.isAI` (for fog filtering use `_exploredFor(g, side)` —

@@ -48,20 +48,47 @@ gdi: [
   {
     n: 1, title: 'FIRST FOOTHOLD',
     sector: 'THE VERDANT REACH — SOUTHERN FRONTIER', terr: [0.10, 0.82], seed: 8121,
-    credits: 6000, aiCredits: 2500, aiCalm: 1.8, aiWaveCap: 5,
+    credits: 3000, aiCredits: 2500, aiCalm: 2.2, aiWaveCap: 3, aiNoSell: true,
+    noHumanSpawn: true,
+    // the classic opening kit: power, refining, barracks, boots. No radar, no
+    // armor, no air — the tech tree grows one operation at a time. (Both
+    // factions' infantry keys are listed: `allow` binds every player in the
+    // mission, so the enemy garrison lives by the same rules.)
+    allow: ['nuke', 'proc', 'silo', 'pyle', 'hand', 'e1', 'e2', 'e3', 'e4', 'e6', 'harv'],
     objective: { type: 'annihilate' },
-    objText: 'Destroy the Serpent Order outpost. Leave nothing standing.',
+    objText: 'Hold the beach until the MCV lands, then destroy the Serpent Order outpost.',
     brief: [
-      'Commander. The Coalition is coming back to this frontier, and you are the tip of the spear. A Serpent Order cell has gone to ground in this valley and is bleeding the region dry — a single fortified outpost, light garrison, minimal armor.',
-      'Your MCV is en route with an escort. Deploy, establish a chrysalite income, and burn that outpost off the map. This is your proving ground, Commander — make it clean.',
+      'Commander. The Coalition is coming back to this frontier, and it starts on this beach. A Serpent Order cell runs the valley from a fortified outpost — light garrison, a standing gun, no armor worth the name. What it does not have is any idea we are coming.',
+      'You land first: one rifle team to hold the shore while the boats cycle. The MCV comes in behind you — deploy it, raise power and a refinery, and train infantry. Heavy equipment cannot come ashore this far south, so rifles and rockets will have to do. This is your proving ground, Commander — burn that outpost off the map.',
     ],
+    setup(g, o) {
+      // the landing team goes in ahead of the MCV — the shore must hold
+      MISSIONS.squad(g, o.side, ['e1', 'e1', 'e1', 'e3'], o.hs);
+      // the outpost is a camp, not a war machine: no conyard, no refinery.
+      // A barracks dribbles riflemen from a fixed purse until it runs dry —
+      // the classic first-mission enemy
+      for (const id of [...g.ai.buildingIds]) { const b = g.buildings.get(id); if (b) removeBuilding(b); }
+      for (const id of [...g.ai.unitIds]) { const u = g.units.get(id); if (u) removeUnit(u); }
+      MISSIONS.placeB(g, o.aiSide, 'nuke', o.as.cx - 1, o.as.cy - 1);
+      MISSIONS.placeB(g, o.aiSide, o.aiSide === 'gdi' ? 'pyle' : 'hand', o.as.cx + 2, o.as.cy);
+      MISSIONS.placeB(g, o.aiSide, o.aiSide === 'gdi' ? 'gtwr' : 'gun', o.as.cx - 2, o.as.cy + 3);
+      MISSIONS.squad(g, o.aiSide, o.aiSide === 'gdi' ? ['e1', 'e1', 'e3'] : ['e1', 'e1', 'e4'],
+        { cx: o.as.cx + 1, cy: o.as.cy + 4 });
+    },
     events: [
+      { at: 12, eva: 'Landing team ashore. Hold the beach — the MCV is close behind you.' },
       { at: 45,
-        eva: 'Enemy scouts are probing your perimeter. Expect a raid.',
+        eva: 'Second boat is in. Riflemen moving up the beach.',
+        reinforce: { types: ['e1', 'e1', 'e3'] } },
+      { at: 75,
+        eva: 'The MCV has made landfall. Deploy it and dig in.',
+        reinforce: { types: ['mcv', 'e1', 'e1'] } },
+      { at: 240,
+        eva: 'Enemy scouts have found the beachhead. Expect a raid.',
         attack: { types: { gdi: ['jeep', 'e1'], nod: ['bggy', 'e1'] }, target: 'base' } },
-      { at: 180,
-        eva: 'A reinforcement column has reached the sector.',
-        reinforce: { types: ['mtnk', 'e3', 'e3'] } },
+      { every: 300, from: 600, until: 1500,
+        eva: 'The outpost is pushing patrols toward your line.',
+        attack: { types: { gdi: ['e1', 'e1', 'e3'], nod: ['e1', 'e1', 'e4'] }, target: 'base' } },
       { when: g => {
           let n = 0;
           for (const id of g.ai.buildingIds) { const b = g.buildings.get(id); if (b && !DATA.buildings[b.type].wall) n++; }
@@ -142,7 +169,7 @@ gdi: [
   {
     n: 4, title: 'BROKEN SPEAR',
     sector: 'THE SPINE — SERPENT SIGNAL RIDGE', terr: [0.24, 0.40], seed: 2718,
-    credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0,
+    credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0, aiNoSell: true,
     noHumanSpawn: true,
     objective: { type: 'demolish', btype: 'hq' },
     objText: 'Destroy the Serpent command hub with your raid team. No base. No reinforcements.',
@@ -222,7 +249,7 @@ gdi: [
   {
     n: 6, title: 'THE LONG ROAD',
     sector: 'PILGRIM ROAD — CONVOY COUNTRY', terr: [0.52, 0.46], seed: 5150,
-    credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0,
+    credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0, aiNoSell: true,
     objective: { type: 'escort', unit: 'apc', dest: 'ai', radius: 2.5 },
     noHumanSpawn: true,
     objText: 'Deliver the transport to the extraction beacon. If it dies, the mission dies with it.',
@@ -442,26 +469,60 @@ nod: [
   {
     n: 1, title: 'FIRST SERMON',
     sector: 'THE VERDANT REACH — SOUTHERN FRONTIER', terr: [0.88, 0.30], seed: 8121,
-    credits: 6000, aiCredits: 2500, aiCalm: 1.8, aiWaveCap: 5,
+    credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0, aiNoSell: true,
+    noHumanSpawn: true,
+    // the classic squad mission: no base, no production for ANYONE — the
+    // empty whitelist locks every build item, and setup() strips the stock
+    // enemy base down to a hand-placed listening post
+    allow: [],
     objective: { type: 'annihilate' },
-    objText: 'Crush the UDC beachhead before it takes root.',
+    objText: 'No base, no production. Wipe out the UDC listening post with the faithful you are given.',
     brief: [
-      'The Coalition has landed, child of the Serpent. A lone UDC expedition digs in across the valley, far from reinforcement — arrogant, and alone.',
-      'The Order has granted you an MCV and the honor of first strike. Take root, harvest the green gold, and erase them. Let the valley learn whose land this is.',
+      'There is no base tonight, child of the Serpent. No factories, no harvest, no war machine — the Order asks for something older: faith, and a knife in the dark. A Coalition listening post has taken root upriver, and its antennas drink every whisper the Order breathes.',
+      'Take your cell and silence it. Kill the garrison, flatten the post, leave nothing standing that flies their colors. More of the faithful will find you on the road — the Order provides. Prove tonight that the Serpent needs no engine of war to win one.',
     ],
+    setup(g, o) {
+      // strip the stock enemy base: the listening post is hand-built below
+      for (const id of [...g.ai.buildingIds]) { const b = g.buildings.get(id); if (b) removeBuilding(b); }
+      for (const id of [...g.ai.unitIds]) { const u = g.units.get(id); if (u) removeUnit(u); }
+      // your cell — everything the Order grants you tonight
+      MISSIONS.squad(g, o.side, ['e1', 'e1', 'e1', 'e1', 'e3'], o.hs);
+      // the listening post: comm array, its power, and a standing garrison
+      MISSIONS.placeB(g, o.aiSide, 'hq', o.as.cx, o.as.cy);
+      MISSIONS.placeB(g, o.aiSide, 'nuke', o.as.cx - 3, o.as.cy + 1);
+      MISSIONS.squad(g, o.aiSide, ['e1', 'e1', 'e3'], { cx: o.as.cx + 2, cy: o.as.cy + 3 });
+      // pickets walk the approaches between you and the post
+      for (const t of [0.45, 0.7]) {
+        const cx = Math.round(o.hs.cx + (o.as.cx - o.hs.cx) * t);
+        const cy = Math.round(o.hs.cy + (o.as.cy - o.hs.cy) * t);
+        MISSIONS.squad(g, o.aiSide, ['e1', 'e1'], { cx, cy });
+      }
+    },
     events: [
-      { at: 45,
-        eva: 'Enemy scouts are probing your perimeter. Expect a raid.',
-        attack: { types: { gdi: ['jeep', 'e1'], nod: ['bggy', 'e1'] }, target: 'base' } },
-      { at: 180,
-        eva: 'The Order has sent brothers to your banner.',
-        reinforce: { types: ['ltnk', 'e3', 'e3'] } },
+      { at: 10, eva: 'Your cell is assembled. There will be no base — the faithful you carry ARE the mission.' },
+      { at: 40,
+        eva: 'The listening post sits upriver. It hears everything. Make it hear you last.',
+        fn: g => {
+          for (const b of g.buildings.values()) {
+            if (b.type !== 'hq' || b.owner === g.humanSide) continue;
+            Fog.revealCircle(g, b.cx + 1, b.cy + 1, 5);
+            _ping(g, cellCenterX(b.cx + 1), cellCenterY(b.cy + 1), 'attack');
+            break;
+          }
+        } },
+      { at: 150,
+        eva: 'More of the faithful have answered the call. Flame walks with them.',
+        reinforce: { types: ['e1', 'e1', 'e4'] } },
+      { at: 340,
+        eva: 'The Order sends rockets for the antennas. Bring them down.',
+        reinforce: { types: ['e3', 'e3'] } },
       { when: g => {
-          let n = 0;
-          for (const id of g.ai.buildingIds) { const b = g.buildings.get(id); if (b && !DATA.buildings[b.type].wall) n++; }
-          return g._m1Seen === undefined ? ((g._m1Seen = n), false) : n < g._m1Seen;
+          for (const b of g.buildings.values()) {
+            if (b.type === 'hq' && b.owner !== g.humanSide) return b.hp < b.maxHp * 0.5;
+          }
+          return false;
         },
-        eva: 'Their beachhead is burning. Finish the sermon.' },
+        eva: 'The antennas are burning! Finish it — leave nothing standing.' },
     ],
   },
   {
@@ -536,7 +597,7 @@ nod: [
   {
     n: 4, title: 'FANGS IN THE DARK',
     sector: 'LANTERN HILLS — COALITION SIGNAL POST', terr: [0.80, 0.60], seed: 3113,
-    credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0,
+    credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0, aiNoSell: true,
     noHumanSpawn: true,
     objective: { type: 'demolish', btype: 'hq' },
     objText: 'Destroy the UDC command post with your infiltration team. No base. No reinforcements.',
@@ -613,7 +674,7 @@ nod: [
   {
     n: 6, title: 'THE RELIC ROAD',
     sector: 'PILGRIM ROAD — CONVOY COUNTRY', terr: [0.48, 0.64], seed: 5150,
-    credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0,
+    credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0, aiNoSell: true,
     objective: { type: 'escort', unit: 'apc', dest: 'ai', radius: 2.5 },
     noHumanSpawn: true,
     objText: 'Deliver the transport to the extraction beacon. Its cargo is worth more than your column.',

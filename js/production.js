@@ -52,6 +52,7 @@ const Production = (function () {
   function prereqOk(player, key) {
     const d = DATA.buildings[key] || DATA.units[key];
     if (!d) return false;
+    if (!_missionAllows(key)) return false;
     if (d.side && d.side !== baseSide(player.side)) return false;
     // skirmish option: superweapon buildings removed from the game entirely
     if (d.superweapon && game && game._noSupers) return false;
@@ -115,6 +116,15 @@ const Production = (function () {
     const cat = categoryOf(key);
     const ticksTotal = Math.max(1, Math.ceil(d.cost * C.BUILD_TPC));
     player.queues[cat] = { key, spent: 0, total: d.cost, ticksLeft: ticksTotal, ticksTotal, hold: false };
+  }
+
+  // campaign tech gates: an op may carry an `allow` whitelist of building and
+  // unit keys — early missions fight with a period-correct toolset (the
+  // classic growing tech tree). Applies to EVERY player in the mission, so
+  // the AI garrison lives under the same rules as the commander.
+  function _missionAllows(key) {
+    const m = typeof game !== 'undefined' && game && game.mission;
+    return !m || !m.allow || m.allow.includes(key);
   }
 
   function tryStart(player, key) {

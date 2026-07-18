@@ -796,7 +796,7 @@ const Main = (function () {
   // briefing tells you what the fight will feel like, not just what to do
   function _briefIntel(m) {
     const out = [];
-    const chest = m.aiCredits || 5000;
+    const chest = m.aiCredits !== undefined ? m.aiCredits : 5000;
     out.push(chest >= 9000 ? 'Enemy war chest: HEAVY — layered defenses and armor in numbers'
       : chest >= 5000 ? 'Enemy war chest: MODERATE — a working base with teeth'
         : 'Enemy war chest: LIGHT — a garrison, not an army');
@@ -805,6 +805,12 @@ const Main = (function () {
       : calm <= 1 ? 'Expected pressure: STEADY — probing raids building into offensives'
         : 'Expected pressure: LIGHT — time is on your side; use it');
     if (m.holdout) out.push('Terrain: a walled plateau with three gated passes — the rich crystal lies OUTSIDE');
+    // per-mission tech gates read as supply lines in the field
+    if (m.allow) {
+      out.push(m.allow.length === 0
+        ? 'Field kit: NONE — production is locked; the force you are given is the force you have'
+        : 'Field kit: RESTRICTED — early-war tech only; heavy equipment cannot reach this sector');
+    }
     const ot = m.objective.type;
     if (ot === 'harvest') out.push('Survey: a BLUE chrysalite lode is charted midfield — double value at the refinery');
     if (ot === 'escort') out.push('Logistics: no base, no production — the convoy is everything you have');
@@ -1011,7 +1017,10 @@ const Main = (function () {
       if (sk.crates === false) game._noCrates = true;
       if (sk.supers === false) game._noSupers = true;
     }
-    const aiCr = (mission && mission.aiCredits) || (mySkirmish && mySkirmish.aiCredits);
+    // NOTE: !== undefined, not truthiness — garrison missions set aiCredits: 0
+    // and mean it (a fixed purse that runs dry, not the 5000 default)
+    const aiCr = (mission && mission.aiCredits !== undefined) ? mission.aiCredits
+      : (mySkirmish ? mySkirmish.aiCredits : undefined);
     if (aiCr !== undefined && aiCr !== null) {
       for (const s of game.sides) if (game.players[s].isAI) game.players[s].credits = aiCr;
     }
