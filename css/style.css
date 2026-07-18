@@ -382,9 +382,6 @@ button:active {
 }
 #skOpts input { width: 130px; }
 #btnSkLaunch { width: 100%; }
-/* the ledger's doorway to the skirmish window */
-#missionList button.skLink { border-left: 3px solid var(--accent); }
-#missionList button.skLink .tag { color: var(--accent); }
 
 /* pause / options: sliders in one sheet, utility buttons in a 2-col grid */
 .pgroup {
@@ -396,25 +393,23 @@ button:active {
 .pauseGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 8px; }
 .pauseGrid button { width: 100%; margin: 0; }
 
-/* mission select + briefing.
-   The ops ledger scrolls INSIDE the panel: the theater map and the Back
-   button stay put, so leaving the screen never needs a scroll. */
+/* mission select: the theater MAP is the whole selector — no ledger. The
+   panel is compact (title, map, caption, two buttons) so it fits a phone. */
 #missions .panel { display: flex; flex-direction: column; overflow: hidden; }
 #missions #theaterMap { flex: 0 0 auto; width: 100%; height: auto; }
-#missionList { overflow-y: auto; flex: 1 1 auto; min-height: 96px; }
-#missionList button {
-  display: flex; justify-content: space-between; gap: 20px;
-  text-align: left;
+#missionsBtns { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
+#missionsBtns button { width: auto; margin: 0; padding: 7px 22px; }
+#btnSkirmish { border-left: 3px solid var(--accent); }
+@media (max-width: 760px), (max-height: 520px) {
+  #missions .panel { padding: 8px 12px 10px; max-width: 96vw; }
+  #missions h2 { font-size: 13px; margin: 2px 0 6px; }
+  /* the map shrinks to whatever height is left after title/caption/buttons,
+     keeping its aspect — the whole panel must fit a phone screen unscrolled */
+  #missions #theaterMap { width: auto; max-width: 100%; max-height: 52vh; margin: 0 auto; }
+  #theaterCap { font-size: 8px; }
+  #missionsBtns { margin-top: 6px; }
+  #missionsBtns button { padding: 5px 13px; font-size: 11px; }
 }
-#missionList button .tag { color: #9a9280; }
-#missionList button:disabled {
-  color: #6a6458; cursor: default;
-  border-color: #33332c; box-shadow: none;
-  background-image: repeating-linear-gradient(45deg, transparent 0 6px, rgba(0,0,0,0.22) 6px 12px),
-                    linear-gradient(180deg, #3e3e36, #33332e);
-}
-#missionList button:disabled:hover { color: #6a6458; border-color: #33332c; box-shadow: none; transform: none; }
-#missionList button.done { border-left: 3px solid #40c040; }
 #missionList button.done .tag { color: #40c040; }
 .backBtn { width: auto; margin: 10px auto 0; padding: 7px 26px; }
 .brief {

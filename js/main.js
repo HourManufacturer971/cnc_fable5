@@ -199,6 +199,7 @@ const Main = (function () {
       _refreshResumeSave();
       $('menu').classList.remove('hidden');
     });
+    $('btnSkirmish').addEventListener('click', () => _showSkirmish(mySide));
     // skirmish setup: remember the player's choices (the seed stays per-visit)
     try {
       const s = JSON.parse(localStorage.getItem('hw_sk') || 'null');
@@ -572,46 +573,26 @@ const Main = (function () {
     $('skirmish').classList.remove('hidden');
   }
 
+  // personal best for a completed op, as a display string ('01:35 · 1234')
+  function _recFor(side, n) {
+    let rec = null;
+    try { rec = JSON.parse(localStorage.getItem('hw_rec_' + side + '_' + n) || 'null'); } catch (e) {}
+    if (!rec || rec.t === undefined) return null;
+    const mm = String(Math.floor(rec.t / 60)).padStart(2, '0');
+    const ss = String(rec.t % 60).padStart(2, '0');
+    return mm + ':' + ss + ' · ' + rec.s;
+  }
+
+  const THEATER_HINT = 'SELECT AN OPERATION ON THE MAP — SECURED GROUND WEARS YOUR COLORS';
+
+  // the map IS the mission select: territories are the only mission links
+  // (a per-op button ledger would just duplicate them and bury the screen)
   function _showMissions(side) {
     mySide = side;
     $('menu').classList.add('hidden');
     $('missionsTitle').textContent = 'THEATER OF WAR — ' + C.SIDE_NAME[side];
-    const list = $('missionList');
-    list.innerHTML = '';
-    const done = MissionProgress.get(side);
-    _drawTheater(side, done);
-    $('theaterCap').textContent = 'SELECT YOUR NEXT OPERATION ON THE MAP — OR FROM THE WAR LEDGER BELOW';
-
-    // skirmish lives in its own setup window now — the ledger keeps ONE
-    // doorway to it, and the campaign rows get room to breathe
-    {
-      const skirm = document.createElement('button');
-      skirm.className = 'skLink';
-      skirm.innerHTML = '<span>SKIRMISH</span><span class="tag">OPEN BATTLE SETUP »</span>';
-      skirm.addEventListener('click', () => _showSkirmish(side));
-      list.appendChild(skirm);
-    }
-
-    for (const m of MISSIONS.arc(side)) {
-      const btn = document.createElement('button');
-      const open = MissionProgress.unlocked(m, side);
-      let tag = m.n <= done ? 'COMPLETE' : open ? 'READY' : 'LOCKED';
-      // personal best for a completed op: fastest win + highest score
-      if (m.n <= done) {
-        let rec = null;
-        try { rec = JSON.parse(localStorage.getItem('hw_rec_' + side + '_' + m.n) || 'null'); } catch (e) {}
-        if (rec && rec.t !== undefined) {
-          const mm = String(Math.floor(rec.t / 60)).padStart(2, '0');
-          const ss = String(rec.t % 60).padStart(2, '0');
-          tag += ` · BEST ${mm}:${ss} · ${rec.s}`;
-        }
-      }
-      btn.innerHTML = `<span>OP ${m.n}: ${m.title}</span><span class="tag">${tag}</span>`;
-      if (m.n <= done) btn.classList.add('done');
-      if (!open) btn.disabled = true;
-      else btn.addEventListener('click', () => _showBriefing(m));
-      list.appendChild(btn);
-    }
+    _drawTheater(side, MissionProgress.get(side));
+    $('theaterCap').textContent = THEATER_HINT;
     $('missions').classList.remove('hidden');
   }
 
@@ -874,12 +855,15 @@ const Main = (function () {
     const toMap = ev => {
       const r = cv.getBoundingClientRect();
       return { x: (ev.clientX - r.left) * cv.width / r.width,
-               y: (ev.clientY - r.top) * cv.height / r.height };
+               y: (ev.clientY - r.top) * cv.height / r.height,
+               // the canvas shrinks on phones: grow the hit radius by the
+               // same factor so territories stay finger-sized targets
+               rad: Math.max(15, 13 * cv.width / Math.max(1, r.width) * 1.4) };
     };
     const hit = ev => {
       const p = toMap(ev);
       for (const nd of theaterNodes) {
-        if ((nd.x - p.x) ** 2 + (nd.y - p.y) ** 2 < 15 * 15 && nd.state !== 'locked') return nd;
+        if ((nd.x - p.x) ** 2 + (nd.y - p.y) ** 2 < p.rad * p.rad && nd.state !== 'locked') return nd;
       }
       return null;
     };
@@ -890,9 +874,12 @@ const Main = (function () {
     cv.addEventListener('mousemove', ev => {
       const nd = hit(ev);
       cv.style.cursor = nd ? 'pointer' : 'default';
-      $('theaterCap').textContent = nd
-        ? 'OP ' + nd.m.n + ': ' + nd.m.title + ' · ' + nd.m.sector
-        : 'SELECT YOUR NEXT OPERATION ON THE MAP — OR FROM THE WAR LEDGER BELOW';
+      if (!nd) { $('theaterCap').textContent = THEATER_HINT; return; }
+      let t = 'OP ' + nd.m.n + ': ' + nd.m.title +
+        ' — ' + (nd.state === 'done' ? 'COMPLETE' : 'READY');
+      const rec = _recFor(mySide, nd.m.n);
+      if (rec) t += ' · BEST ' + rec;
+      $('theaterCap').textContent = t;
     });
   }
 
@@ -1103,7 +1090,9 @@ const Main = (function () {
     pendingMission = m;
     $('missions').classList.add('hidden');
     $('briefTitle').textContent = 'OP ' + m.n + ': ' + m.title;
-    $('briefSector').textContent = 'SECTOR ' + m.seed + ' · ' + (m.sector || 'UNCHARTED');
+    const rec = _recFor(mySide, m.n);
+    $('briefSector').textContent = 'SECTOR ' + m.seed + ' · ' + (m.sector || 'UNCHARTED') +
+      (rec ? ' · PERSONAL BEST ' + rec : '');
     $('briefClass').textContent = mySide === 'udc'
       ? 'UDC TACTICAL NET — EYES ONLY' : 'SERPENT WHISPERS — FOR THE FAITHFUL';
     _teletype($('briefBody'), m.brief);

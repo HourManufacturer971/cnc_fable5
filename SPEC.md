@@ -475,7 +475,14 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   front is tinted + hatched in the faction color and a bold toothed FRONT LINE
   (teeth toward the enemy) crosses the country at the frontier between the
   last secured op and the next, which is tagged NEXT OP (clickable →
-  briefing); the accessible "war ledger" rows remain beneath it. The briefing
+  briefing); the map IS the whole mission select — there is no per-op button
+  ledger. Node hit zones scale with the on-screen canvas size (finger-sized on
+  phones), the hover caption carries state + the personal best ('OP 2: … —
+  COMPLETE · BEST 12:34 · 3120'), the record also rides the briefing's sector
+  line ('… · PERSONAL BEST mm:ss · score'), and a compact button row beneath
+  the map holds Skirmish — Battle Setup (`#btnSkirmish` → the skirmish window)
+  and Back; a phone media query shrinks padding and caps the map height so the
+  whole panel fits a landscape phone unscrolled. The briefing
   tactical survey (`_drawBriefMap`) wears FACTION colors: a Serpent commander
   is RED and the Coalition enemy GOLD, never the seat-based inverse. `MissionProgress` is per faction (`hw_progress_udc/srp`,
   `get/unlockUpTo/unlocked` take a side) and records live at
