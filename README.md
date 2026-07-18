@@ -233,7 +233,9 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   minimap is always on (no Comm Center needed) and you can hop between
   commanders' seats — press **V** or click the ◀ ▶ chip in the top bar —
   to see each army's build queues, treasury and power from their side of
-  the war
+  the war. And when the early game drags, press **F** (or click the SPEED
+  chip) to fast-forward the battle at x2 to x16 — sound mutes at high
+  speed, and one more press drops you back to real time
 - **Save & resume** — pause any single-player battle and hit *Save Battle*;
   the main menu then offers *Resume Battle*, which re-simulates your
   recording at fast-forward (a progress bar counts it up) and hands the

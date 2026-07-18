@@ -821,8 +821,17 @@ const Main = (function () {
     }
     if (game && !game.paused && game.status === 'playing') {
       acc += dt;
-      const step = 1000 / (C.TPS * (game.speed || 1));
+      // spectator fast-forward: an AI-vs-AI battle (or a replay) runs at up
+      // to 16x via game._ffSpeed (Render.cycleSpeed / the SPEED chip / F).
+      // Pure pacing — the sim steps the same ticks in the same order, so
+      // determinism, recording and saves are untouched. At 4x+ the sound
+      // effects mute for the burst (a battle at 16x is just noise).
+      const ff = game._ffSpeed || 1;
+      const step = 1000 / (C.TPS * (game.speed || 1) * ff);
       let guard = 0;
+      const ffMute = ff >= 4 && AUDIO.enabled;
+      if (ffMute) AUDIO.setEnabled(false);
+      try {
       while (acc >= step && guard < 10) {
         if (NET.active) {
           // lockstep barrier: broadcast our order batch for this tick's
@@ -857,6 +866,9 @@ const Main = (function () {
         if (NET.active) NET.postTick(game);
         if (game.tick % 15 === 0 && game.tick > 450) _checkEnd();
         if (!game || game.status !== 'playing') break;
+      }
+      } finally {
+        if (ffMute) AUDIO.setEnabled(true);
       }
       if (guard >= 10) acc = 0;
     }

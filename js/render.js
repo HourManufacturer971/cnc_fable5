@@ -63,6 +63,41 @@ const Render = (function () {
     return !!game && (seeAll || _viewP(game).radar);
   }
 
+  // spectator fast-forward: watching an AI-vs-AI battle (or a replay) at up
+  // to 16x. Pure loop pacing (main.js reads g._ffSpeed) — never sim state.
+  const FF_STEPS = [1, 2, 4, 8, 16];
+  let ffChip = null;   // clickable SPEED chip rect, set each frame while watching
+
+  function cycleSpeed() {
+    const g = game;
+    if (!g || g._ffTarget || g.status !== 'playing') return 0;
+    if (!g._spectate && !(typeof REPLAY !== 'undefined' && REPLAY.playing)) return 0;
+    const i = FF_STEPS.indexOf(g._ffSpeed || 1);
+    g._ffSpeed = FF_STEPS[(i + 1) % FF_STEPS.length] || 1;
+    return g._ffSpeed;
+  }
+
+  function _drawFFChip(g) {
+    ffChip = null;
+    if (g._ffTarget || g.status !== 'playing') return;
+    if (!g._spectate && !(typeof REPLAY !== 'undefined' && REPLAY.playing)) return;
+    const ff = g._ffSpeed || 1;
+    ctx.font = 'bold 13px monospace';
+    ctx.textBaseline = 'middle';
+    const s = (ff > 1 ? '▶▶' : '▶') + ' SPEED x' + ff;
+    const bw = ctx.measureText(s).width + 22;
+    const bx = 10, by = C.TAB_H + 8, bh = 24;
+    ctx.fillStyle = 'rgba(12,14,10,0.78)';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = ff > 1 ? PAL.uiGold : 'rgba(224,184,64,0.4)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+    ctx.fillStyle = ff > 1 ? '#ffe789' : '#c8c8b8';
+    ctx.fillText(s, bx + 11, by + bh / 2 + 1);
+    ctx.textBaseline = 'alphabetic';
+    ffChip = { x: bx, y: by, w: bw, h: bh };
+  }
+
   function _computeRevealAll(g) {
     if (!g.ai || (typeof NET !== 'undefined' && NET.active)) return false;
     if (g.sides && g.sides.length > 2) return false;   // classic 1v1 rule only
@@ -204,6 +239,8 @@ const Render = (function () {
       }
       return { zone: 'tab' };
     }
+    if (game && ffChip && x >= ffChip.x && x < ffChip.x + ffChip.w &&
+        y >= ffChip.y && y < ffChip.y + ffChip.h) return { zone: 'ff-cycle' };
     if (x < C.VIEW_PW) return { zone: 'viewport' };
     if (x >= C.RADAR_X && y >= C.RADAR_Y && y < C.RADAR_Y + C.RADAR_H) return { zone: 'radar' };
     if (y >= C.BTN_Y && y < C.BTN_Y + C.BTN_H) {
@@ -2300,6 +2337,7 @@ const Render = (function () {
     _drawNetStall(g);
     _drawReplayBadge(g);
     _drawViewHint(g);
+    _drawFFChip(g);
     _drawEvaBanner();
     _drawF1Tip(g);
     _drawIconTooltip(g);
@@ -2310,6 +2348,6 @@ const Render = (function () {
     shownTick = g.tick;
   }
 
-  return { init, frame, resize, worldFromScreen, hitTest, cycleView, radarOn,
+  return { init, frame, resize, worldFromScreen, hitTest, cycleView, cycleSpeed, radarOn,
     viewPlayer: () => (typeof game !== 'undefined' && game ? _viewP(game) : null) };
 })();

@@ -470,6 +470,11 @@ const Input = (function () {
         AUDIO.play('click');
         return;
       }
+      // spectator fast-forward: F steps x1 -> x2 -> x4 -> x8 -> x16 -> x1
+      if ((ev.key === 'f' || ev.key === 'F') && Render.cycleSpeed()) {
+        AUDIO.play('click');
+        return;
+      }
       if (game.paused || game.status !== 'playing') return;
       _hotkeys(ev);
     });
@@ -634,6 +639,10 @@ const Input = (function () {
     if (hit.zone === 'idle-harv') { _cycleIdleHarv(); return; }
     if (hit.zone === 'view-cycle') {
       if (Render.cycleView(hit.dir)) AUDIO.play('click');
+      return;
+    }
+    if (hit.zone === 'ff-cycle') {
+      if (Render.cycleSpeed()) AUDIO.play('click');
       return;
     }
     if (hit.zone === 'arrow') { _scrollStrip(hit.strip, hit.dir); return; }

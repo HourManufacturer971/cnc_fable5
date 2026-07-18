@@ -1041,6 +1041,13 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   harvester auto-seek), so seat-hopping through a replay reproduces the exact live
   checksum — viewtest47 asserts this, plus the chip/radar behavior and that live
   non-spectate games are unchanged (`cycleView` refuses when `seeAll` is off).
+- **Spectator fast-forward** (spectate + replay playback): `game._ffSpeed`
+  (1/2/4/8/16, default 1) multiplies the main loop's step rate — pure pacing, the
+  sim ticks the same sequence, so determinism, recording and saves are untouched.
+  Cycled by the top-left `▶ SPEED xN` viewport chip (`hitTest` zone `ff-cycle`)
+  or the F key; `Render.cycleSpeed()` refuses in live games, MP and during
+  save-resume catch-up (`g._ffTarget`). At ≥4x the tick loop runs with SFX
+  muted (`AUDIO.setEnabled` wrap, same pattern as resume fast-forward).
 - **Large map**: `C.MAP_W/H` set per game in `startGame` (88 for Large, else 64 —
   missions/MP always classic); `findPath` refits its scratch arrays on size change
   and the terrain cache keys on seed + size. Minimap/camera/fog scale through C.
