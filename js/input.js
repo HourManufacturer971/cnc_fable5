@@ -595,6 +595,20 @@ const Input = (function () {
     _select(shift ? [...new Set(g.selection.concat(ids))] : ids);
   }
 
+  // every own unit on screen except the economy (harvesters) and the MCV
+  function _selectArmyOnScreen() {
+    const g = game;
+    const ids = [];
+    for (const u of g.units.values()) {
+      if (u.owner !== g.humanSide) continue;
+      const d = DATA.units[u.type];
+      if (d.harvester || d.deploysTo) continue;
+      const sx = u.x - g.camera.x, sy = u.y - g.camera.y;
+      if (sx >= 0 && sx <= C.VIEW_W && sy >= 0 && sy <= C.VIEW_H) ids.push(u.id);
+    }
+    if (ids.length) _select(ids);
+  }
+
   function _selectSameTypeOnScreen(type) {
     const g = game;
     const ids = [];
@@ -777,7 +791,12 @@ const Input = (function () {
         // group — the shift-click substitute for pruning a band-box sweep
         const touchToggle = fromTouch && g.selection.length > 1 && g.selection.includes(ent.id);
         if (lastClick.id === ent.id && now - lastClick.t < 350) {
-          _selectSameTypeOnScreen(ent.type);
+          // double-click a combat unit: grab the whole on-screen army —
+          // harvesters and MCVs stay out of the fight. Double-clicking a
+          // harvester/MCV still selects its own kind (economy management).
+          const dd = DATA.units[ent.type];
+          if (dd.harvester || dd.deploysTo) _selectSameTypeOnScreen(ent.type);
+          else _selectArmyOnScreen();
         } else if (shift || touchToggle) {
           const has = g.selection.includes(ent.id);
           _select(has ? g.selection.filter(i => i !== ent.id) : g.selection.concat(ent.id));

@@ -83,7 +83,7 @@ so bandwidth is tiny. Notes:
 | Ctrl+click | Focus fire: force-attack ANY unit or building (friend, foe or neutral) |
 | `A`, then click ground (or Ctrl+click open ground) | **Attack-move**: sweep to the spot, engaging every enemy met on the way |
 | Shift+click | Add/remove from selection |
-| Double-click | Select all visible units of that type |
+| Double-click | Select the on-screen army (harvesters and MCVs stay put; double-click a harvester for its own kind) |
 | Click selected MCV (or `D`) | Deploy into Construction Yard |
 | Select infantry, click a friendly APC | Board it (up to 5 passengers) |
 | Select vehicles, click your Repair Facility | Drive to the pad and repair (costs credits) |

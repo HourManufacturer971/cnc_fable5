@@ -654,7 +654,10 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   primary desktop pan.
 - **Right-click**: deselect / cancel mode (placement, repair, sell, super target). NO
   right-click orders — authentic to the original.
-- Shift+click adds/removes from selection. Double-click a unit selects all visible of type.
+- Shift+click adds/removes from selection. Double-click a COMBAT unit selects every
+  own on-screen unit except harvesters and MCVs (`_selectArmyOnScreen`); double-click
+  a harvester/MCV keeps the classic same-type select (economy management). T hotkey
+  still selects same-type.
 - Ctrl+click on open GROUND with combat units selected = attack-move to that spot (`A` also
   arms an attack-move mode: attack cursor, next left-click sweeps there in formation).
   Ctrl+click on an ENTITY stays focus-fire — entity beats ground.
