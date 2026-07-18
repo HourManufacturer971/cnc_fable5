@@ -266,6 +266,13 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 - **Armies, not patrols** — the AI masses its attacks: fresh units join a
   gathering wave instead of loitering at home, skirmish waves run bigger,
   and buildings hit by superweapons get repaired when the treasury allows
+- **A fair fight** — faction balance is measured, not guessed: AI-vs-AI
+  soak runs from both map corners drove out a string of hidden biases —
+  the Serpent never built Repair Facilities (so never MCVs), attack waves
+  launched by headcount (cheap rosters attacked early and light), a
+  poverty trap kept a battered army from ever saving for its second
+  refinery, and early SAM sites sat useless against a capped air wing.
+  UDC and the Serpent now trade blows at roughly even odds
 - **Base discipline** — the AI always keeps the wrench on a damaged
   Construction Yard (even flat broke), leaves breathing room between its
   buildings so one nuke can't gut three and its own traffic isn't walled

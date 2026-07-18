@@ -509,11 +509,12 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_handshake()` — the host rolls a FRESH seed and the match relaunches over the
   same connection, sides kept, no new code exchange. `NET.onRematch('remote'|'gone')`
   drives the button labels ("opponent is ready" / hide when the peer leaves);
-  `_peerGone` outside a live game only tears down + notifies. PROTO = 8 (bumped for
-  sim-visible changes: conyard repair exemption, AI spacing/economy/air-cap/expansion
-  discipline; 7 covered path lane noise, two-lane bridges, depot rate, AI air/
-  expansion/crate behavior; 6 covered mapgen area scaling, superweapon auto-repair
-  and wave massing).
+  `_peerGone` outside a live game only tears down + notifies. PROTO = 10 (bumped
+  for sim-visible changes: value-based waves, faction balance retune, ltnk/nuke
+  stats, poverty-trap fix; 9 covered depot capture bonus + $100 trickle and
+  mapgen field spread; 8 covered conyard repair exemption and AI base
+  discipline; 7 covered path lane noise, two-lane bridges, depot rate; 6
+  covered mapgen area scaling, superweapon auto-repair and wave massing).
 - **Determinism rules all future sim changes must respect**: sim randomness
   only via `game.rng`; sim behavior must never read `g.shroud`/`g.visible`,
   `g.humanSide`, or `p.isAI` (for fog filtering use `_exploredFor(g, side)` —
@@ -749,7 +750,11 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   turrets shoot it in the back. While a wave GATHERS, freshly built idle units (all but
   the 2 closest to home, cap 16 ids) JOIN the muster each cadence — the launched wave
   is the whole production run, not the batch that was idle when the timer fired.
-  Wave floor `4+wave` (elite `5+wave*2`), capped by `_waveCap`. All group moves
+  Wave readiness is measured in CREDIT VALUE, not headcount (`needVal`: normal
+  `2400+wave*800` capped at `waveCap*650`, elite `2800+wave*1200` capped at
+  `max(waveCap*800, 9000)`) — a count bar let the cheap-roster faction launch
+  earlier, lighter waves that broke on defenses while the expensive roster
+  arrived in real punches. Mission `aiWaveCap` still caps the launched COUNT. All group moves
   (muster, advance, join, escort AND the player's own group orders via input.js)
   route through the shared `formationCells(g, cx, cy, n)` spiral (core.js), with
   input assigning spots row-major-sorted so blocks translate without crossing;
@@ -781,6 +786,21 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   (0 harvesters + a refinery → 'harv' with no credit bar; the unit-start gate
   drops from 400 to 100 for that purchase) and caps the AIR WING at
   `max(2, min(elite?5:3, ground/4))` — air is a scalpel, not the army.
+- **Poverty-trap fix**: the "never save yourself defenseless" army floor (military
+  < 9 bypasses savings goals) is DISABLED while the economy itself is the
+  casualty (`procs < 2 || harvs < 2`) — a battered AI that spent every trickle
+  credit on replacement units could never save for the second refinery and
+  starved forever; this loop decided most one-sided AI battles.
+- **Faction balance** (measured by AI-vs-AI soaks, scratchpad balance53, both
+  map orientations): Nod builds the Repair Facility too (was gdi-gated — the
+  Serpent could never field an MCV or heal armor); Nod DEF_PLAN moves its
+  air-only SAMs late; WEIGHTS retuned (nod ltnk 6 / arty 3 / ftnk 3, e1 3 /
+  e4 1 — flamers die crossing open ground to rifles; gdi mtnk 4 / htnk 1);
+  DATA: ltnk 550/330hp (Nod's cheap-fast identity), nuke strike 850 dmg (the
+  warhead must still DELETE what it lands on now that buildings auto-repair
+  after superweapon hits — a survivable blast was quietly worth far less than
+  the ion's pinpoint kill). Measured result: from GDI 7–0 sweeps to ~parity
+  (draw leans split, decisive wins ~even across difficulties).
 - **Expansion discipline** (elite): `wantMcv` clears the moment the MCV exists
   (it used to stay set for the whole trek, so the factory turned out MCV after
   MCV); `_richFarField` skips pockets within 25 cells of the current enemy's

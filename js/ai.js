@@ -256,7 +256,10 @@ const AI = (function () {
 
   const DEF_PLAN = {
     gdi: ['gtwr', 'gtwr', 'atwr', 'gtwr', 'atwr', 'gtwr', 'atwr', 'atwr', 'gtwr'],
-    nod: ['gun', 'gun', 'obli', 'sam', 'gun', 'obli', 'sam', 'obli', 'gun'],
+    // SAMs moved late: they are air-ONLY, and with the enemy wing capped at
+    // a few gunships an early SAM was a dead slot exactly when the ground
+    // waves arrived — the Serpent now meets those with guns and Spires
+    nod: ['gun', 'gun', 'obli', 'gun', 'obli', 'sam', 'obli', 'gun', 'sam'],
   };
 
   // Strict-priority build goals. The first applicable goal either starts
@@ -344,7 +347,10 @@ const AI = (function () {
       }
     }
 
-    if (side === 'gdi' && _planned(g, p, 'fix') < 1 &&
+    // BOTH war machines run a Repair Facility: wounded armor gets a pad to
+    // limp to, and the expansion MCV (prereq 'fix') opens up for either
+    // side — this was gdi-gated, so the Serpent never fielded an MCV at all
+    if (_planned(g, p, 'fix') < 1 &&
         Production.prereqOk(p, 'fix') && !blocked('fix')) return pick('fix', 1500);
     if (!st.builtHpad && Production.prereqOk(p, 'hpad') && !blocked('hpad')) return pick('hpad', 2000);
     // late-game economy keeps pace with the growing army bill
@@ -360,9 +366,11 @@ const AI = (function () {
     return null;
   }
 
+  // measured, not guessed: the mixes are tuned by AI-vs-AI soak runs
+  // (scratchpad balance53) toward an even UDC/Serpent win rate
   const WEIGHTS = {
-    gdi: [['e1', 2], ['e2', 2], ['e3', 2], ['jeep', 2], ['mtnk', 5], ['msam', 2], ['htnk', 2], ['orca', 1]],
-    nod: [['e1', 2], ['e3', 2], ['e4', 2], ['e5', 1], ['bggy', 2], ['bike', 2], ['ltnk', 5], ['arty', 2], ['ftnk', 2], ['stnk', 1], ['heli', 1]],
+    gdi: [['e1', 2], ['e2', 2], ['e3', 2], ['jeep', 2], ['mtnk', 4], ['msam', 2], ['htnk', 1], ['orca', 1]],
+    nod: [['e1', 3], ['e3', 2], ['e4', 1], ['e5', 1], ['bggy', 2], ['bike', 2], ['ltnk', 6], ['arty', 3], ['ftnk', 3], ['stnk', 1], ['heli', 1]],
   };
 
   // kind: 'infantry' | 'vehicle' | 'air' — each factory line picks only its
@@ -645,11 +653,16 @@ const AI = (function () {
     // gather the strike force: everything idle beyond a small home garrison
     const idle = _military(g, p).filter(u => u.state === 'idle' && !DATA.units[u.type].air);
     const garrison = 2;
-    // elite masses HARDER before moving out: fewer, far heavier hammers
-    const need = _elite(g)
-      ? Math.min(5 + st.wave * 2, Math.max(_waveCap(g), 12))
-      : Math.min(4 + st.wave, _waveCap(g));
-    if (idle.length - garrison < need) {
+    // readiness is measured in VALUE, not headcount: a count bar let the
+    // cheap-roster faction launch earlier, lighter waves that broke on the
+    // defenses while the expensive roster arrived in real punches — the
+    // same credits now buy the same weight of attack for either side
+    let idleVal = 0;
+    for (const u of idle) idleVal += DATA.units[u.type].cost || 0;
+    const needVal = _elite(g)
+      ? Math.min(2800 + st.wave * 1200, Math.max(_waveCap(g) * 800, 9000))
+      : Math.min(2400 + st.wave * 800, _waveCap(g) * 650);
+    if (idle.length <= garrison || idleVal < needVal) {
       st.nextWaveAt = g.tick + 300; // keep producing, check again shortly
       return;
     }
@@ -853,7 +866,12 @@ const AI = (function () {
     // the treasury can actually climb; harvesters are exempt (an eco stall
     // would defeat the whole point of saving).
     if (p.queues.building || p.ready.building) st.savingFor = null;
-    const armyFloor = _military(g, p).length < 9;   // never save yourself defenseless
+    // never save yourself defenseless — UNLESS the economy itself is the
+    // casualty: a battered AI that spends every trickle credit on replacement
+    // units can never save for the second refinery and starves forever (the
+    // poverty trap that decided most one-sided AI battles)
+    const ecoWeak = _planned(g, p, 'proc') < 2 || _unitCount(g, p, 'harv') < 2;
+    const armyFloor = _military(g, p).length < 9 && !ecoWeak;
     // a dead economy restarts below the normal credit gate: the harvester is
     // the only purchase that ever brings the number back up
     const ecoDead = _unitCount(g, p, 'harv') === 0;

@@ -1870,7 +1870,10 @@ function _tickStrikes(g) {
       spawnEffect('scorch', x, y);
     } else {
       AUDIO.play('nukeBoom');
-      _splashDamage(x, y, 600, 'he', 84, null);
+      // 850: the warhead must still DELETE what it lands on — since damaged
+      // buildings auto-repair after a strike, a wide-but-survivable blast
+      // was quietly worth far less than the ion's pinpoint kill
+      _splashDamage(x, y, 850, 'he', 84, null);
       spawnEffect('nukeCloud', x, y);
       spawnEffect('crater', x, y);
       spawnEffect('scorch', x + 10, y + 6);

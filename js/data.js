@@ -59,7 +59,7 @@ DATA.units = {
   bggy: { name: 'Raider Buggy', cost: 300, hp: 140, speed: 3.2, sight: 4, armor: 'light', weapon: 'mg50', side: 'nod', factory: 'vehicle', prereq: [], turn: 2 },
   bike: { name: 'Recon Bike', cost: 500, hp: 130, speed: 3.8, sight: 4, armor: 'light', weapon: 'bikeRockets', side: 'nod', factory: 'vehicle', prereq: [], turn: 3 },
   apc:  { name: 'APC', cost: 700, hp: 200, speed: 2.8, sight: 4, armor: 'heavy', weapon: 'mg50', side: 'gdi', factory: 'vehicle', prereq: ['pyle'], crush: true, turn: 2, transport: 5 },
-  ltnk: { name: 'Light Tank', cost: 600, hp: 300, speed: 2.2, sight: 4, armor: 'heavy', weapon: 'cannon75', side: 'nod', factory: 'vehicle', prereq: [], crush: true, turret: true, turn: 1 },
+  ltnk: { name: 'Light Tank', cost: 550, hp: 330, speed: 2.2, sight: 4, armor: 'heavy', weapon: 'cannon75', side: 'nod', factory: 'vehicle', prereq: [], crush: true, turret: true, turn: 1 },
   mtnk: { name: 'Medium Tank', cost: 800, hp: 400, speed: 2.0, sight: 4, armor: 'heavy', weapon: 'cannon90', side: 'gdi', factory: 'vehicle', prereq: [], crush: true, turret: true, turn: 1 },
   htnk: { name: 'Behemoth Tank', cost: 1500, hp: 700, speed: 1.4, sight: 5, armor: 'heavy', weapon: 'cannon120', weapon2: 'mammothTusk', side: 'gdi', factory: 'vehicle', prereq: ['fix'], crush: true, turret: true, turn: 1, selfHeal: true, dualBarrel: true },
   ftnk: { name: 'Flame Tank', cost: 800, hp: 300, speed: 2.2, sight: 4, armor: 'heavy', weapon: 'flameTank', side: 'nod', factory: 'vehicle', prereq: [], crush: true, turn: 1 },
