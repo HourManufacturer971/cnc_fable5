@@ -143,7 +143,7 @@ buildings/units (players include a `civ` stub owner nobody auto-targets). The ha
 farmhouse + chapel (`chur`) + two cottages + barn; the chapel drops a guaranteed cash
 crate when destroyed (see Crates). Skirmish maps also place two neutral SUPPLY DEPOTS
 (`depo`) on contested ground (near crossings/midfield, ≥18 cells from both starts) —
-engineer-capturable; a held depot pays its owner 25 credits every 150 ticks
+engineer-capturable; a held depot pays its owner 60 credits every 150 ticks
 (`_tickDepots`, found money like crates: ignores the silo cap; cash popup humanSide-only).
 GARRISONS: armed non-engineer infantry `orderEnter` a DATA `garrison`-capable civ (or own,
 with room) building: the structure transfers to the occupier (`_transferBuilding` — the
@@ -509,8 +509,10 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_handshake()` — the host rolls a FRESH seed and the match relaunches over the
   same connection, sides kept, no new code exchange. `NET.onRematch('remote'|'gone')`
   drives the button labels ("opponent is ready" / hide when the peer leaves);
-  `_peerGone` outside a live game only tears down + notifies. PROTO = 6 (bumped for
-  sim-visible changes: mapgen area scaling, superweapon auto-repair, wave massing).
+  `_peerGone` outside a live game only tears down + notifies. PROTO = 7 (bumped for
+  sim-visible changes: path lane noise, two-lane bridges, depot rate, AI air/expansion/
+  crate behavior; PROTO 6 covered mapgen area scaling, superweapon auto-repair and
+  wave massing).
 - **Determinism rules all future sim changes must respect**: sim randomness
   only via `game.rng`; sim behavior must never read `g.shroud`/`g.visible`,
   `g.humanSide`, or `p.isAI` (for fog filtering use `_exploredFor(g, side)` —
@@ -746,7 +748,25 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   turrets shoot it in the back. While a wave GATHERS, freshly built idle units (all but
   the 2 closest to home, cap 16 ids) JOIN the muster each cadence — the launched wave
   is the whole production run, not the batch that was idle when the timer fired.
-  Wave floor `4+wave` (elite `5+wave*2`), capped by `_waveCap`.
+  Wave floor `4+wave` (elite `5+wave*2`), capped by `_waveCap`. All group moves
+  (muster, advance, join, escort AND the player's own group orders via input.js)
+  route through the shared `formationCells(g, cx, cy, n)` spiral (core.js), with
+  input assigning spots row-major-sorted so blocks translate without crossing;
+  findPath additionally adds 0-2 per-unit deterministic "lane noise" per step so
+  equal-cost open-ground routes fan into clusters instead of one single-file line
+  (chokes still funnel: noise never beats a genuinely shorter route).
+- **Aircraft doctrine** (all difficulties): strikes pick `_airTarget` — value over
+  distance among buildings ≥500 cost + enemy harvesters, never walls/silos — and a
+  90-tick sweep sends any idle aircraft loitering >14 cells from home either at a
+  worthwhile target within 12 cells or straight home (rearm logic takes over).
+- **Crate runs** (all difficulties): every ~10s the nearest fast idle raider
+  fetches loose crates — within 14 cells for normal AIs, 26 for elite.
+- **Expansion convoy** (elite): the anchor is `_deploySpotNear` — the nearest
+  conyard-footprint of clear, crystal-free, unoccupied ground beside the rich
+  field (aiming at the field itself parked the MCV on crystal where deploy can
+  never succeed) — the MCV travels with up to 3 escorting guns (`_escortTo`),
+  and a blocked deploy re-anchors on fresh ground near the MCV with a widening
+  search instead of nudging forever.
 - **Building repair** (sim, all owners incl. AI): hostile OR unattributed damage
   (superweapon splash passes `attacker=null`) flips `repairing` on any finished
   building whose owner holds >100 credits — the AI patches up after a nuke/ion
@@ -918,7 +938,9 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   - the west→east river FOLLOWS THE VALLEY (per column, step ±1 to the lowest-elevation
     cell ahead; base plateaus repel the channel so the start-safety guard never censors
     it into visible gaps), widens downstream, keeps two fords — one pinned where it
-    crosses the start↔start segment — and most seeds get a timber bridge;
+    crosses the start↔start segment — and most seeds get a timber bridge (TWO
+    adjacent deck columns — a single-file deck wedged harvester traffic head-to-head;
+    the painter draws rails only on true outer edges so the lanes read as one span);
   - rock crowns the ~93rd elevation percentile, broken by detail noise into ridge lines
     with saddles; grass at the foot of rock weathers to talus dirt; high, dry (far from
     water) flats bake to dirt regions;

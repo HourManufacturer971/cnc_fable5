@@ -264,6 +264,14 @@ Temple charges the Orbital Lance / nuke proportionally faster.
 - **Armies, not patrols** — the AI masses its attacks: fresh units join a
   gathering wave instead of loitering at home, skirmish waves run bigger,
   and buildings hit by superweapons get repaired when the treasury allows
+- **Field discipline** — group orders fan out into cluster formations
+  instead of single-file conga lines (yours and the AI's), gunships strike
+  refineries and factories rather than sandbags — and fly home instead of
+  hovering over your base — the AI's expansion MCV picks buildable ground
+  beside the crystal (not in it) and travels with an escort, every AI
+  difficulty grabs convenient crates, held supply depots pay a trickle
+  that's actually worth capturing, and river bridges are two lanes wide so
+  harvester traffic stops wedging head-to-head
 - **Campaign records** — each operation remembers your fastest win and best
   score, shown on the operations list and stamped NEW BEST on the tally
 - **Multiplayer rematch** — the connection stays up at the score screen:

@@ -1381,9 +1381,9 @@ function _tickDepots(g) {
     for (const id of p.buildingIds) {
       const b = g.buildings.get(id);
       if (!b || !DATA.buildings[b.type].depot || b.buildProgress < 1) continue;
-      p.credits += 25;
+      p.credits += 60;
       if (side === g.humanSide) {
-        spawnEffect('cash', _entX(b), _entY(b) - 10, { ttl: 20, vy: -0.9, amount: 25 });
+        spawnEffect('cash', _entX(b), _entY(b) - 10, { ttl: 20, vy: -0.9, amount: 60 });
       }
     }
   }

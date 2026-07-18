@@ -95,6 +95,12 @@ const findPath = (function () {
     // never a hard block: a field blocking the only way through still passes)
     const ud = unit && unit.type ? DATA.units[unit.type] : null;
     const avoidTib = !!(ud && ud.infantry && !ud.tibImmune);
+    // per-unit lane personality: a whisper of deterministic cost noise so
+    // equal-cost routes break ties differently per unit — a group ordered
+    // across open ground fans into a cluster of lanes instead of a single
+    // file behind one shared optimal path. Chokes (bridges, gates) still
+    // funnel everyone: the noise never beats a genuinely shorter route.
+    const jseed = unit && unit.id !== undefined ? Math.imul(unit.id | 0, 2654435761) : 0;
     const scx = worldToCell(unit.x), scy = worldToCell(unit.y);
     let dcx = clamp(destCx | 0, 0, C.MAP_W - 1), dcy = clamp(destCy | 0, 0, C.MAP_H - 1);
 
@@ -158,7 +164,8 @@ const findPath = (function () {
         const ni = cellIdx(nx, ny);
         if (state[ni] === closedTag) continue;
         const tibPenalty = (avoidTib && game.tib[ni] > 0) ? 30 : 0;
-        const step = (dx && dy ? 14 : 10) +
+        const lane = jseed ? (Math.imul(ni ^ jseed, 2246822519) >>> 16) % 3 : 0;
+        const step = (dx && dy ? 14 : 10) + lane +
           (st === SOFT ? 80 : st === GATE ? 15 : st === CRUSH ? 4 : 0) + tibPenalty;
         const ng = gCost[cur] + step;
         if (state[ni] !== openTag || ng < gCost[ni]) {

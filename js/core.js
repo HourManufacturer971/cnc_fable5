@@ -319,6 +319,25 @@ function makeGame(opts) {
 
 function enemyOf(side) { return side === 'gdi' ? 'nod' : 'gdi'; }
 
+// spread a group destination into a spiral cluster of passable cells —
+// shared by player group orders (input.js) and the AI's wave movement
+// (ai.js), so both sides arrive as blocks instead of stacking on one cell
+function formationCells(g, cx, cy, n) {
+  const out = [{ cx, cy }];
+  let r = 1;
+  while (out.length < n && r < 8) {
+    for (let dy = -r; dy <= r && out.length < n; dy++) {
+      for (let dx = -r; dx <= r && out.length < n; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const x = cx + dx, y = cy + dy;
+        if (inMap(x, y) && terrainPassable(g.terrain[cellIdx(x, y)])) out.push({ cx: x, cy: y });
+      }
+    }
+    r++;
+  }
+  return out;
+}
+
 function makeUnit(type, owner, cx, cy) {
   const d = DATA.units[type];
   return {

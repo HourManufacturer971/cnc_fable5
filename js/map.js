@@ -363,28 +363,35 @@ const MAPGEN = (function () {
     return { yc, fordX1, fordX2 };
   }
 
-  // Convert one river column into a bridge deck (passable id 6), well away
-  // from both fords so it forms a third, man-made crossing.
+  // Convert TWO adjacent river columns into a bridge deck (passable id 6),
+  // well away from both fords so it forms a third, man-made crossing. Two
+  // lanes wide: a single-file deck wedged harvester traffic head-to-head.
   function placeBridge(g, rng, riv) {
     const W = C.MAP_W, H = C.MAP_H;
-    const cand = [];
-    for (let x = 8; x < W - 8; x++) {
-      const dFord = Math.min(Math.abs(x - riv.fordX1), Math.abs(x - riv.fordX2));
-      if (dFord < 7) continue;
-      // column must actually hold water here
+    const colWater = x => {
       let n = 0;
       for (let y = Math.max(1, Math.round(riv.yc[x]) - 4); y <= Math.min(H - 2, Math.round(riv.yc[x]) + 4); y++) {
         if (g.terrain[cellIdx(x, y)] === T_WATER) n++;
       }
-      if (n >= 2 && n <= 5) cand.push({ x, dFord });
+      return n;
+    };
+    const cand = [];
+    for (let x = 8; x < W - 9; x++) {
+      const dFord = Math.min(Math.abs(x - riv.fordX1), Math.abs(x - riv.fordX2));
+      if (dFord < 7) continue;
+      // both lanes must actually span water here
+      const n1 = colWater(x), n2 = colWater(x + 1);
+      if (n1 >= 2 && n1 <= 5 && n2 >= 2 && n2 <= 5) cand.push({ x, dFord });
     }
     if (!cand.length) return null;
     cand.sort((a, b) => b.dFord - a.dFord);
     const pick = cand[(rng() * Math.min(6, cand.length)) | 0];
     const cells = [];
-    for (let y = Math.max(1, Math.round(riv.yc[pick.x]) - 4); y <= Math.min(H - 2, Math.round(riv.yc[pick.x]) + 4); y++) {
-      const idx = cellIdx(pick.x, y);
-      if (g.terrain[idx] === T_WATER) { g.terrain[idx] = T_BRIDGE; cells.push({ cx: pick.x, cy: y }); }
+    for (const bx of [pick.x, pick.x + 1]) {
+      for (let y = Math.max(1, Math.round(riv.yc[bx]) - 4); y <= Math.min(H - 2, Math.round(riv.yc[bx]) + 4); y++) {
+        const idx = cellIdx(bx, y);
+        if (g.terrain[idx] === T_WATER) { g.terrain[idx] = T_BRIDGE; cells.push({ cx: bx, cy: y }); }
+      }
     }
     return cells.length ? cells : null;
   }

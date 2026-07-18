@@ -424,6 +424,62 @@ const AI = (function () {
     return best;
   }
 
+  // aircraft pick PAYING targets — production, tech, harvesters — never the
+  // nearest sandbag. Value over distance: a sortie crosses the map for a
+  // refinery but not for a silo.
+  function _airTarget(g, ep, from, maxCells) {
+    const cap = maxCells ? maxCells * C.CELL : Infinity;
+    let best = null, bestS = 0;
+    for (const id of ep.buildingIds) {
+      const b = g.buildings.get(id);
+      if (!b || b.buildProgress < 1) continue;
+      const bd = DATA.buildings[b.type];
+      if (bd.wall || (bd.cost || 0) < 500) continue;   // not worth the fuel
+      const d = dist(from.x, from.y, (b.cx + b.w / 2) * C.CELL, (b.cy + b.h / 2) * C.CELL);
+      if (d > cap) continue;
+      const s = bd.cost / (1 + d / (30 * C.CELL));
+      if (s > bestS) { bestS = s; best = b; }
+    }
+    for (const id of ep.unitIds) {
+      const u = g.units.get(id);
+      if (!u || u._dead) continue;
+      const ud = DATA.units[u.type];
+      if (!ud.harvester) continue;   // eco strikes: the classic gunship errand
+      const d = dist(from.x, from.y, u.x, u.y);
+      if (d > cap) continue;
+      const s = (ud.cost || 1100) * 1.2 / (1 + d / (30 * C.CELL));
+      if (s > bestS) { bestS = s; best = u; }
+    }
+    return best;
+  }
+
+  // nearest anchor to `at` where an MCV can actually unfold: a conyard-sized
+  // footprint of clear, crystal-free, unoccupied ground. Aiming the MCV at
+  // the middle of a rich field parks it on crystal where deploy always fails.
+  function _deploySpotNear(g, at, rMax) {
+    const d = DATA.buildings.fact;
+    const fits = (mcx, mcy) => {
+      for (let y = 0; y < d.h; y++) {
+        for (let x = 0; x < d.w; x++) {
+          const cx = mcx - 1 + x, cy = mcy - 1 + y;
+          if (!inMap(cx, cy)) return false;
+          const i = cellIdx(cx, cy);
+          if (!terrainPassable(g.terrain[i]) || g.tib[i] > 0 || g.occ[i]) return false;
+        }
+      }
+      return true;
+    };
+    for (let r = 0; r <= (rMax || 7); r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          if (fits(at.cx + dx, at.cy + dy)) return { cx: at.cx + dx, cy: at.cy + dy };
+        }
+      }
+    }
+    return null;
+  }
+
   // ---- waves ---------------------------------------------------------------------------
 
   // per-wave approach bearings (radians off the direct line): the strike
@@ -482,9 +538,9 @@ const AI = (function () {
         for (const u of joiners.slice(0, Math.max(0, joiners.length - 2))) {
           if (st.staging.ids.length >= 16) break;
           st.staging.ids.push(u.id);
-          const k = st.staging.ids.length;
-          orderMove(u, clamp(sc0.cx + (k % 3) - 1, 0, C.MAP_W - 1),
-            clamp(sc0.cy + (((k / 3) | 0) % 3) - 1, 0, C.MAP_H - 1));
+          const spots = formationCells(g, sc0.cx, sc0.cy, st.staging.ids.length);
+          const s = spots[spots.length - 1];
+          orderMove(u, s.cx, s.cy);
         }
       }
       const alive = st.staging.ids.map(id => g.units.get(id)).filter(Boolean);
@@ -517,12 +573,11 @@ const AI = (function () {
             }
           }
           if (!fwd) fwd = sc;
-          let i = 0;
-          for (const u of alive) {
-            const dx = (i % 3) - 1, dy = ((i / 3) | 0) % 3 - 1;
-            orderMove(u, clamp(fwd.cx + dx, 0, C.MAP_W - 1), clamp(fwd.cy + dy, 0, C.MAP_H - 1));
-            i++;
-          }
+          const fSpots = formationCells(g, fwd.cx, fwd.cy, alive.length);
+          alive.forEach((u, i) => {
+            const s = fSpots[Math.min(i, fSpots.length - 1)];
+            orderMove(u, s.cx, s.cy);
+          });
           st.staging.phase = 'strike';
           st.staging.cell = fwd;
           st.staging.launchAt = g.tick + 380;
@@ -573,12 +628,11 @@ const AI = (function () {
     // repertoire widens to full flanking sweeps as the war grinds on
     st.approachAng = APPROACHES[(g.rng() * Math.min(APPROACHES.length, 3 + st.wave)) | 0];
     const cell = _stageCell(g, p, st);
-    let i = 0;
-    for (const u of force) {
-      const dx = (i % 3) - 1, dy = ((i / 3) | 0) % 3 - 1;
-      orderMove(u, clamp(cell.cx + dx, 0, C.MAP_W - 1), clamp(cell.cy + dy, 0, C.MAP_H - 1));
-      i++;
-    }
+    const mSpots = formationCells(g, cell.cx, cell.cy, force.length);
+    force.forEach((u, i) => {
+      const s = mSpots[Math.min(i, mSpots.length - 1)];
+      orderMove(u, s.cx, s.cy);
+    });
     const target = _nearestEnemyTarget(g, ep, { x: baseX, y: baseY });
     st.wave++;
     st.staging = {
@@ -588,9 +642,14 @@ const AI = (function () {
       phase: 'gather',
       launchAt: g.tick + 600,  // longer leash: crossing a ford takes time
     };
-    // aircraft join the strike directly (they rearm on their own)
+    // aircraft join the strike directly (they rearm on their own) — but they
+    // pick their OWN mark: the highest-value target in reach, not whatever
+    // ground building the wave happens to be marching on
     for (const u of _military(g, p)) {
-      if (DATA.units[u.type].air && u.state === 'idle' && target) orderAttack(u, target);
+      if (DATA.units[u.type].air && u.state === 'idle') {
+        const at = _airTarget(g, ep, u) || target;
+        if (at) orderAttack(u, at);
+      }
     }
   }
 
@@ -788,27 +847,47 @@ const AI = (function () {
       } else if (deep.length) {
         for (const u of deep) orderMove(u, worldToCell(cydX), worldToCell(cydY));
       }
+
+      // aircraft never hover over enemy ground: hit something worth the fuel
+      // if it's near, otherwise fly home (the rearm logic takes over there)
+      const home2 = g.startPos[p.side] || g.startPos.ai;
+      for (const id of p.unitIds) {
+        const u = g.units.get(id);
+        if (!u || !DATA.units[u.type].air || u.state !== 'idle') continue;
+        if (_cellDist(worldToCell(u.x), worldToCell(u.y), home2.cx, home2.cy) <= 14) continue;
+        const t = u.ammo > 0 ? _airTarget(g, ep, u, 12) : null;
+        if (t) orderAttack(u, t);
+        else orderMove(u, home2.cx, home2.cy);
+      }
     }
 
+    // crate runs at every difficulty: loose salvage near an idle raider is
+    // free money/tech — the elite AI ranges much further for it
+    if (g.tick % 150 === 7) _crateRuns(g, p, _elite(g) ? 26 : 14);
+
     if (_elite(g)) _eliteMoves(g, p, st, ep);
+  }
+
+  // send the nearest fast idle raider at each crate within `maxCells`
+  function _crateRuns(g, p, maxCells) {
+    if (!g.crates || !g.crates.length) return;
+    for (const c of g.crates) {
+      let best = null, bestD = maxCells * maxCells * C.CELL * C.CELL;
+      for (const u of _military(g, p)) {
+        if (u.state !== 'idle' || DATA.units[u.type].air) continue;
+        if (DATA.units[u.type].speed < 2.4) continue;
+        const d = (u.x - cellCenterX(c.cx)) ** 2 + (u.y - cellCenterY(c.cy)) ** 2;
+        if (d < bestD) { bestD = d; best = u; }
+      }
+      if (best) orderMove(best, c.cx, c.cy);
+    }
   }
 
   // ---- elite side-quests: crates, depots, garrisons, expansion ---------------
 
   function _eliteMoves(g, p, st, ep) {
-    // crate runs: the nearest fast idle raider grabs loose salvage
-    if (g.crates && g.crates.length && g.tick % 150 === 7) {
-      for (const c of g.crates) {
-        let best = null, bestD = 26 * 26 * C.CELL * C.CELL;
-        for (const u of _military(g, p)) {
-          if (u.state !== 'idle' || DATA.units[u.type].air) continue;
-          if (DATA.units[u.type].speed < 2.4) continue;
-          const d = (u.x - cellCenterX(c.cx)) ** 2 + (u.y - cellCenterY(c.cy)) ** 2;
-          if (d < bestD) { bestD = d; best = u; }
-        }
-        if (best) orderMove(best, c.cx, c.cy);
-      }
-    }
+    // (crate runs moved to _crateRuns — every difficulty grabs convenient
+    // salvage now; elite just ranges further for it)
 
     // supply depots: keep an engineer alive and send it at the free money
     if (g.tick % 120 === 37) {
@@ -862,7 +941,10 @@ const AI = (function () {
       }
     }
 
-    // expansion: a second MCV plants a forward yard by the richest far field
+    // expansion: a second MCV plants a forward yard by the richest far field.
+    // The anchor is a DEPLOYABLE clear pad beside the field (aiming at the
+    // field itself parks the MCV on crystal where deploy can never succeed),
+    // and the convoy travels with an escort instead of trundling out alone.
     if (!st.expanded && g.tick > 4200 && g.tick % 150 === 97) {
       let mcv = null;
       for (const id of p.unitIds) {
@@ -873,15 +955,25 @@ const AI = (function () {
       if (mcv && st.expandAt) {
         const d = dist(mcv.x, mcv.y, cellCenterX(st.expandAt.cx), cellCenterY(st.expandAt.cy));
         if (d <= C.CELL * 2.5) {
-          if (orderDeploy(mcv)) st.expanded = true;
-          else orderMove(mcv, st.expandAt.cx + 1, st.expandAt.cy + 1);
+          if (orderDeploy(mcv)) {
+            st.expanded = true;
+          } else {
+            // blocked after all (a unit wandered in, crystal spread): re-anchor
+            // on fresh clear ground near the MCV, widening the search each try
+            st.expandTries = (st.expandTries || 0) + 1;
+            const re = _deploySpotNear(g,
+              { cx: worldToCell(mcv.x), cy: worldToCell(mcv.y) }, 3 + st.expandTries * 2);
+            if (re) { st.expandAt = re; orderMove(mcv, re.cx, re.cy); }
+          }
         } else if (mcv.state === 'idle') {
           orderMove(mcv, st.expandAt.cx, st.expandAt.cy);
+          _escortTo(g, p, st, st.expandAt);
         }
       } else if (!mcv && yards.length === 1 && p.credits > 2500 &&
                  Production.prereqOk(p, 'mcv')) {
-        // is there a field worth trekking to?
-        const spot = _richFarField(g, yards[0]);
+        // is there a field worth trekking to — with buildable ground beside it?
+        const field = _richFarField(g, yards[0]);
+        const spot = field && _deploySpotNear(g, field, 7);
         if (spot) {
           st.expandAt = spot;
           st.wantMcv = true;      // the vehicle line's next slot builds it
@@ -889,6 +981,20 @@ const AI = (function () {
       } else if (mcv) {
         st.wantMcv = false;
       }
+    }
+  }
+
+  // a few idle guns ride along and hold the ground at the destination
+  function _escortTo(g, p, st, cell) {
+    let sent = 0;
+    for (const u of _military(g, p)) {
+      if (sent >= 3) break;
+      if (u.state !== 'idle' || DATA.units[u.type].air) continue;
+      if (st.staging && st.staging.ids.includes(u.id)) continue;
+      const spots = formationCells(g, cell.cx, cell.cy, 4);
+      const s = spots[Math.min(1 + sent, spots.length - 1)];
+      orderAttackMove(u, s.cx, s.cy);
+      sent++;
     }
   }
 

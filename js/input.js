@@ -601,21 +601,23 @@ const Input = (function () {
     if (ids.length) _select(ids);
   }
 
-  // spread group move destinations in a spiral so units don't all fight for one cell
+  // spread group move destinations in a spiral so units don't all fight for
+  // one cell (shared helper in core.js — the AI's waves use the same one)
   function _formationCells(cx, cy, n) {
-    const out = [{ cx, cy }];
-    let r = 1;
-    while (out.length < n && r < 8) {
-      for (let dy = -r; dy <= r && out.length < n; dy++) {
-        for (let dx = -r; dx <= r && out.length < n; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-          const x = cx + dx, y = cy + dy;
-          if (inMap(x, y) && terrainPassable(game.terrain[cellIdx(x, y)])) out.push({ cx: x, cy: y });
-        }
-      }
-      r++;
-    }
-    return out;
+    return formationCells(game, cx, cy, n);
+  }
+
+  // hand each unit the formation spot matching its CURRENT relative position
+  // (both lists sorted row-major): the group translates as a block instead of
+  // crossing paths into a single-file line
+  function _orderFormation(units, cx, cy, order) {
+    const spots = _formationCells(cx, cy, units.length)
+      .sort((a, b) => (a.cy - b.cy) || (a.cx - b.cx));
+    const su = units.slice().sort((a, b) => (a.y - b.y) || (a.x - b.x));
+    su.forEach((u, i) => {
+      const s = spots[Math.min(i, spots.length - 1)];
+      order(u, s.cx, s.cy);
+    });
   }
 
   // ---- click handling --------------------------------------------------------------
@@ -675,11 +677,7 @@ const Input = (function () {
       // attack-move: sweep to the clicked spot, engaging everything en route
       const am = _selectedUnits().filter(u => u.owner === g.humanSide);
       if (am.length) {
-        const spots = _formationCells(cx, cy, am.length);
-        am.forEach((u, i) => {
-          const s = spots[Math.min(i, spots.length - 1)];
-          orderAttackMove(u, s.cx, s.cy);
-        });
+        _orderFormation(am, cx, cy, (u, tx, ty) => orderAttackMove(u, tx, ty));
         AUDIO.ack('attack', _selClass());
         spawnEffect('atkMark', cellCenterX(cx), cellCenterY(cy), { ttl: 14 });
       } else AUDIO.play('buzz');
@@ -705,11 +703,7 @@ const Input = (function () {
     }
     if (ctrl && !ent && ownSel.some(u =>
         DATA.units[u.type].weapon && !DATA.units[u.type].air)) {
-      const spots = _formationCells(cx, cy, ownSel.length);
-      ownSel.forEach((u, i) => {
-        const s = spots[Math.min(i, spots.length - 1)];
-        orderAttackMove(u, s.cx, s.cy);
-      });
+      _orderFormation(ownSel, cx, cy, (u, tx, ty) => orderAttackMove(u, tx, ty));
       AUDIO.ack('attack', _selClass());
       spawnEffect('atkMark', cellCenterX(cx), cellCenterY(cy), { ttl: 14 });
       return;
@@ -868,11 +862,7 @@ const Input = (function () {
         return;
       }
       if (terrainPassable(g.terrain[cellIdx(cx, cy)]) || ownSel.some(u => DATA.units[u.type].air)) {
-        const spots = _formationCells(cx, cy, ownSel.length);
-        ownSel.forEach((u, i) => {
-          const s = spots[Math.min(i, spots.length - 1)];
-          orderMove(u, s.cx, s.cy);
-        });
+        _orderFormation(ownSel, cx, cy, (u, tx, ty) => orderMove(u, tx, ty));
         AUDIO.ack('move', _selClass());
         spawnEffect('moveMark', cellCenterX(cx), cellCenterY(cy), { ttl: 14 });
       } else {

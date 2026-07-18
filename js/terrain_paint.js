@@ -726,26 +726,38 @@ const TERRAINPAINT = (function () {
         const bx = cx * CS, by = cy * CS;
         const up = inMap(cx, cy - 1) && g.terrain[cellIdx(cx, cy - 1)] === T_BRIDGE;
         const dn = inMap(cx, cy + 1) && g.terrain[cellIdx(cx, cy + 1)] === T_BRIDGE;
+        // two-lane decks: rails and beams only on true OUTER edges, the deck
+        // itself runs seam-free into a neighboring bridge cell
+        const lf = inMap(cx - 1, cy) && g.terrain[cellIdx(cx - 1, cy)] === T_BRIDGE;
+        const rt = inMap(cx + 1, cy) && g.terrain[cellIdx(cx + 1, cy)] === T_BRIDGE;
         // under-deck shade on the visible waterline slivers
-        P(q, bx + 1, by, 1, CS, 'rgba(6,10,16,0.4)');
-        P(q, bx + 22, by, 1, CS, 'rgba(6,10,16,0.4)');
+        if (!lf) P(q, bx + 1, by, 1, CS, 'rgba(6,10,16,0.4)');
+        if (!rt) P(q, bx + 22, by, 1, CS, 'rgba(6,10,16,0.4)');
         // timber deck
-        P(q, bx + 2, by, 20, CS, '#7d5f3c');
+        const x0 = lf ? 0 : 2, x1 = rt ? CS : 22;
+        P(q, bx + x0, by, x1 - x0, CS, '#7d5f3c');
         for (let y = 0; y < CS; y++) {
-          if ((by + y) % 4 === 3) P(q, bx + 3, by + y, 18, 1, '#67492c');   // plank seams
+          if ((by + y) % 4 === 3) {
+            const sx0 = lf ? 0 : 3, sx1 = rt ? CS : 21;
+            P(q, bx + sx0, by + y, sx1 - sx0, 1, '#67492c');   // plank seams
+          }
         }
         for (let k = 0; k < 6; k++) {                                       // worn grain
           const gy2 = by + ((h2(cx * 7 + k, cy, seed ^ 0xbd1) * 22) | 0);
           P(q, bx + 4 + ((h2(k, cx + cy, seed ^ 0xbd2) * 14) | 0), gy2, 2 + (k & 1), 1, '#8d6d46');
         }
         // edge beams + rail posts
-        P(q, bx + 2, by, 2, CS, '#5b452a');
-        P(q, bx + 20, by, 2, CS, '#4e3a23');
+        if (!lf) P(q, bx + 2, by, 2, CS, '#5b452a');
+        if (!rt) P(q, bx + 20, by, 2, CS, '#4e3a23');
         for (let y = 1; y < CS; y += 6) {
-          P(q, bx + 1, by + y, 2, 3, '#3d2e1c');
-          P(q, bx + 21, by + y, 2, 3, '#3d2e1c');
-          P(q, bx + 1, by + y, 2, 1, '#5b452a');
-          P(q, bx + 21, by + y, 2, 1, '#5b452a');
+          if (!lf) {
+            P(q, bx + 1, by + y, 2, 3, '#3d2e1c');
+            P(q, bx + 1, by + y, 2, 1, '#5b452a');
+          }
+          if (!rt) {
+            P(q, bx + 21, by + y, 2, 3, '#3d2e1c');
+            P(q, bx + 21, by + y, 2, 1, '#5b452a');
+          }
         }
         // end aprons flare onto the banks
         if (!up) { P(q, bx, by, CS, 2, '#8a6a42'); P(q, bx, by, CS, 1, '#9c7a4e'); }
