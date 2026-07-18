@@ -289,6 +289,12 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   difficulty grabs convenient crates, held supply depots pay a trickle
   that's actually worth capturing, and river bridges are two lanes wide so
   harvester traffic stops wedging head-to-head
+- **Proper war-room briefings** — every operation opens on a full sitrep:
+  a sector stamp and faction classification bar, the situation report
+  teletyped onto the screen (click to skip ahead), explicit objectives,
+  intel notes on enemy strength and tempo, and a live tactical survey of
+  the actual battlefield with your position, the enemy, and the objective
+  marked — the map you study is the map you fight on
 - **Campaign records** — each operation remembers your fastest win and best
   score, shown on the operations list and stamped NEW BEST on the tally
 - **Multiplayer rematch** — the connection stays up at the score screen:

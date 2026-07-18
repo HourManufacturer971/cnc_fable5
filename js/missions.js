@@ -26,7 +26,8 @@
 
 const MISSIONS = [
   {
-    n: 1, title: 'LANDFALL', seed: 8121,
+    n: 1, title: 'LANDFALL',
+    sector: "THE VERDANT REACH — SOUTHERN FRONTIER", seed: 8121,
     credits: 6000, aiCredits: 2500, aiCalm: 1.8, aiWaveCap: 5,
     objective: { type: 'annihilate' },
     objText: {
@@ -59,7 +60,8 @@ const MISSIONS = [
     ],
   },
   {
-    n: 2, title: 'GREEN GOLD', seed: 4257,
+    n: 2, title: 'GREEN GOLD',
+    sector: "THE GREENBELT — CONTESTED FIELDS", seed: 4257,
     credits: 3000, aiCredits: 5000, aiCalm: 1.4,
     objective: { type: 'harvest', amount: 6000 },
     objText: {
@@ -103,7 +105,8 @@ const MISSIONS = [
     ],
   },
   {
-    n: 3, title: 'HOLD THE LINE', seed: 9773, holdout: true,
+    n: 3, title: 'HOLD THE LINE',
+    sector: "KARST PLATEAU — THE OLD HILL FORT", seed: 9773, holdout: true,
     credits: 8000, aiCredits: 11000, aiCalm: 0.5,
     objective: { type: 'survive', minutes: 15 },
     objText: {
@@ -144,7 +147,8 @@ const MISSIONS = [
     ],
   },
   {
-    n: 4, title: 'SCORCHED HARVEST', seed: 3141,
+    n: 4, title: 'SCORCHED HARVEST',
+    sector: "ASHFIELD BASIN — THE ENEMY BREADBASKET", seed: 3141,
     credits: 6000, aiCredits: 7000,
     objective: { type: 'killEconomy' },
     objText: {
@@ -179,7 +183,8 @@ const MISSIONS = [
     ],
   },
   {
-    n: 5, title: 'SEVERED HEAD', seed: 6008,
+    n: 5, title: 'SEVERED HEAD',
+    sector: "THE SERPENT'S THROAT — FORTIFIED GORGE", seed: 6008,
     credits: 8000, aiCredits: 12000, aiCalm: 0.7, aiWaveCap: 12,
     objective: { type: 'annihilate' },
     objText: {
@@ -219,7 +224,8 @@ const MISSIONS = [
     ],
   },
   {
-    n: 6, title: 'THE LONG ROAD', seed: 5150,
+    n: 6, title: 'THE LONG ROAD',
+    sector: "PILGRIM ROAD — CONVOY COUNTRY", seed: 5150,
     credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0,
     objective: { type: 'escort', unit: 'apc', dest: 'ai', radius: 2.5 },
     noHumanSpawn: true,
@@ -285,7 +291,8 @@ const MISSIONS = [
     ],
   },
   {
-    n: 7, title: 'INSIDE JOB', seed: 7414,
+    n: 7, title: 'INSIDE JOB',
+    sector: "BLACKWATER CROSSING — DEEP BEHIND THE LINES", seed: 7414,
     credits: 7000, aiCredits: 9000, aiCalm: 0.9,
     objective: { type: 'capture', btype: { gdi: 'tmpl', nod: 'eye' } },
     objText: {
@@ -340,7 +347,8 @@ const MISSIONS = [
     ],
   },
   {
-    n: 8, title: 'AVALANCHE', seed: 9091,
+    n: 8, title: 'AVALANCHE',
+    sector: "AVALANCHE FOOTHILLS — THE LAST FORTRESS", seed: 9091,
     credits: 10000, aiCredits: 16000, aiCalm: 0.5, aiWaveCap: 14,
     objective: { type: 'annihilate' },
     objText: {

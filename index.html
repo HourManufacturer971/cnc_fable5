@@ -122,10 +122,21 @@
   </div>
 
   <div id="briefing" class="overlay hidden">
-    <div class="panel">
+    <div class="panel briefPanel">
       <h2 id="briefTitle"></h2>
-      <div id="briefBody" class="brief"></div>
-      <p id="briefObjective"></p>
+      <div id="briefSector"></div>
+      <div id="briefClass"></div>
+      <div class="briefCols">
+        <div class="briefLeft">
+          <div id="briefBody" class="brief"></div>
+          <p id="briefObjective"></p>
+          <div id="briefIntel"></div>
+        </div>
+        <div class="briefRight">
+          <canvas id="briefMap" width="220" height="220"></canvas>
+          <div id="briefMapCap"></div>
+        </div>
+      </div>
       <button id="btnCommence">Commence Operation</button>
       <button id="btnBriefBack" class="backBtn">Back</button>
     </div>

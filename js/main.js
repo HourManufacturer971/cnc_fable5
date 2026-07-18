@@ -225,10 +225,12 @@ const Main = (function () {
     }
     _wireMpLobby();
     $('btnBriefBack').addEventListener('click', () => {
+      _stopTeletype();
       $('briefing').classList.add('hidden');
       $('missions').classList.remove('hidden');
     });
     $('btnCommence').addEventListener('click', () => {
+      _stopTeletype();
       startGame(mySide, { mission: pendingMission });
     });
 
@@ -595,13 +597,206 @@ const Main = (function () {
     $('missions').classList.remove('hidden');
   }
 
+  let briefTimer = 0;
+
+  function _stopTeletype() {
+    if (briefTimer) { clearInterval(briefTimer); briefTimer = 0; }
+  }
+
+  // typed sitrep: the FULL text is in the DOM immediately (the untyped tail
+  // sits in visibility-hidden spans), so the reveal is purely visual — tests
+  // and screen readers always see the whole report
+  function _teletype(el, paragraphs) {
+    _stopTeletype();
+    el.innerHTML = '';
+    const parts = [];
+    for (const text of paragraphs) {
+      const pe = document.createElement('p');
+      const shown = document.createElement('span');
+      const hid = document.createElement('span');
+      hid.className = 'tt-hid';
+      hid.textContent = text;
+      pe.appendChild(shown);
+      pe.appendChild(hid);
+      el.appendChild(pe);
+      parts.push({ shown, hid });
+    }
+    let pi = 0, typed = 0;
+    if (parts.length) parts[0].shown.className = 'tt-on';
+    briefTimer = setInterval(() => {
+      const part = parts[pi];
+      if (!part) { _stopTeletype(); return; }
+      const t = part.hid.textContent;
+      part.shown.textContent += t.slice(0, 3);
+      part.hid.textContent = t.slice(3);
+      typed += 3;
+      if (typed % 60 === 0) { try { AUDIO.play('click'); } catch (e) {} }
+      if (!part.hid.textContent.length) {
+        part.shown.className = '';
+        pi++;
+        if (parts[pi]) parts[pi].shown.className = 'tt-on';
+        else _stopTeletype();
+      }
+    }, 16);
+    // impatient commanders click the report to print it all at once
+    el.onclick = () => {
+      _stopTeletype();
+      for (const part of parts) {
+        part.shown.textContent += part.hid.textContent;
+        part.hid.textContent = '';
+        part.shown.className = '';
+      }
+    };
+  }
+
+  // intel bullets derived from the mission's own difficulty knobs — the
+  // briefing tells you what the fight will feel like, not just what to do
+  function _briefIntel(m) {
+    const out = [];
+    const chest = m.aiCredits || 5000;
+    out.push(chest >= 9000 ? 'Enemy war chest: HEAVY — layered defenses and armor in numbers'
+      : chest >= 5000 ? 'Enemy war chest: MODERATE — a working base with teeth'
+        : 'Enemy war chest: LIGHT — a garrison, not an army');
+    const calm = m.aiCalm || 1;
+    out.push(calm <= 0.6 ? 'Expected pressure: RELENTLESS — the waves will not stop coming'
+      : calm <= 1 ? 'Expected pressure: STEADY — probing raids building into offensives'
+        : 'Expected pressure: LIGHT — time is on your side; use it');
+    if (m.holdout) out.push('Terrain: a walled plateau with three gated passes — the rich crystal lies OUTSIDE');
+    const ot = m.objective.type;
+    if (ot === 'harvest') out.push('Survey: a BLUE chrysalite lode is charted midfield — double value at the refinery');
+    if (ot === 'escort') out.push('Logistics: no base, no production — the convoy is everything you have');
+    if (ot === 'capture') out.push('Rules of engagement: the prize must be taken INTACT — engineers, not artillery');
+    if (ot === 'killEconomy') out.push('Targets: the harvest chain — refineries and harvesters; nothing else wins this');
+    return out;
+  }
+
+  // tactical survey: the REAL mission battlefield (same seed, same generator)
+  // drawn schematic-style with force and objective markers. Missions are
+  // always 64x64 — C flips there for the generation and is restored before
+  // any frame could render.
+  function _drawBriefMap(m) {
+    const cv = $('briefMap'), q = cv.getContext('2d');
+    const W0 = C.MAP_W, H0 = C.MAP_H;
+    C.MAP_W = C.MAP_H = 64;
+    const n = 64 * 64;
+    const fake = {
+      seed: m.seed, sides: ['gdi', 'nod'], humanSide: mySide,
+      terrain: new Uint8Array(n), tvar: new Uint8Array(n),
+      tib: new Uint16Array(n), tibType: new Uint8Array(n),
+      startPos: null, decor: null,
+    };
+    try {
+      MAPGEN.generate(fake, m.seed, { holdout: m.holdout });
+    } finally {
+      C.MAP_W = W0; C.MAP_H = H0;
+    }
+    const P = 3, MG = 13;
+    cv.width = 64 * P + MG * 2;
+    cv.height = 64 * P + MG * 2;
+    q.fillStyle = '#05070c';
+    q.fillRect(0, 0, cv.width, cv.height);
+    const TC = ['#233a20', '#4a3d28', '#3f4045', '#123050', '#152a0e', '#1a3a12', '#5a4326'];
+    for (let cy = 0; cy < 64; cy++) {
+      for (let cx = 0; cx < 64; cx++) {
+        const i = cy * 64 + cx;
+        q.fillStyle = fake.tib[i] > 0
+          ? (fake.tibType[i] === 1 ? '#2f74d0' : '#3fae53')
+          : (TC[fake.terrain[i]] || TC[0]);
+        q.fillRect(MG + cx * P, MG + cy * P, P, P);
+      }
+    }
+    // survey grid + scanlines
+    q.globalAlpha = 0.10;
+    q.strokeStyle = '#9fae7a';
+    q.lineWidth = 1;
+    for (let k = 0; k <= 64; k += 16) {
+      q.beginPath(); q.moveTo(MG + k * P + 0.5, MG); q.lineTo(MG + k * P + 0.5, MG + 64 * P); q.stroke();
+      q.beginPath(); q.moveTo(MG, MG + k * P + 0.5); q.lineTo(MG + 64 * P, MG + k * P + 0.5); q.stroke();
+    }
+    q.fillStyle = '#000';
+    for (let y = 0; y < cv.height; y += 3) q.fillRect(0, y, cv.width, 1);
+    q.globalAlpha = 1;
+    const X = c => MG + c * P + P / 2;
+    const label = (x, y, s, color) => {
+      q.font = 'bold 9px monospace';
+      const w = q.measureText(s).width;
+      const lx = Math.max(2, Math.min(cv.width - w - 4, x - w / 2));
+      const ly = Math.max(9, Math.min(cv.height - 3, y));
+      q.fillStyle = 'rgba(0,0,0,0.7)';
+      q.fillRect(lx - 2, ly - 8, w + 4, 10);
+      q.fillStyle = color;
+      q.fillText(s, lx, ly);
+    };
+    const you = fake.startPos[mySide] || fake.startPos.human;
+    const foe = fake.startPos[mySide === 'gdi' ? 'nod' : 'gdi'] || fake.startPos.ai;
+    // neutral prizes: supply depots + the village
+    q.fillStyle = '#e8e6da';
+    if (fake.decor && fake.decor.depots) {
+      for (const d of fake.decor.depots) q.fillRect(X(d.cx) - 1, X(d.cy) - 1, 3, 3);
+    }
+    if (fake.decor && fake.decor.village) {
+      const v0 = fake.decor.village.houses[0];
+      q.fillRect(X(v0.cx) - 1, X(v0.cy) - 1, 3, 3);
+    }
+    if (m.objective.type === 'escort') {
+      // the beacon is the destination; the road there IS the mission
+      q.strokeStyle = 'rgba(224,184,64,0.7)';
+      q.lineWidth = 1;
+      q.setLineDash([4, 3]);
+      q.beginPath(); q.moveTo(X(you.cx), X(you.cy)); q.lineTo(X(foe.cx), X(foe.cy)); q.stroke();
+      q.setLineDash([]);
+      q.strokeStyle = '#ffe28a';
+      q.lineWidth = 2;
+      q.strokeRect(X(foe.cx) - 4, X(foe.cy) - 4, 8, 8);
+      label(X(foe.cx), X(foe.cy) - 8, 'BEACON', '#ffe28a');
+    } else {
+      q.strokeStyle = '#ff4030';
+      q.lineWidth = 2;
+      q.beginPath();
+      q.moveTo(X(foe.cx) - 6, X(foe.cy)); q.lineTo(X(foe.cx) + 6, X(foe.cy));
+      q.moveTo(X(foe.cx), X(foe.cy) - 6); q.lineTo(X(foe.cx), X(foe.cy) + 6);
+      q.stroke();
+      q.strokeRect(X(foe.cx) - 4, X(foe.cy) - 4, 8, 8);
+      label(X(foe.cx), X(foe.cy) - 9, 'ENEMY', '#ff6a50');
+    }
+    q.fillStyle = '#ffd23c';
+    q.fillRect(X(you.cx) - 3, X(you.cy) - 3, 6, 6);
+    q.strokeStyle = '#fff2b0';
+    q.lineWidth = 1;
+    q.strokeRect(X(you.cx) - 4.5, X(you.cy) - 4.5, 9, 9);
+    label(X(you.cx), X(you.cy) + 14, m.holdout ? 'HOLD HERE' : 'YOUR FORCE', '#ffe28a');
+    if (m.holdout) {
+      q.strokeStyle = 'rgba(255,210,60,0.5)';
+      q.beginPath(); q.arc(X(you.cx), X(you.cy), 11 * P, 0, Math.PI * 2); q.stroke();
+    }
+    if (m.objective.type === 'harvest') {
+      for (let i = 0; i < n; i++) {
+        if (fake.tibType[i] === 1 && fake.tib[i] > 0) {
+          const cx = i % 64, cy = (i / 64) | 0;
+          q.strokeStyle = '#7fb4ff';
+          q.lineWidth = 1;
+          q.beginPath(); q.arc(X(cx), X(cy), 8, 0, Math.PI * 2); q.stroke();
+          label(X(cx), X(cy) - 10, 'BLUE LODE', '#9fc8ff');
+          break;
+        }
+      }
+    }
+  }
+
   function _showBriefing(m) {
     pendingMission = m;
     $('missions').classList.add('hidden');
     $('briefTitle').textContent = 'OP ' + m.n + ': ' + m.title;
-    $('briefBody').innerHTML = m.brief[mySide].map(p => `<p>${p}</p>`).join('');
+    $('briefSector').textContent = 'SECTOR ' + m.seed + ' · ' + (m.sector || 'UNCHARTED');
+    $('briefClass').textContent = mySide === 'gdi'
+      ? 'UDC TACTICAL NET — EYES ONLY' : 'SERPENT WHISPERS — FOR THE FAITHFUL';
+    _teletype($('briefBody'), m.brief[mySide]);
     $('briefBody').scrollTop = 0;   // the element persists across briefings
     $('briefObjective').textContent = 'OBJECTIVE: ' + m.objText[mySide];
+    $('briefIntel').innerHTML =
+      _briefIntel(m).map(s => `<div>◈ ${s}</div>`).join('');
+    _drawBriefMap(m);
+    $('briefMapCap').textContent = 'TACTICAL SURVEY · GRID 16 · LIVE FEED';
     $('briefing').classList.remove('hidden');
   }
 

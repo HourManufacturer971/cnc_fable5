@@ -1012,7 +1012,17 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - Menu DOM (#menu overlays in index.html): title screen with the two faction emblems
   (canvas-drawn logos injected), faction buttons UDC / Serpent Order → Operations
   (a SKIRMISH SETUP strip `#skOpts`, three SKIRMISH difficulty rows, then the campaign
-  ops) → Briefing → game; pause menu (Resume, Sound/Music/Voice toggles, SFX/Music/Voice
+  ops) → Briefing → game. The briefing is a full sitrep screen (main.js
+  `_showBriefing`): OP title + a per-mission `sector` stamp, a faction-styled
+  classification bar, the brief paragraphs TELETYPED (the untyped tail lives in
+  `visibility:hidden` spans so `textContent` is always complete — click the body
+  to print it all), an OBJECTIVE block, intel bullets derived from the mission's
+  own knobs (`_briefIntel`: aiCredits/aiCalm/holdout/objective type), and a
+  TACTICAL SURVEY canvas (`_drawBriefMap`): the real mission map regenerated
+  from its seed via MAPGEN into a throwaway grid (C.MAP_W flipped to 64 and
+  restored synchronously), drawn schematic-style with markers — your force,
+  enemy crosshair (or the escort BEACON + dashed route), the holdout ring, the
+  blue lode on harvest ops, depot/village dots; pause menu (Resume, Sound/Music/Voice toggles, SFX/Music/Voice
   volume sliders, Fullscreen, Speed slider 0.5–2.2 defaulting to 1.7, Save Battle,
   Restart mission, Abort mission, a `#seedLine` "Map seed N" footer for sharing);
   score screen (+ Rematch in MP). The main menu shows Resume Battle when a compatible
