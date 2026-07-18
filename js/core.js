@@ -7,6 +7,7 @@ const C = {
   // doubles ("hi-res mode": 48 screen px per cell at 1280x800 internal)
   CELL: 24,
   ZOOM: 2,
+  VZOOM: 1,      // runtime view zoom (pinch): multiplies ZOOM at draw time
   MAP_W: 64,
   MAP_H: 64,
   TPS: 15,
@@ -53,11 +54,26 @@ function applyScreenAspect(aspect) {
   C.SCREEN_W = w;
   C.SIDEBAR_X = w - C.SIDEBAR_W;
   C.VIEW_PW = C.SIDEBAR_X;
-  C.VIEW_W = C.VIEW_PW / C.ZOOM;
+  C.VIEW_W = C.VIEW_PW / (C.ZOOM * (C.VZOOM || 1));
+  C.VIEW_H = C.VIEW_PH / (C.ZOOM * (C.VZOOM || 1));
   C.RADAR_X = C.SIDEBAR_X;
-  C.MM_X = C.SIDEBAR_X + 32;
+  C.MM_X = C.SIDEBAR_X + ((C.SIDEBAR_W - C.MM_S) >> 1);
   C.STRIP_BX = C.SIDEBAR_X + 8;
-  C.STRIP_UX = C.SIDEBAR_X + 144;
+  C.STRIP_UX = C.SIDEBAR_X + 8 + C.CAMEO_PW + 8;
+}
+
+// Coarse-pointer (touch) UI: a wider sidebar with bigger build icons —
+// finger-sized targets on phone-sized screens. Runs BEFORE the first
+// applyScreenAspect so the derived layout picks the width up. Four rows
+// stay visible per strip (they scroll); the icons themselves grow ~40%.
+function applyTouchSidebar() {
+  C.TOUCH_UI = true;
+  C.SIDEBAR_W = 448;
+  C.RADAR_W = 448;
+  C.CAMEO_PW = 176;
+  C.CAMEO_PH = 132;
+  C.STRIP_SPACING = 138;
+  C.STRIP_VISIBLE = 4;
 }
 
 // Shared palette — every sprite file draws from these so the art reads as one set.

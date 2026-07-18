@@ -468,7 +468,13 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   fiction. Mission defs are single-faction now (`brief` is a paragraph array,
   `objText` a string) and carry `terr: [x,y]` territory coords for the THEATER
   OF WAR screen (main.js `_drawTheater`): a procedurally drawn original country
-  at war — sea with wave dashes and a coastal shelf around a Path2D coastline,
+  at war — the silhouette is built from layered coastal lobes (two broad
+  sinusoidal lobes + headlands + coves) so it reads as peninsulas and bays,
+  not a blob; every mission territory of BOTH arcs then pushes its coastal
+  spokes out (`need = hypot + 0.12` margin over ±2 spokes) so all 20 ops stand
+  on dry land — the corner ops' `terr` were also nudged inboard; 2-3 offshore
+  islets sit in the sea. Sea with wave dashes and a coastal shelf around the
+  Path2D coastline,
   rivers running to the coast, mountain chains, forest stipple, and eight
   towns with ORIGINAL names (VELMOR, KARSA POINT, OSTHOLM, …) threaded by
   dashed supply roads; the war state reads at a glance: home ground behind the
@@ -798,6 +804,28 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   the CSS box fills the screen exactly. Every consumer reads `C.*` live so the whole UI
   re-flows; re-run on visualViewport/window resize, orientationchange and
   fullscreenchange. Fine-pointer devices keep the fixed 1600×1000 layout untouched.
+- **Wide touch sidebar** (`core.js` `applyTouchSidebar`, called once at boot on
+  coarse pointers BEFORE the first layout pass): `SIDEBAR_W/RADAR_W` 320→448,
+  cameo slots 128×96→176×132, strip spacing 100→138 with 4 visible rows —
+  finger-sized build icons on phone-sized screens. `applyScreenAspect` derives
+  `STRIP_UX` and `MM_X` from `CAMEO_PW`/`SIDEBAR_W`, so the whole sidebar
+  re-flows from the two base numbers; hit zones and strip scrolling follow the
+  constants automatically.
+- **Pinch-to-zoom** (`Render.setViewZoom(f)`, `C.VZOOM`): render.js splits its
+  scale into `BZ` (the fixed bake scale — terrain cache, tree sprites and the
+  cursor stay authored at `C.ZOOM`) and a live `Z = BZ × C.VZOOM` used by every
+  world→screen path (`X/Y/cs`, `sca()`, `worldFromScreen`), so retargeting Z
+  re-scales the whole battlefield; cached bitmaps blit with explicit
+  `Z/BZ`-scaled dims. `C.VIEW_W/H` recompute from the zoom, which drives
+  culling, camera clamps, edge/keyboard/wheel panning and the radar's viewport
+  box for free; the zoom clamps to 0.5–1.6× and never lets the view exceed the
+  map. Touch: a two-finger pinch rides the existing two-finger gesture (spread
+  ratio → zoom, anchored on the world point between the fingers; a pinch never
+  counts as a two-finger tap). Desktop: ctrl+wheel (which is also how browsers
+  report a trackpad pinch) zooms around the cursor. Every screen→world
+  conversion in input.js divides by `C.ZOOM * C.VZOOM`; each battle opens at
+  1× (`startGame` resets). View zoom is render-only — per-client, excluded
+  from the MP checksum, PROTO unaffected.
 
 ### AI opponent (`ai.js`)
 - Skirmish AI. Starts with deployed base (see map/main setup) + same credits as player.

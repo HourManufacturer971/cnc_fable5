@@ -129,6 +129,7 @@ The game is playable from a mobile browser — landscape strongly recommended:
 | Tab-bar chips 1-5 | Tap to recall that control group (twice centers); long-press to assign the current selection |
 | Two-finger tap | Deselect / cancel mode (the right-click equivalent) |
 | Two-finger drag | Pan the map in any mode |
+| **Pinch** | **Zoom the battlefield** (0.5×–1.6×), anchored between your fingers — ctrl+wheel does the same on desktop |
 | Tap selected MCV again | Deploy into Construction Yard |
 | Tap selected loaded APC again | Unload its passengers |
 | Tap selected factory again | Make it the primary factory for its kind |

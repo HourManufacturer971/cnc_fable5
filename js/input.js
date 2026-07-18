@@ -93,7 +93,7 @@ const Input = (function () {
     window.addEventListener('mousemove', ev => {
       if (!rPan || !game) return;
       const r = canvas.getBoundingClientRect();
-      const s = C.SCREEN_W / r.width / C.ZOOM;   // client px -> WORLD px
+      const s = C.SCREEN_W / r.width / (C.ZOOM * (C.VZOOM || 1));   // client px -> WORLD px
       const dx = ev.clientX - rPan.cx, dy = ev.clientY - rPan.cy;
       if (!rPan.moved && Math.abs(dx) + Math.abs(dy) < 5) return;
       rPan.moved = true;
@@ -162,12 +162,25 @@ const Input = (function () {
         ev.preventDefault();
         return;
       }
+      // ctrl+wheel (and a trackpad pinch, which browsers report the same
+      // way) zooms the battlefield around the cursor
+      if (hit.zone === 'viewport' && !game.paused && ev.ctrlKey) {
+        const before = Render.worldFromScreen(p.x, p.y);
+        Render.setViewZoom((C.VZOOM || 1) * (1 - clamp(ev.deltaY, -60, 60) * 0.004));
+        const after = Render.worldFromScreen(p.x, p.y);
+        if (before && after) {
+          game.camera.x = clamp(game.camera.x + before.x - after.x, 0, Math.max(0, C.MAP_W * C.CELL - C.VIEW_W));
+          game.camera.y = clamp(game.camera.y + before.y - after.y, 0, Math.max(0, C.MAP_H * C.CELL - C.VIEW_H));
+        }
+        ev.preventDefault();
+        return;
+      }
       // two-finger touchpad scroll (or mouse wheel) pans the map
       if (hit.zone === 'viewport' && !game.paused) {
         const r = canvas.getBoundingClientRect();
-        const scale = C.SCREEN_W / r.width / C.ZOOM; // client px -> WORLD px
-        game.camera.x = clamp(game.camera.x + ev.deltaX * scale, 0, C.MAP_W * C.CELL - C.VIEW_W);
-        game.camera.y = clamp(game.camera.y + ev.deltaY * scale, 0, C.MAP_H * C.CELL - C.VIEW_H);
+        const scale = C.SCREEN_W / r.width / (C.ZOOM * (C.VZOOM || 1)); // client px -> WORLD px
+        game.camera.x = clamp(game.camera.x + ev.deltaX * scale, 0, Math.max(0, C.MAP_W * C.CELL - C.VIEW_W));
+        game.camera.y = clamp(game.camera.y + ev.deltaY * scale, 0, Math.max(0, C.MAP_H * C.CELL - C.VIEW_H));
         ev.preventDefault();
       }
     }, { passive: false });
@@ -195,7 +208,7 @@ const Input = (function () {
 
     function clientToWorld() {
       const r = canvas.getBoundingClientRect();
-      return C.SCREEN_W / r.width / C.ZOOM;  // client px -> WORLD px
+      return C.SCREEN_W / r.width / (C.ZOOM * (C.VZOOM || 1));  // client px -> WORLD px
     }
 
     function _cancelOneFinger() {
@@ -324,6 +337,10 @@ const Input = (function () {
           idA: a.identifier, idB: b.identifier,
           startMid: mid, lastMid: mid, t0: Date.now(), moved: false,
           tapEligible: wasQuickTap,
+          // pinch-to-zoom rides the same gesture: spread = zoom in, squeeze
+          // = zoom out, anchored on the point between the fingers
+          startDist: Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY),
+          startVz: C.VZOOM || 1,
         };
       }
     }, { passive: false });
@@ -340,8 +357,25 @@ const Input = (function () {
         const mid = { x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2 };
         if (game && !game.paused && game.status === 'playing') {
           const s = clientToWorld();
-          game.camera.x = clamp(game.camera.x - (mid.x - tTwo.lastMid.x) * s, 0, C.MAP_W * C.CELL - C.VIEW_W);
-          game.camera.y = clamp(game.camera.y - (mid.y - tTwo.lastMid.y) * s, 0, C.MAP_H * C.CELL - C.VIEW_H);
+          game.camera.x = clamp(game.camera.x - (mid.x - tTwo.lastMid.x) * s, 0, Math.max(0, C.MAP_W * C.CELL - C.VIEW_W));
+          game.camera.y = clamp(game.camera.y - (mid.y - tTwo.lastMid.y) * s, 0, Math.max(0, C.MAP_H * C.CELL - C.VIEW_H));
+          // pinch: retarget the view zoom, holding the world point between
+          // the fingers fixed on screen so the map zooms "under" the pinch
+          const dist = Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY);
+          if (tTwo.startDist > 24) {
+            const want = tTwo.startVz * dist / tTwo.startDist;
+            if (Math.abs(want - (C.VZOOM || 1)) > 0.01) {
+              const p = toInternal({ clientX: mid.x, clientY: mid.y });
+              const before = Render.worldFromScreen(p.x, p.y);
+              Render.setViewZoom(want);
+              const after = Render.worldFromScreen(p.x, p.y);
+              if (before && after) {
+                game.camera.x = clamp(game.camera.x + before.x - after.x, 0, Math.max(0, C.MAP_W * C.CELL - C.VIEW_W));
+                game.camera.y = clamp(game.camera.y + before.y - after.y, 0, Math.max(0, C.MAP_H * C.CELL - C.VIEW_H));
+              }
+              tTwo.moved = true;   // a pinch is never a two-finger tap
+            }
+          }
         }
         if (Math.hypot(mid.x - tTwo.startMid.x, mid.y - tTwo.startMid.y) > TAP_SLOP) tTwo.moved = true;
         tTwo.lastMid = mid;
@@ -583,7 +617,7 @@ const Input = (function () {
   function _boxSelect(shift) {
     const g = game;
     const r = dragRect;
-    const Z = C.ZOOM;
+    const Z = C.ZOOM * (C.VZOOM || 1);
     const wx1 = Math.min(r.x1, r.x2) / Z + g.camera.x, wx2 = Math.max(r.x1, r.x2) / Z + g.camera.x;
     const wy1 = (Math.min(r.y1, r.y2) - C.TAB_H) / Z + g.camera.y, wy2 = (Math.max(r.y1, r.y2) - C.TAB_H) / Z + g.camera.y;
     const ids = [];

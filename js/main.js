@@ -68,6 +68,9 @@ const Main = (function () {
     const vh = vv ? vv.height : window.innerHeight;
     if (!vw || !vh) return;
     applyScreenAspect(vw / vh);
+    // re-derive the effective view for the current pinch zoom (aspect
+    // changes VIEW_PW; the zoom scales it down to world units)
+    if (typeof Render !== 'undefined' && Render.setViewZoom) Render.setViewZoom(C.VZOOM || 1);
     // CSS box: exact fill when the internal aspect matches the screen's;
     // outside the clamp range, letterbox the leftover axis
     const internal = C.SCREEN_W / C.SCREEN_H;
@@ -149,6 +152,9 @@ const Main = (function () {
     window.addEventListener('resize', _hideSwipeHintIfDone);
     window.addEventListener('scroll', _hideSwipeHintIfDone);
 
+    // touch devices get the wide sidebar BEFORE the first layout pass, so
+    // every derived constant (strips, radar, buttons) picks it up
+    if (matchMedia('(pointer: coarse)').matches) applyTouchSidebar();
     // keep the internal layout matched to the real screen on touch devices —
     // the bar collapsing, rotating, or entering fullscreen all change it
     _fitScreen();
@@ -623,20 +629,41 @@ const Main = (function () {
       }
       q.stroke();
     }
-    // --- the landmass: the same original continent, kept as a Path2D so
-    // geography and the war overlay can clip to the coast -------------------
+    // --- the landmass: a real country, not a blob. Layered coastal lobes
+    // give it peninsulas, bays and headlands; then every mission territory
+    // of BOTH arcs pushes the coast out far enough to stand on dry land
+    // (the first and last ops used to drown in the surf) -------------------
     const ccx = W * 0.5, ccy = H * 0.52;
     const spokes = 44, rad = [];
-    for (let i = 0; i < spokes; i++) rad.push(0.62 + rng() * 0.38);
+    const ph1 = rng() * Math.PI * 2, ph2 = rng() * Math.PI * 2, ph3 = rng() * Math.PI * 2;
+    for (let i = 0; i < spokes; i++) {
+      const a = i / spokes * Math.PI * 2;
+      rad.push(0.52
+        + 0.16 * Math.sin(a * 2 + ph1)     // two broad lobes: a waist between them
+        + 0.12 * Math.sin(a * 3 + ph2)     // headlands
+        + 0.07 * Math.sin(a * 5 + ph3)     // coves
+        + rng() * 0.08);
+    }
     for (let p = 0; p < 2; p++) {
       for (let i = 0; i < spokes; i++) {
         rad[i] = (rad[i] + rad[(i + 1) % spokes] + rad[(i + spokes - 1) % spokes]) / 3;
       }
     }
+    for (const m2 of MISSIONS.udc.concat(MISSIONS.srp)) {
+      const dx = (m2.terr[0] * W - ccx) / (W * 0.47);
+      const dy = (m2.terr[1] * H - ccy) / (H * 0.46);
+      const need = Math.min(1.04, Math.hypot(dx, dy) + 0.12);
+      const ai2 = Math.atan2(dy, dx);
+      const si = Math.round((ai2 < 0 ? ai2 + Math.PI * 2 : ai2) / (Math.PI * 2) * spokes) % spokes;
+      for (let k = -2; k <= 2; k++) {
+        const j = (si + k + spokes) % spokes;
+        rad[j] = Math.max(rad[j], need * (1 - Math.abs(k) * 0.08));
+      }
+    }
     const blob = new Path2D();
     for (let i = 0; i <= spokes; i++) {
       const a = (i % spokes) / spokes * Math.PI * 2;
-      const r = rad[i % spokes];
+      const r = Math.min(rad[i % spokes], 1.04);
       const x = ccx + Math.cos(a) * W * 0.47 * r;
       const y = ccy + Math.sin(a) * H * 0.46 * r;
       if (i) blob.lineTo(x, y); else blob.moveTo(x, y);
@@ -653,6 +680,24 @@ const Main = (function () {
     q.strokeStyle = '#4a5340';
     q.lineWidth = 1.5;
     q.stroke(blob);
+    // offshore islets give the sea some truth
+    for (let tr = 0, isl = 0; tr < 40 && isl < 3; tr++) {
+      const x = W * (0.06 + rng() * 0.88), y = H * (0.08 + rng() * 0.84);
+      let clear = !q.isPointInPath(blob, x, y);
+      for (const [ox2, oy2] of [[16, 0], [-16, 0], [0, 11], [0, -11]]) {
+        if (!clear) break;
+        if (q.isPointInPath(blob, x + ox2, y + oy2)) clear = false;
+      }
+      if (!clear) continue;
+      q.fillStyle = '#1b2416';
+      q.strokeStyle = '#4a5340';
+      q.lineWidth = 1;
+      q.beginPath();
+      q.ellipse(x, y, 6 + rng() * 7, 4 + rng() * 4, rng() * Math.PI, 0, Math.PI * 2);
+      q.fill();
+      q.stroke();
+      isl++;
+    }
     // --- interior geography, clipped to the coast ---------------------------
     q.save();
     q.clip(blob);
@@ -1251,6 +1296,7 @@ const Main = (function () {
     }
 
     for (const s of game.sides) Production.computePower(game.players[s]);
+    Render.setViewZoom(1);   // every battle opens at the classic zoom
     AI.init(game);   // in MP this is a symmetric no-op consumer of game.rng
     Input.init(canvas, game);
     Fog.update(game);

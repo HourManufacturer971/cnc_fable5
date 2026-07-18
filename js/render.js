@@ -8,7 +8,26 @@
 // authored at 24px/cell and drawn scaled 2x with nearest-neighbour sampling.
 
 const Render = (function () {
-  const Z = C.ZOOM;
+  const BZ = C.ZOOM;      // bake scale: offscreen caches are authored at this
+  let Z = C.ZOOM;         // live draw scale: BZ x the pinch view zoom (C.VZOOM)
+
+  // pinch-to-zoom: every world->screen path multiplies by Z, so retargeting
+  // it re-scales the whole battlefield. C.VIEW_W/H shrink or grow to match,
+  // which drives culling, camera clamps and the radar viewport box for free.
+  function setViewZoom(f) {
+    // never zoom out past the map itself (the view must stay inside it)
+    const minVz = Math.max(0.5,
+      C.VIEW_PW / (BZ * C.MAP_W * C.CELL),
+      C.VIEW_PH / (BZ * C.MAP_H * C.CELL));
+    C.VZOOM = clamp(f, Math.min(minVz, 1.6), 1.6);
+    Z = BZ * C.VZOOM;
+    C.VIEW_W = C.VIEW_PW / Z;
+    C.VIEW_H = C.VIEW_PH / Z;
+    if (typeof game !== 'undefined' && game && game.camera) {
+      game.camera.x = clamp(game.camera.x, 0, Math.max(0, C.MAP_W * C.CELL - C.VIEW_W));
+      game.camera.y = clamp(game.camera.y, 0, Math.max(0, C.MAP_H * C.CELL - C.VIEW_H));
+    }
+  }
   let cv = null, ctx = null;
   let terrainCache = null;      // full-map prerender at screen scale
   let terrainCacheSeed = -1;
@@ -210,7 +229,7 @@ const Render = (function () {
 
   // scale factor for a sprite canvas (pre-rendered assets are already hi-res;
   // a few units carry a _scaleBoost to visibly outsize their footprint)
-  function sca(img) { return img._hires ? 1 : Z * (img._scaleBoost || 1); }
+  function sca(img) { return img._hires ? Z / BZ : Z * (img._scaleBoost || 1); }
 
   // draw a sprite at SCREEN coords (top-left)
   function drawSpr(img, sx, sy) {
@@ -288,8 +307,9 @@ const Render = (function () {
       _buildMinimapBase();
       return;
     }
-    // fallback: classic per-cell tile blits
-    const cs = C.CELL * Z;
+    // fallback: classic per-cell tile blits (caches bake at BZ, never at the
+    // live pinch zoom — the blit scales instead)
+    const cs = C.CELL * BZ;
     terrainCache = mkCanvas(C.MAP_W * cs, C.MAP_H * cs);
     const tc = terrainCache.getContext('2d');
     tc.imageSmoothingEnabled = false;
@@ -1186,7 +1206,7 @@ const Render = (function () {
 
   function _drawViewport(g) {
     if (!terrainCache || terrainCacheSeed !== g.seed ||
-        terrainCache.width !== C.MAP_W * C.CELL * Z) _buildTerrainCache(g);
+        terrainCache.width !== C.MAP_W * C.CELL * BZ) _buildTerrainCache(g);
 
     if (g.shake > 0 && g.tick !== shownTick) {
       shakeX = ((Math.random() * 2 - 1) * Math.min(6, g.shake / 3)) | 0;
@@ -1208,7 +1228,8 @@ const Render = (function () {
     ctx.clip();
 
     // terrain (cache is at screen scale)
-    ctx.drawImage(terrainCache, -ox * Z, C.TAB_H - oy * Z);
+    ctx.drawImage(terrainCache, -ox * Z, C.TAB_H - oy * Z,
+      terrainCache.width * (Z / BZ), terrainCache.height * (Z / BZ));
     for (const a of animCells) {
       const sx = X(a.cx * C.CELL), sy = Y(a.cy * C.CELL);
       if (sx < -cs || sx > C.VIEW_PW || sy < -cs || sy > C.SCREEN_H) continue;
@@ -1343,7 +1364,8 @@ const Render = (function () {
     ground.sort((a, b) => baseY(a) - baseY(b));
     for (const e of ground) {
       if (e.kind === 'building') _drawBuilding(g, e, X, Y);
-      else if (e.kind === 'tree') ctx.drawImage(e.canvas, X(e.wx), Y(e.wy));
+      else if (e.kind === 'tree') ctx.drawImage(e.canvas, X(e.wx), Y(e.wy),
+        e.canvas.width * (Z / BZ), e.canvas.height * (Z / BZ));
       else _drawUnit(g, e, X, Y);
     }
 
@@ -2116,10 +2138,11 @@ const Render = (function () {
     const kind = Input.cursorKind || 'default';
     const cur = SPRITES.cursor[kind] || SPRITES.cursor.default;
     if (!cur) return;
+    // the cursor is UI: it keeps its size regardless of the pinch zoom
     ctx.drawImage(cur.c,
-      Math.round(Input.mouse.x - cur.hx * Z),
-      Math.round(Input.mouse.y - cur.hy * Z),
-      cur.c.width * Z, cur.c.height * Z);
+      Math.round(Input.mouse.x - cur.hx * BZ),
+      Math.round(Input.mouse.y - cur.hy * BZ),
+      cur.c.width * BZ, cur.c.height * BZ);
   }
 
   // ---- living menu backdrop --------------------------------------------------------------------
@@ -2360,5 +2383,6 @@ const Render = (function () {
   }
 
   return { init, frame, resize, worldFromScreen, hitTest, cycleView, cycleSpeed, radarOn,
+    setViewZoom,
     viewPlayer: () => (typeof game !== 'undefined' && game ? _viewP(game) : null) };
 })();

@@ -49,7 +49,7 @@ const MISSIONS = {
 udc: [
   {
     n: 1, title: 'FIRST FOOTHOLD',
-    sector: 'THE VERDANT REACH — SOUTHERN FRONTIER', terr: [0.10, 0.82], seed: 8121,
+    sector: 'THE VERDANT REACH — SOUTHERN FRONTIER', terr: [0.14, 0.75], seed: 8121,
     credits: 3000, aiCredits: 2500, aiCalm: 2.2, aiWaveCap: 3, aiNoSell: true,
     noHumanSpawn: true, shore: true,
     // the classic opening kit: power, refining, barracks, boots. No radar, no
@@ -423,7 +423,7 @@ udc: [
   },
   {
     n: 10, title: 'AVALANCHE',
-    sector: 'AVALANCHE FOOTHILLS — THE LAST FORTRESS', terr: [0.85, 0.22], seed: 9091,
+    sector: 'AVALANCHE FOOTHILLS — THE LAST FORTRESS', terr: [0.83, 0.25], seed: 9091,
     credits: 10000, aiCredits: 16000, aiCalm: 0.5, aiWaveCap: 14,
     objective: { type: 'annihilate' },
     objText: 'Annihilate the fortress. Everything they have is already built — and pointed at you.',
@@ -472,7 +472,7 @@ udc: [
 srp: [
   {
     n: 1, title: 'FIRST SERMON',
-    sector: 'THE VERDANT REACH — SOUTHERN FRONTIER', terr: [0.88, 0.30], seed: 8121,
+    sector: 'THE VERDANT REACH — SOUTHERN FRONTIER', terr: [0.86, 0.32], seed: 8121,
     credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0, aiNoSell: true,
     noHumanSpawn: true,
     // the classic squad mission: no base, no production for ANYONE — the
@@ -848,7 +848,7 @@ srp: [
   },
   {
     n: 10, title: 'AGE OF THE SERPENT',
-    sector: 'AVALANCHE FOOTHILLS — THE LAST FORTRESS', terr: [0.12, 0.78], seed: 9091,
+    sector: 'AVALANCHE FOOTHILLS — THE LAST FORTRESS', terr: [0.15, 0.74], seed: 9091,
     credits: 10000, aiCredits: 16000, aiCalm: 0.5, aiWaveCap: 14,
     objective: { type: 'annihilate' },
     objText: 'Annihilate the fortress. Their whole war machine is awake — bury it.',
