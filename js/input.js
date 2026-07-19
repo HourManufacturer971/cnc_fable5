@@ -763,7 +763,9 @@ const Input = (function () {
     }
 
     // ---- normal mode: classic left-click scheme ----
-    const ent = _entAt(w.x, w.y);
+    // Ctrl also picks the bridge deck (never a plain click: a plain click on
+    // the deck must stay a MOVE order — driving across, not opening fire)
+    const ent = _entAt(w.x, w.y) || (ctrl ? bridgeDeckAt(cx, cy) : null);
     const sel = _selectedUnits();
     const ownSel = sel.filter(u => u.owner === g.humanSide);
 

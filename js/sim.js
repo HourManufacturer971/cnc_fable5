@@ -1172,6 +1172,22 @@ function _engineer(u, d) {
       _maybePlay('place', u.x, u.y);
       return;
     }
+    // bridge control room: the engineer becomes the repair crew. Only a
+    // damaged or fallen bridge takes the crew — an intact one refuses the
+    // order instead of eating the engineer.
+    if (DATA.buildings[t.type].bridgeHut) {
+      const br = (g.bridges || []).find(b => b.hutIds.includes(t.id));
+      const deck = br && !br.down ? g.buildings.get(br.entId) : null;
+      if (br && (br.down || (deck && deck.hp < deck.maxHp))) {
+        _bridgeRepair(g, br);
+        _maybePlay('repair', u.x, u.y);
+        removeUnit(u); // consumed
+      } else {
+        u.state = 'idle'; u.targetId = 0;
+        if (u.owner === g.humanSide) AUDIO.play('buzz');
+      }
+      return;
+    }
     if (t.owner !== u.owner) {
       // capture!
       _transferBuilding(g, t, u.owner);
@@ -1656,6 +1672,46 @@ function _tickCloak(g) {
   }
 }
 
+// ---- bridges -------------------------------------------------------------------
+
+// the deck entity died: open the river again. The span over water becomes
+// terrain 7 (impassable open water); anything standing on it goes down with
+// the deck. The land-end stubs stay walkable — you can drive onto them and
+// stare across the gap, TS-style.
+function _bridgeCollapse(g, ent) {
+  const br = (g.bridges || []).find(b => b.entId === ent.id);
+  if (!br) return;
+  br.down = true;
+  br.entId = 0;
+  for (const c of br.water) {
+    const i = cellIdx(c.cx, c.cy);
+    g.terrain[i] = 7;
+    const o = g.occ[i];
+    const u = o > 0 ? g.units.get(o) : null;
+    if (u && !u._dead && !DATA.units[u.type].air) killEntity(u, null);
+    spawnEffect('expS', cellCenterX(c.cx), cellCenterY(c.cy));
+  }
+  AUDIO.evaText('Bridge destroyed');
+}
+
+// an engineer reached a control room: rebuild the fallen span (or patch a
+// damaged standing one) at full strength
+function _bridgeRepair(g, br) {
+  if (br.down) {
+    for (const c of br.water) g.terrain[cellIdx(c.cx, c.cy)] = 6;
+    const deck = makeBuilding('bridge', 'civ', br.rect.cx, br.rect.cy);
+    deck.w = br.rect.w; deck.h = br.rect.h;
+    deck.buildProgress = 1;
+    addBuilding(deck);
+    br.entId = deck.id;
+    br.down = false;
+  } else {
+    const deck = g.buildings.get(br.entId);
+    if (deck) deck.hp = deck.maxHp;
+  }
+  AUDIO.evaText('Bridge repaired');
+}
+
 // ---- death ---------------------------------------------------------------------
 
 function killEntity(ent, attacker) {
@@ -1722,9 +1778,15 @@ function killEntity(ent, attacker) {
     const d = DATA.buildings[ent.type];
     removeBuilding(ent);
     spawnEffect('expL', _entX(ent), _entY(ent));
-    spawnEffect('scorch', _entX(ent), _entY(ent));
-    // the footprint stays a rubble field: broken slabs, wall stubs, embers
-    spawnEffect('rubble', _entX(ent), _entY(ent), { ttl: 1350, w: ent.w, h: ent.h });
+    if (d.deck) {
+      // a shot-out bridge drops its span into the river — no rubble field,
+      // the broken-water art comes from the bridge record instead
+      _bridgeCollapse(g, ent);
+    } else {
+      spawnEffect('scorch', _entX(ent), _entY(ent));
+      // the footprint stays a rubble field: broken slabs, wall stubs, embers
+      spawnEffect('rubble', _entX(ent), _entY(ent), { ttl: 1350, w: ent.w, h: ent.h });
+    }
     _maybePlay('expL', _entX(ent), _entY(ent));
     // a collapsing structure buries its garrison
     if (ent.garrison && ent.garrison.length) {

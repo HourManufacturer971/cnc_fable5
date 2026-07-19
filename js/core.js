@@ -321,6 +321,7 @@ function makeGame(opts) {
     shroud: new Uint8Array(n),
     visible: new Uint8Array(n), // cells currently within human sight (recomputed by Fog)
     startPos: null,
+    bridges: [],   // { entId, rect, water, hutIds, down } — built in startGame
     status: 'playing',
     paused: false,
     speed: 1,
@@ -418,7 +419,19 @@ function clearOcc(cx, cy, id) {
   if (inMap(cx, cy) && game.occ[cellIdx(cx, cy)] === id) game.occ[cellIdx(cx, cy)] = 0;
 }
 
-function terrainPassable(t) { return t === 0 || t === 1 || t === 6; } // grass, dirt, bridge
+function terrainPassable(t) { return t === 0 || t === 1 || t === 6; } // grass, dirt, bridge (7 = fallen span)
+
+// The live deck entity covering a cell, if any. Decks skip the occupancy
+// grid (they're walkable), so entity picking needs this dedicated lookup.
+function bridgeDeckAt(cx, cy) {
+  if (!game || !game.bridges) return null;
+  for (const br of game.bridges) {
+    if (br.down) continue;
+    const b = game.buildings.get(br.entId);
+    if (b && cx >= b.cx && cx < b.cx + b.w && cy >= b.cy && cy < b.cy + b.h) return b;
+  }
+  return null;
+}
 
 // Is cell enterable by `unit` (or by any ground unit if unit omitted)?
 // Air units never call this. Occupied-by-self is passable.
@@ -460,7 +473,10 @@ function addUnit(u) {
 function addBuilding(b) {
   game.buildings.set(b.id, b);
   game.players[b.owner].buildingIds.push(b.id);
-  for (const c of footprintCells(b)) setOcc(c.cx, c.cy, b.id);
+  // a bridge deck never stamps occupancy: traffic drives straight over it
+  if (!DATA.buildings[b.type].deck) {
+    for (const c of footprintCells(b)) setOcc(c.cx, c.cy, b.id);
+  }
   // a crate under the slab is crushed — it could never be picked up again
   // and its radar blip would blink under the building forever
   if (game.crates) {
@@ -499,6 +515,7 @@ function removeBuilding(b) {
 function applyDamage(target, amount, warhead, attacker) {
   if (!target || target.hp <= 0) return;
   const d = target.kind === 'unit' ? DATA.units[target.type] : DATA.buildings[target.type];
+  if (d.invuln) return;   // bridge control rooms shrug off everything
   const mult = (DATA.warheads[warhead] || DATA.warheads.he)[d.armor];
   const dmg = Math.max(1, Math.round(amount * mult));
   target.hp -= dmg;

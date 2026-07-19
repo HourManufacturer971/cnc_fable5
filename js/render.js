@@ -388,6 +388,16 @@ const Render = (function () {
         }
       }
     }
+    // a fallen bridge span reads as open water on radar, not as the baked deck
+    if (g.bridges) {
+      mc.fillStyle = '#16242e';
+      for (const br of g.bridges) {
+        if (!br.down) continue;
+        for (const c of br.water) {
+          if (seeAll || g.shroud[cellIdx(c.cx, c.cy)] === 1) mc.fillRect(c.cx * MMC, c.cy * MMC, MMC, MMC);
+        }
+      }
+    }
     if (!seeAll) {
       const vis = g.visible;
       // explored terrain outside anyone's current sight goes grey — the map
@@ -456,6 +466,7 @@ const Render = (function () {
     const MMC = C.MM_S / C.MAP_W;
     const hunt = _huntCount(g) > 0;
     for (const b of g.buildings.values()) {
+      if (DATA.buildings[b.type].deck) continue;   // the deck is terrain on radar
       if (!seeAll && !hunt && g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
       if (!seeAll && hunt && b.owner !== g.ai.side && g.shroud[cellIdx(b.cx, b.cy)] !== 1) continue;
       ctx.fillStyle = OWNER_COLOR[b.owner] || '#ccc';
@@ -587,6 +598,58 @@ const Render = (function () {
     ctx.moveTo(x + w - 1, y + h - s); ctx.lineTo(x + w - 1, y + h - 1); ctx.lineTo(x + w - s, y + h - 1);
     ctx.moveTo(x + s, y + h - 1); ctx.lineTo(x + 1, y + h - 1); ctx.lineTo(x + 1, y + h - s);
     ctx.stroke();
+  }
+
+  // a fallen span: cover the baked deck with open river water — charred tear
+  // lines against the surviving land stubs, slab debris in the current. Pure
+  // render; the sim's truth is g.bridges[i].down and terrain id 7.
+  function _drawBrokenBridges(g, XF, YF) {
+    if (!g.bridges) return;
+    for (const br of g.bridges) {
+      if (!br.down) continue;
+      const colTop = new Map(), colBot = new Map();
+      for (const c of br.water) {
+        colTop.set(c.cx, Math.min(colTop.has(c.cx) ? colTop.get(c.cx) : Infinity, c.cy));
+        colBot.set(c.cx, Math.max(colBot.has(c.cx) ? colBot.get(c.cx) : -Infinity, c.cy));
+      }
+      for (const c of br.water) {
+        const x = XF(c.cx * C.CELL), y = YF(c.cy * C.CELL), s = C.CELL * Z;
+        const h8 = (c.cx * 0x9e37 ^ c.cy * 0x85eb) >>> 0;
+        ctx.fillStyle = '#1c3a52';
+        ctx.fillRect(x, y, s, s);
+        // wash out the deck's baked contact shadows on the flanking water
+        if (c.cx === br.rect.cx) ctx.fillRect(x - 4 * Z, y, 4 * Z, s);
+        if (c.cx === br.rect.cx + br.rect.w - 1) ctx.fillRect(x + s, y, 5 * Z, s);
+        // current: a darker striation and a pale ripple per cell
+        ctx.fillStyle = '#173248';
+        ctx.fillRect(x, y + (((h8 >> 2) % 18) + 3) * Z, s, 2 * Z);
+        ctx.fillStyle = '#2e5a78';
+        ctx.fillRect(x + (h8 % 12) * Z, y + ((h8 >> 5) % 20) * Z, 5 * Z, Z);
+        // drowned slab debris breaking the surface
+        if ((h8 & 3) === 0) {
+          const dx = x + (((h8 >> 3) % 14) + 3) * Z, dy = y + (((h8 >> 7) % 14) + 4) * Z;
+          ctx.fillStyle = '#4c483e';
+          ctx.fillRect(dx, dy, 6 * Z, 3 * Z);
+          ctx.fillStyle = '#5f5b4f';
+          ctx.fillRect(dx, dy, 6 * Z, Z);
+          ctx.fillStyle = 'rgba(200,220,228,0.25)';
+          ctx.fillRect(dx - Z, dy + 3 * Z, 8 * Z, Z);
+        }
+        // ragged charred tear against the stub this column broke away from
+        const top = c.cy === colTop.get(c.cx), bot = c.cy === colBot.get(c.cx);
+        if (top || bot) {
+          const ey = top ? y : y + s;
+          ctx.fillStyle = '#141210';
+          for (let k = 0; k < 6; k++) {
+            const tw = 2 + ((h8 >> k) & 3);
+            const th = (2 + ((h8 >> (k + 3)) & 5)) * Z;
+            ctx.fillRect(x + k * 4 * Z, top ? ey - Z : ey - th + Z, tw * Z, th);
+          }
+          ctx.fillStyle = '#2a2620';
+          ctx.fillRect(x, top ? ey - 2 * Z : ey + Z, s, Z);
+        }
+      }
+    }
   }
 
   function _drawBuilding(g, b, X, Y) {
@@ -1251,6 +1314,7 @@ const Render = (function () {
     // terrain (cache is at screen scale)
     ctx.drawImage(terrainCache, -ox * Z, C.TAB_H - oy * Z,
       terrainCache.width * (Z / BZ), terrainCache.height * (Z / BZ));
+    _drawBrokenBridges(g, X, Y);
     for (const a of animCells) {
       const sx = X(a.cx * C.CELL), sy = Y(a.cy * C.CELL);
       if (sx < -cs || sx > C.VIEW_PW || sy < -cs || sy > C.SCREEN_H) continue;
@@ -1580,6 +1644,13 @@ const Render = (function () {
             if (e2 && e2.kind === 'building' &&
                 (seeAll || g.shroud[cellIdx(e2.cx, e2.cy)] === 1)) hov = e2;
           }
+        }
+        if (!hov) {
+          // the bridge deck skips occupancy — pick it up directly so the
+          // hover bar reveals its name and remaining strength
+          const bcx = worldToCell(w.x), bcy = worldToCell(w.y);
+          const deck = bridgeDeckAt(bcx, bcy);
+          if (deck && (seeAll || g.shroud[cellIdx(bcx, bcy)] === 1)) hov = deck;
         }
         if (hov && !g.selection.includes(hov.id)) {
           let barX, barY, barW;

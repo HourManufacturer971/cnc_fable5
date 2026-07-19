@@ -388,23 +388,44 @@ const MAPGEN = (function () {
     if (!cand.length) return null;
     cand.sort((a, b) => b.dFord - a.dFord);
     const pick = cand[(rng() * Math.min(6, cand.length)) | 0];
-    const cells = [];
+    // the water span across BOTH lanes (the part that falls when destroyed)
+    let yTop = Infinity, yBot = -Infinity;
     for (const bx of [pick.x, pick.x + 1]) {
       for (let y = Math.max(1, Math.round(riv.yc[bx]) - 4); y <= Math.min(H - 2, Math.round(riv.yc[bx]) + 4); y++) {
-        const idx = cellIdx(bx, y);
-        if (g.terrain[idx] === T_WATER) { g.terrain[idx] = T_BRIDGE; cells.push({ cx: bx, cy: y }); }
+        if (g.terrain[cellIdx(bx, y)] === T_WATER) { yTop = Math.min(yTop, y); yBot = Math.max(yBot, y); }
       }
     }
-    // a crossing carries traffic: short worn dirt approaches run off both
-    // ends onto the banks, so the deck reads as part of a road, not a plank
-    // floating on the river
-    if (cells.length) {
-      let yTop = Infinity, yBot = -Infinity;
-      for (const c of cells) { yTop = Math.min(yTop, c.cy); yBot = Math.max(yBot, c.cy); }
-      road(g, pick.x, Math.max(1, yTop - 3), pick.x, yTop - 1);
-      road(g, pick.x, yBot + 1, pick.x, Math.min(H - 2, yBot + 3));
+    if (!isFinite(yTop)) return null;
+    // deck rectangle: two lanes running TWO cells past the water onto each
+    // bank, so the span lands on solid ground instead of stopping at the
+    // waterline — the painted abutments sit fully on the banks
+    const y0 = Math.max(1, yTop - 2), y1 = Math.min(H - 2, yBot + 2);
+    const cells = [], water = [];
+    for (const bx of [pick.x, pick.x + 1]) {
+      for (let y = y0; y <= y1; y++) {
+        const idx = cellIdx(bx, y);
+        if (g.terrain[idx] === T_WATER) water.push({ cx: bx, cy: y });
+        g.terrain[idx] = T_BRIDGE;
+        cells.push({ cx: bx, cy: y });
+      }
     }
-    return cells.length ? cells : null;
+    // a crossing carries traffic: worn dirt approaches continue from the
+    // deck ends, so the whole thing reads as one road over the river
+    road(g, pick.x, Math.max(1, y0 - 3), pick.x, Math.max(1, y0 - 1));
+    road(g, pick.x, Math.min(H - 2, y1 + 1), pick.x, Math.min(H - 2, y1 + 3));
+    // control rooms on the banks, off to the side of each end: an engineer
+    // sent inside rebuilds a fallen span (either bank's hut works)
+    const huts = [];
+    const tryHut = (cands) => {
+      for (const [hx, hy] of cands) {
+        if (hx < 1 || hx >= W - 1 || hy < 1 || hy >= H - 1) continue;
+        const t = g.terrain[cellIdx(hx, hy)];
+        if (t === T_GRASS || t === T_DIRT) { huts.push({ cx: hx, cy: hy }); return; }
+      }
+    };
+    tryHut([[pick.x - 2, y0], [pick.x + 3, y0], [pick.x - 2, y0 + 1], [pick.x + 3, y0 + 1]]);
+    tryHut([[pick.x - 2, y1], [pick.x + 3, y1], [pick.x - 2, y1 - 1], [pick.x + 3, y1 - 1]]);
+    return { cells, rect: { cx: pick.x, cy: y0, w: 2, h: y1 - y0 + 1 }, water, huts };
   }
 
   // Ragged rocky rim, 1..3 cells deep, depth varying smoothly along each edge.
@@ -703,12 +724,14 @@ const MAPGEN = (function () {
     const elev = buildElevation(hseed);
 
     // --- river in the valley (most seeds) ---------------------------------------
-    g.decor = { bridge: null, waterfall: null, village: null };
+    g.decor = { bridge: null, bridgeInfo: null, waterfall: null, village: null };
     const hasRiver = rng() < 0.62;
     let riv = null;
     if (hasRiver) {
       riv = river(g, rng, hs, as, elev);
-      g.decor.bridge = placeBridge(g, rng, riv);
+      const bri = placeBridge(g, rng, riv);
+      g.decor.bridge = bri ? bri.cells : null;
+      g.decor.bridgeInfo = bri;   // rect + water span + hut sites (sim setup)
     }
 
     // --- ponds pool in genuine depressions ---------------------------------------

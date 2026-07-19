@@ -135,9 +135,10 @@ rally {cx,cy}|null, spawnTick`.
 
 `0 grass, 1 dirt, 2 rock (impassable), 3 water (impassable), 4 tree (impassable),
 5 blossom tree (impassable, regrows chrysalite around it), 6 bridge deck (passable,
-drawn over water)`. `game.tvar` picks sprite variants.
+drawn over water), 7 fallen bridge span (impassable open water; set by
+`_bridgeCollapse`, restored to 6 by `_bridgeRepair`)`. `game.tvar` picks sprite variants.
 Chrysalite lives in `game.tib` (0..C.TIB_MAX per cell) independent of terrain (only on 0/1).
-MAPGEN also fills `game.decor = { bridge, waterfall, village }`: bridge cells, the
+MAPGEN also fills `game.decor = { bridge, bridgeInfo, waterfall, village }`: bridge cells, the
 waterfall cell, and the neutral hamlet layout that main.js spawns as 'civ'-owned
 buildings/units (players include a `civ` stub owner nobody auto-targets). The hamlet is
 farmhouse + chapel (`chur`) + two cottages + barn; the chapel drops a guaranteed cash
@@ -578,8 +579,10 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_handshake()` — the host rolls a FRESH seed and the match relaunches over the
   same connection, sides kept, no new code exchange. `NET.onRematch('remote'|'gone')`
   drives the button labels ("opponent is ready" / hide when the peer leaves);
-  `_peerGone` outside a live game only tears down + notifies. PROTO = 15 (bumped
-  for the side-token rename — the internal faction keys are `udc`/`srp` (extra
+  `_peerGone` outside a live game only tears down + notifies. PROTO = 16 (bumped
+  for destroyable bridges — deck/hut entities at battle start, terrain 7 fallen
+  spans, engineer bridge repair; 15 covered
+  the side-token rename — the internal faction keys are `udc`/`srp` (extra
   slots `ud2`/`sr2`) everywhere: entity owners, replay/save meta, MP handshake,
   URL `?side=`, storage `hw_progress_udc/srp` + `hw_rec_<side>_<n>` — a clean
   break, no legacy-key migration; 14 covered
@@ -1099,9 +1102,24 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   - the west→east river FOLLOWS THE VALLEY (per column, step ±1 to the lowest-elevation
     cell ahead; base plateaus repel the channel so the start-safety guard never censors
     it into visible gaps), widens downstream, keeps two fords — one pinned where it
-    crosses the start↔start segment — and most seeds get a timber bridge (TWO
+    crosses the start↔start segment — and most seeds get a stone bridge (TWO
     adjacent deck columns — a single-file deck wedged harvester traffic head-to-head;
-    the painter draws rails only on true outer edges so the lanes read as one span);
+    the painter draws rails only on true outer edges so the lanes read as one span).
+    The deck rectangle runs TWO cells past the water onto each bank so the abutments
+    sit on solid ground and the road continues from the deck ends. `placeBridge`
+    returns `{ cells, rect, water, huts }`; `g.decor.bridgeInfo` carries it to
+    startGame, which spawns a neutral 'bridge' deck entity (walkable — `deck: true`
+    skips the occupancy stamp; no sprite, the art is baked terrain) plus a 'bhut'
+    control room on each bank, recorded in `g.bridges`. The deck is a real target:
+    Ctrl+click force-fires on it (`bridgeDeckAt` supplements occ-based picking) and
+    splash damage reaches it; at 0 hp `_bridgeCollapse` marks the record down, turns
+    the water-span cells to terrain 7 (impassable), kills ground units standing on
+    them and leaves the land stubs walkable, with `_drawBrokenBridges` covering the
+    baked deck with open water + charred tear lines (radar shows water too). An
+    engineer sent into either control room (`orderEnter`; huts are `invuln`) runs
+    `_bridgeRepair`: span cells back to 6, a fresh full-hp deck entity, engineer
+    consumed — an intact bridge refuses the crew. All of it flows through existing
+    'atk'/'ent' orders, so MP/replay/save need no new command plumbing;
   - rock crowns the ~93rd elevation percentile, broken by detail noise into ridge lines
     with saddles; grass at the foot of rock weathers to talus dirt; high, dry (far from
     water) flats bake to dirt regions;

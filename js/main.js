@@ -1289,6 +1289,23 @@ const Main = (function () {
         addBuilding(b);
       }
     }
+    // the river bridge is a real structure: shoot out its span to cut the
+    // crossing, send an engineer into a bank-side control room to rebuild it
+    if (game.decor && game.decor.bridgeInfo) {
+      const bi = game.decor.bridgeInfo;
+      const deck = makeBuilding('bridge', 'civ', bi.rect.cx, bi.rect.cy);
+      deck.w = bi.rect.w; deck.h = bi.rect.h;
+      deck.buildProgress = 1;
+      addBuilding(deck);
+      const hutIds = [];
+      for (const hc of bi.huts) {
+        const hb = makeBuilding('bhut', 'civ', hc.cx, hc.cy);
+        hb.buildProgress = 1;
+        addBuilding(hb);
+        hutIds.push(hb.id);
+      }
+      game.bridges.push({ entId: deck.id, rect: bi.rect, water: bi.water, hutIds, down: false });
+    }
     // mission-specific stage dressing: pre-built enemy works, convoys,
     // checkpoint garrisons… (deterministic — replays rebuild identically)
     if (mission && mission.setup && !opts.mp) {

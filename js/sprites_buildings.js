@@ -2191,6 +2191,32 @@
     const entry = { normal: [_houseFrame(key, false)], damaged: [_houseFrame(key, true)] };
     SPRITES.buildings[key] = { civ: entry, udc: entry, srp: entry };
   }
+
+  // bridge control room (24x24, 1x1 cell): a squat concrete blockhouse with a
+  // hazard-striped door, a comms whip and a status lamp — obviously the thing
+  // an engineer should be sent into
+  function _bhutFrame(dmg) {
+    const c = mkCanvas(24, 24);
+    const q = c.getContext('2d');
+    q.imageSmoothingEnabled = false;
+    q.fillStyle = 'rgba(10,12,8,0.35)';                       // cast shadow SE
+    q.fillRect(4, 19, 17, 3); q.fillRect(19, 8, 3, 12);
+    VP(q, 2, 6, 17, 14, '#101008');                           // outline mass
+    VP(q, 3, 7, 15, 12, '#8e8a80');                           // concrete body
+    VP(q, 3, 7, 15, 2, '#a09c92');                            // lit roof edge
+    VP(q, 3, 16, 15, 3, '#6f6b62');                           // footing shade
+    VP(q, 5, 9, 4, 3, '#31414f'); VP(q, 5, 9, 1, 1, '#88a8c0'); // window
+    VP(q, 11, 10, 5, 9, '#3a3a32');                           // door recess
+    for (let k = 0; k < 4; k++) VP(q, 11, 11 + k * 2, 5, 1, k & 1 ? '#c8a84c' : '#23231c');
+    VP(q, 4, 3, 1, 4, '#4f4a41'); VP(q, 3, 2, 3, 1, '#4f4a41'); // comms whip
+    VP(q, 16, 7, 2, 2, dmg ? '#5a2318' : '#d8a028');          // status lamp
+    if (dmg) { q.fillStyle = 'rgba(16,12,8,0.45)'; q.fillRect(5, 8, 8, 5); }
+    return c;
+  }
+  {
+    const entry = { normal: [_bhutFrame(false)], damaged: [_bhutFrame(true)] };
+    SPRITES.buildings.bhut = { civ: entry, udc: entry, srp: entry };
+  }
 })();
 
 // ==== EXTRA COMBAT SIDES: recolored faction art ==================================

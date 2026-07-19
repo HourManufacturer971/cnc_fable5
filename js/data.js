@@ -109,6 +109,15 @@ DATA.buildings = {
   chur: { name: 'Chapel', cost: 0, hp: 400, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true, garrison: 4 },
   // abandoned supply depot: capture it (engineer) and it trickles credits
   depo: { name: 'Supply Depot', cost: 0, hp: 500, w: 2, h: 2, armor: 'wood', sight: 2, power: 0, drain: 0, side: null, prereq: [], civ: true, depot: true },
+  // the river bridge itself: a neutral, walkable structure. `deck` skips the
+  // occupancy stamp (traffic drives over it) and its art lives in the baked
+  // terrain, not a sprite. Ctrl+click to force-fire; at 0 hp the span drops.
+  // w/h are per-instance (set from the generated span), these are fallbacks.
+  bridge: { name: 'Bridge', cost: 0, hp: 900, w: 2, h: 9, armor: 'concrete', sight: 0, power: 0, drain: 0, side: null, prereq: [], civ: true, deck: true },
+  // bridge control room on the bank: indestructible; send an engineer inside
+  // to rebuild the fallen span (the engineer is consumed) — repair crews work
+  // from either bank's hut
+  bhut: { name: 'Bridge Control', cost: 0, hp: 500, w: 1, h: 1, armor: 'concrete', sight: 0, power: 0, drain: 0, side: null, prereq: [], civ: true, bridgeHut: true, invuln: true },
 };
 
 // sidebar ordering (filtered by prereqOk at runtime)
