@@ -509,6 +509,21 @@ const Input = (function () {
         AUDIO.play('click');
         return;
       }
+      // battlefield zoom: works paused too (inspecting a frozen moment is
+      // exactly when you want to lean in), anchored on the viewport centre
+      if (ev.key === '+' || ev.key === '=' || ev.key === '-' || ev.key === '0') {
+        const vz = C.VZOOM || 1;
+        const want = ev.key === '0' ? 1 : vz * (ev.key === '-' ? 1 / 1.15 : 1.15);
+        const ccx = C.VIEW_PW / 2, ccy = C.TAB_H + C.VIEW_PH / 2;
+        const before = Render.worldFromScreen(ccx, ccy);
+        Render.setViewZoom(want);
+        const after = Render.worldFromScreen(ccx, ccy);
+        if (before && after) {
+          game.camera.x = clamp(game.camera.x + before.x - after.x, 0, Math.max(0, C.MAP_W * C.CELL - C.VIEW_W));
+          game.camera.y = clamp(game.camera.y + before.y - after.y, 0, Math.max(0, C.MAP_H * C.CELL - C.VIEW_H));
+        }
+        return;
+      }
       if (game.paused || game.status !== 'playing') return;
       _hotkeys(ev);
     });
@@ -691,6 +706,11 @@ const Input = (function () {
     }
     if (hit.zone === 'ff-cycle') {
       if (Render.cycleSpeed()) AUDIO.play('click');
+      return;
+    }
+    if (hit.zone === 'zoom-reset') {
+      Render.setViewZoom(1);
+      AUDIO.play('click');
       return;
     }
     if (hit.zone === 'arrow') { _scrollStrip(hit.strip, hit.dir); return; }
@@ -1171,9 +1191,13 @@ const Input = (function () {
       else if (t) edge = 0; else if (r) edge = 2; else if (b) edge = 4; else if (l) edge = 6;
     }
     if (sx || sy) {
-      const maxX = C.MAP_W * C.CELL - C.VIEW_W, maxY = C.MAP_H * C.CELL - C.VIEW_H;
-      const nx = clamp(g.camera.x + sx * C.SCROLL_SPEED, 0, maxX);
-      const ny = clamp(g.camera.y + sy * C.SCROLL_SPEED, 0, maxY);
+      // scroll speed is a SCREEN feel, not a world constant: divide by the
+      // pinch zoom so panning covers the same on-screen distance per frame
+      // whether zoomed in or out
+      const spd = C.SCROLL_SPEED / (C.VZOOM || 1);
+      const maxX = Math.max(0, C.MAP_W * C.CELL - C.VIEW_W), maxY = Math.max(0, C.MAP_H * C.CELL - C.VIEW_H);
+      const nx = clamp(g.camera.x + sx * spd, 0, maxX);
+      const ny = clamp(g.camera.y + sy * spd, 0, maxY);
       const stuck = nx === g.camera.x && ny === g.camera.y;
       g.camera.x = nx; g.camera.y = ny;
       if (edge >= 0) { cursorKind = (stuck ? 'noscroll' : 'scroll') + edge; return; }

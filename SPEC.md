@@ -825,7 +825,17 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   report a trackpad pinch) zooms around the cursor. Every screen→world
   conversion in input.js divides by `C.ZOOM * C.VZOOM`; each battle opens at
   1× (`startGame` resets). View zoom is render-only — per-client, excluded
-  from the MP checksum, PROTO unaffected.
+  from the MP checksum, PROTO unaffected. A ZOOM chip (top-left, stacked
+  under the objective/SPEED chips via `objChipH`) shows whenever the zoom is
+  off 1× and clicking it (`zone: 'zoom-reset'`) snaps back; `+`/`=`/`-`
+  zoom the keyboard around the viewport centre and `0` resets (these work
+  paused — inspecting a frozen moment is when you lean in); edge/keyboard
+  scrolling divides `SCROLL_SPEED` by the zoom so panning keeps a constant
+  SCREEN speed.
+- **Radio log** (render.js `evaLog`): the last 4 EVA lines linger bottom-left
+  for ~11s, oldest fading — the record the transient banner doesn't keep;
+  cleared whenever `frame()` sees a new game object so chatter never leaks
+  across battles.
 
 ### AI opponent (`ai.js`)
 - Skirmish AI. Starts with deployed base (see map/main setup) + same credits as player.

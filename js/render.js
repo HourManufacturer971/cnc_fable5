@@ -37,6 +37,9 @@ const Render = (function () {
   let creditsShown = 0;
   let shownTick = -1, shakeX = 0, shakeY = 0;
   let evaMsg = null;            // {text, born} — HUD announcement banner
+  let evaLog = [];              // the last few radio lines — a fading record
+                                // in the corner, so a missed banner can
+                                // still be read (mission chatter flies by)
   let evaWired = false;
   let vignette = null, vigW = 0, vigH = 0;   // cached radial vignette gradient
   let grainPat = null;                        // cached film-grain pattern
@@ -195,7 +198,11 @@ const Render = (function () {
     // flavor; the words live here). Wire once — EV is a session singleton.
     if (!evaWired && typeof EV !== 'undefined' && EV) {
       evaWired = true;
-      EV.on('eva', function (text) { evaMsg = { text: String(text), born: _nowMs() }; });
+      EV.on('eva', function (text) {
+        evaMsg = { text: String(text), born: _nowMs() };
+        evaLog.unshift(evaMsg);
+        if (evaLog.length > 4) evaLog.length = 4;
+      });
     }
   }
 
@@ -260,6 +267,8 @@ const Render = (function () {
     }
     if (game && ffChip && x >= ffChip.x && x < ffChip.x + ffChip.w &&
         y >= ffChip.y && y < ffChip.y + ffChip.h) return { zone: 'ff-cycle' };
+    if (game && zoomChip && x >= zoomChip.x && x < zoomChip.x + zoomChip.w &&
+        y >= zoomChip.y && y < zoomChip.y + zoomChip.h) return { zone: 'zoom-reset' };
     if (x < C.VIEW_PW) return { zone: 'viewport' };
     if (x >= C.RADAR_X && y >= C.RADAR_Y && y < C.RADAR_Y + C.RADAR_H) return { zone: 'radar' };
     if (y >= C.BTN_Y && y < C.BTN_Y + C.BTN_H) {
@@ -1966,7 +1975,7 @@ const Render = (function () {
     if (p.power.drain > p.power.out && (g.tick >> 3) & 1) {
       ctx.fillStyle = PAL.uiRed;
       ctx.font = '16px monospace';
-      ctx.fillText('LOW POWER', C.SIDEBAR_X + 96, C.BTN_Y - 22);
+      ctx.fillText('LOW POWER', C.SIDEBAR_X + (C.SIDEBAR_W - 128) / 2, C.BTN_Y - 22);
     }
   }
 
@@ -1999,6 +2008,57 @@ const Render = (function () {
     ctx.fillStyle = PAL.uiGold;
     ctx.fillText(evaMsg.text, Math.round(cx - tw / 2 + 8), by + bh / 2 + 1);
     ctx.restore();
+  }
+
+  // radio log: the last few lines linger in the bottom-left corner, oldest
+  // fading out — the record the transient banner doesn't keep
+  function _drawRadioLog() {
+    if (!evaLog.length) return;
+    const LIFE = 11, FADE = 2.5;
+    const now = _nowMs();
+    ctx.save();
+    ctx.font = '12px monospace';
+    ctx.textBaseline = 'middle';
+    let row = 0;
+    for (const m of evaLog) {
+      const age = (now - m.born) / 1000;
+      if (age > LIFE) continue;
+      const a = age > LIFE - FADE ? (LIFE - age) / FADE : 1;
+      const y = C.TAB_H + C.VIEW_PH - 16 - row * 19;
+      const tw = ctx.measureText(m.text).width;
+      ctx.globalAlpha = 0.75 * Math.max(0, a);
+      ctx.fillStyle = 'rgba(8,12,8,0.7)';
+      ctx.fillRect(8, y - 9, tw + 14, 18);
+      ctx.fillStyle = row === 0 ? '#e8dca0' : '#a8a48c';
+      ctx.fillText(m.text, 15, y + 1);
+      row++;
+    }
+    ctx.restore();
+  }
+
+  // zoom chip: visible whenever the battlefield is off the classic 1x —
+  // clicking (or tapping) it snaps back
+  let zoomChip = null;
+  function _drawZoomChip() {
+    zoomChip = null;
+    const vz = C.VZOOM || 1;
+    if (Math.abs(vz - 1) < 0.02) return;
+    ctx.font = 'bold 13px monospace';
+    ctx.textBaseline = 'middle';
+    const s = 'ZOOM x' + vz.toFixed(1) + '  ✕';
+    const bw = ctx.measureText(s).width + 22;
+    // stack under whatever already owns the top-left corner (objective
+    // chip in missions, SPEED chip while spectating)
+    const bx = 10, by = C.TAB_H + 8 + (ffChip ? 30 : 0) + objChipH, bh = 24;
+    ctx.fillStyle = 'rgba(12,14,10,0.78)';
+    ctx.fillRect(bx, by, bw, bh);
+    ctx.strokeStyle = 'rgba(224,184,64,0.55)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(bx + 0.5, by + 0.5, bw - 1, bh - 1);
+    ctx.fillStyle = '#e0d8a8';
+    ctx.fillText(s, bx + 11, by + bh / 2 + 1);
+    ctx.textBaseline = 'alphabetic';
+    zoomChip = { x: bx, y: by, w: bw, h: bh };
   }
 
   // ---- mission objective HUD line --------------------------------------------------------------
@@ -2059,9 +2119,13 @@ const Render = (function () {
     return 'DESTROY ALL ENEMY FORCES';
   }
 
+  let objChipH = 0;   // objective chip height this frame, so others stack below
+
   function _drawObjective(g) {
+    objChipH = 0;
     const s = _objStatus(g);
     if (!s) return;
+    objChipH = 34;
     ctx.font = 'bold 16px monospace';
     ctx.textBaseline = 'middle';
     const tw = ctx.measureText(s).width;
@@ -2356,11 +2420,18 @@ const Render = (function () {
 
   // ---- frame ----------------------------------------------------------------------------------
 
+  let evaGame = null;   // the game the radio log belongs to
+
   function frame(g) {
     if (!ctx) return;
     if (!g) {
       _menuBackdrop();
       return;
+    }
+    if (g !== evaGame) {   // fresh battle: yesterday's chatter stays there
+      evaGame = g;
+      evaLog = [];
+      evaMsg = null;
     }
     seeAll = (typeof REPLAY !== 'undefined' && REPLAY.playing) || !!g._spectate;
     revealAll = _computeRevealAll(g);
@@ -2372,7 +2443,9 @@ const Render = (function () {
     _drawReplayBadge(g);
     _drawViewHint(g);
     _drawFFChip(g);
+    _drawZoomChip();
     _drawEvaBanner();
+    _drawRadioLog();
     _drawF1Tip(g);
     _drawIconTooltip(g);
     _drawVerdict(g);
