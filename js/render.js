@@ -246,6 +246,19 @@ const Render = (function () {
 
   // ---- coordinate helpers ------------------------------------------------------
 
+  // REPAIR/SELL/MAP geometry, shared by the sidebar draw and hitTest: the
+  // outer buttons sit flush with the content column edges (C.SB_X0/C.SB_X1),
+  // the middle one is centered between them
+  function _btnRects() {
+    const cw = C.SB_X1 - C.SB_X0;
+    const bw = ((cw - 18) / 3) | 0;
+    return [
+      { which: 'repair', label: 'REPAIR', x: C.SB_X0, w: bw },
+      { which: 'sell', label: 'SELL', x: C.SB_X0 + ((cw - bw) >> 1), w: bw },
+      { which: 'map', label: 'MAP', x: C.SB_X1 - bw, w: bw },
+    ];
+  }
+
   function worldFromScreen(x, y) {
     if (!game || x < 0 || x >= C.VIEW_PW || y < C.TAB_H || y >= C.SCREEN_H) return null;
     return { x: x / Z + game.camera.x, y: (y - C.TAB_H) / Z + game.camera.y };
@@ -272,10 +285,9 @@ const Render = (function () {
     if (x < C.VIEW_PW) return { zone: 'viewport' };
     if (x >= C.RADAR_X && y >= C.RADAR_Y && y < C.RADAR_Y + C.RADAR_H) return { zone: 'radar' };
     if (y >= C.BTN_Y && y < C.BTN_Y + C.BTN_H) {
-      const b0 = C.SIDEBAR_X + 8, bw = ((C.SIDEBAR_W - 32) / 3) | 0;
-      if (x >= b0 && x < b0 + bw) return { zone: 'btn', which: 'repair' };
-      if (x >= b0 + bw + 8 && x < b0 + bw * 2 + 8) return { zone: 'btn', which: 'sell' };
-      if (x >= b0 + bw * 2 + 16 && x < b0 + bw * 3 + 16) return { zone: 'btn', which: 'map' };
+      for (const b of _btnRects()) {
+        if (x >= b.x && x < b.x + b.w) return { zone: 'btn', which: b.which };
+      }
       return { zone: 'sidebar' };
     }
     if (game && game.human) {
@@ -1775,7 +1787,8 @@ const Render = (function () {
     const mm = String(Math.floor(secs / 60)).padStart(2, '0');
     const ss = String(secs % 60).padStart(2, '0');
     ctx.fillStyle = PAL.uiText;
-    ctx.fillText(mm + ':' + ss, C.SIDEBAR_X + 220, 8);
+    const clock = mm + ':' + ss;
+    ctx.fillText(clock, C.SB_X1 - ctx.measureText(clock).width, 8);
     const vs = _viewSideOf(g);
     viewChip = null;
     if (seeAll && g.sides && g.sides.length >= 2) {
@@ -1784,7 +1797,7 @@ const Render = (function () {
       const name = C.SIDE_NAME[vs] || vs.toUpperCase();
       ctx.font = '14px monospace';
       const aw = 20, nw = ctx.measureText(name).width + 10;
-      const x0 = C.SIDEBAR_X + 8;
+      const x0 = C.SB_X0;
       _bevel(x0, 3, aw + nw + aw, C.TAB_H - 6, false);
       ctx.fillStyle = PAL.uiGold;
       ctx.fillText('◀', x0 + 5, 10);
@@ -1794,7 +1807,7 @@ const Render = (function () {
       ctx.font = '16px monospace';
       viewChip = { x: x0, w: aw + nw + aw, mid: x0 + (aw + nw + aw) / 2 };
     } else {
-      ctx.fillText(C.SIDE_NAME[g.humanSide] || g.humanSide.toUpperCase(), C.SIDEBAR_X + 16, 8);
+      ctx.fillText(C.SIDE_NAME[g.humanSide] || g.humanSide.toUpperCase(), C.SB_X0, 8);
     }
   }
 
@@ -1804,32 +1817,28 @@ const Render = (function () {
     const p = _viewP(g);
     ctx.fillStyle = PAL.uiMetal;
     ctx.fillRect(C.SIDEBAR_X, C.TAB_H, C.SIDEBAR_W, C.SCREEN_H - C.TAB_H);
-    // seam where the sidebar meets the battlefield: a narrow dark gap so the
-    // panel reads as one clean slab beside the viewport
+    // seam where the sidebar meets the battlefield: one dark channel running
+    // the full height; below the radar the power readout glows inside it
     ctx.fillStyle = '#0d0d0a';
-    ctx.fillRect(C.SIDEBAR_X, C.TAB_H - 1, 4, C.SCREEN_H - C.TAB_H + 1);
-
-    // power readout set into the seam below the radar
+    ctx.fillRect(C.SIDEBAR_X, C.TAB_H - 1, 8, C.SCREEN_H - C.TAB_H + 1);
     const pb = p.power;
     const barTop = C.RADAR_Y + C.RADAR_H, barH = C.SCREEN_H - barTop;
-    ctx.fillStyle = '#0d0d0a';
-    ctx.fillRect(C.SIDEBAR_X, barTop, 8, barH);
     const scale = Math.max(pb.out, pb.drain, 100) * 1.2;
     const outH = Math.round(pb.out / scale * barH);
     const low = pb.drain > pb.out;
     ctx.fillStyle = low ? PAL.uiRed : (pb.drain > pb.out * 0.8 ? '#d8c020' : PAL.uiGreen);
-    ctx.fillRect(C.SIDEBAR_X + 2, barTop + barH - outH, 5, outH);
+    ctx.fillRect(C.SIDEBAR_X + 2, barTop + barH - outH, 4, outH);
     const drainY = barTop + barH - Math.round(pb.drain / scale * barH);
     ctx.fillStyle = '#fff';
-    ctx.fillRect(C.SIDEBAR_X + 2, drainY, 5, 3);
+    ctx.fillRect(C.SIDEBAR_X + 2, drainY, 4, 3);
     // gold hairline on the viewport's right edge — continues the tab bar's
-    // baseline and runs unbroken over both the seam and the power channel
+    // baseline and runs unbroken over the seam channel
     ctx.fillStyle = 'rgba(224,184,64,0.35)';
     ctx.fillRect(C.SIDEBAR_X, C.TAB_H - 1, 1, C.SCREEN_H - C.TAB_H + 1);
 
-    // radar — recessed bezel with a gold inner hairline, set into the panel
-    // with even shoulders on both sides
-    const rx = C.SIDEBAR_X + 16, rw = C.SIDEBAR_W - 32;
+    // radar — recessed bezel with a gold inner hairline, flush with the
+    // shared content column
+    const rx = C.SB_X0, rw = C.SB_X1 - C.SB_X0;
     _bevel(rx - 3, C.RADAR_Y - 3, rw + 6, C.RADAR_H + 6, false);
     ctx.fillStyle = '#000';
     ctx.fillRect(rx, C.RADAR_Y, rw, C.RADAR_H);
@@ -1853,22 +1862,18 @@ const Render = (function () {
       const logo = SPRITES.logo[baseSide(_viewSideOf(g))];
       if (logo) {
         const lw = logo.width * 2, lh = logo.height * 2;
-        ctx.drawImage(logo, C.SIDEBAR_X + (C.SIDEBAR_W - lw) / 2,
+        ctx.drawImage(logo, C.SB_X0 + (rw - lw) / 2,
           C.RADAR_Y + (C.RADAR_H - lh) / 2, lw, lh);
       }
     }
 
-    // buttons — three equal bevels sharing the panel width (matches hitTest)
-    const bw = ((C.SIDEBAR_W - 32) / 3) | 0;
-    const btns = [['REPAIR', C.SIDEBAR_X + 8, 'repair'],
-      ['SELL', C.SIDEBAR_X + 8 + bw + 8, 'sell'],
-      ['MAP', C.SIDEBAR_X + 8 + (bw + 8) * 2, 'map']];
+    // buttons — geometry shared with hitTest via _btnRects
     ctx.font = '16px monospace';
-    for (const [label, bx, which] of btns) {
-      const active = Input.mode === which;
-      _bevel(bx, C.BTN_Y + 4, bw, C.BTN_H - 8, active);
-      ctx.fillStyle = which === 'map' ? '#7a7a70' : (active ? PAL.uiGold : PAL.uiText);
-      ctx.fillText(label, bx + bw / 2 - label.length * 5, C.BTN_Y + 14);
+    for (const b of _btnRects()) {
+      const active = Input.mode === b.which;
+      _bevel(b.x, C.BTN_Y + 4, b.w, C.BTN_H - 8, active);
+      ctx.fillStyle = b.which === 'map' ? '#7a7a70' : (active ? PAL.uiGold : PAL.uiText);
+      ctx.fillText(b.label, b.x + b.w / 2 - b.label.length * 5, C.BTN_Y + 14);
     }
 
     // strips
@@ -1964,22 +1969,23 @@ const Render = (function () {
           ctx.strokeRect(sx + 0.5, iy + 0.5, C.CAMEO_PW - 1, C.CAMEO_PH - 1);
         }
       }
-      // scroll arrows
+      // scroll arrows — the pair spans the cameo column exactly
       const ay = C.STRIP_Y + C.STRIP_VISIBLE * C.STRIP_SPACING;
       const canUp = scroll > 0, canDown = scroll < list.length - C.STRIP_VISIBLE;
-      _bevel(sx, ay, 60, 24);
-      _bevel(sx + 68, ay, 60, 24);
+      const aw = (C.CAMEO_PW - 8) >> 1;
+      _bevel(sx, ay, aw, 24);
+      _bevel(sx + aw + 8, ay, aw, 24);
       ctx.fillStyle = canUp ? PAL.uiText : '#6a6a60';
-      ctx.fillText('▲', sx + 23, ay + 5);
+      ctx.fillText('▲', sx + (aw >> 1) - 7, ay + 5);
       ctx.fillStyle = canDown ? PAL.uiText : '#6a6a60';
-      ctx.fillText('▼', sx + 91, ay + 5);
+      ctx.fillText('▼', sx + aw + 8 + (aw >> 1) - 7, ay + 5);
     }
 
     // low power warning
     if (p.power.drain > p.power.out && (g.tick >> 3) & 1) {
       ctx.fillStyle = PAL.uiRed;
       ctx.font = '16px monospace';
-      ctx.fillText('LOW POWER', C.SIDEBAR_X + (C.SIDEBAR_W - 128) / 2, C.BTN_Y - 22);
+      ctx.fillText('LOW POWER', (C.SB_X0 + C.SB_X1) / 2 - 44, C.BTN_Y - 22);
     }
   }
 
