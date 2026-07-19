@@ -638,8 +638,13 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   deep cells darken by their 8-neighbour water count (grades shore→channel), shore cells
   brighten turquoise with a shimmering foam rim on every land-facing edge.
 - **HUD chrome**: `_bevel` builds a per-call vertical brushed-metal gradient; the tab bar
-  gets a gradient + a warm-gold baseline seam; the sidebar gets a lit gold seam framing the
-  viewport; the radar sits in a beveled bezel with a gold inner hairline.
+  gets a gradient + a warm-gold baseline seam. The viewport/sidebar seam is a narrow dark
+  gap under a single gold hairline that continues the tab bar's baseline down the screen
+  (no grey bevel stack); the power readout is a slim lit channel recessed into that seam
+  below the radar. The radar/logo screen sits in a beveled bezel with a gold inner
+  hairline, inset with even shoulders (`SIDEBAR_X+16`, width `SIDEBAR_W-32`); the build
+  strips are centered in the panel (`STRIP_BX` derived in `applyScreenAspect`) and the
+  REPAIR/SELL/MAP buttons share the panel width three ways at every sidebar width.
 - **Living menu backdrop** (`_menuBackdrop`, drawn by `frame(null)` when no game exists):
   a cached dawn gradient, a warm horizon glow, a slowly drifting tactical grid, ~46 additive
   embers (seeded once with `Math.random`, advanced by a `performance.now` dt), a cached

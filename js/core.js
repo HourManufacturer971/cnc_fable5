@@ -24,7 +24,7 @@ const C = {
   GROUP_X: 140, GROUP_W: 60, GROUP_SPACING: 68, GROUP_N: 5, // tab-bar control-group chips
   MM_X: 1312, MM_Y: 34, MM_S: 256,      // radar minimap blit rect (4px/cell)
   BTN_Y: 292, BTN_H: 40,
-  STRIP_BX: 1288, STRIP_UX: 1424, STRIP_Y: 344, STRIP_SPACING: 100, STRIP_VISIBLE: 6,
+  STRIP_BX: 1308, STRIP_UX: 1444, STRIP_Y: 344, STRIP_SPACING: 100, STRIP_VISIBLE: 6,
   CAMEO_W: 64, CAMEO_H: 48,             // cameo layout unit (art authored at 2x = 128x96)
   CAMEO_PW: 128, CAMEO_PH: 96,          // cameo SCREEN slot size (1:1 with the 2x art)
   HARV_CAP: 700,
@@ -58,8 +58,9 @@ function applyScreenAspect(aspect) {
   C.VIEW_H = C.VIEW_PH / (C.ZOOM * (C.VZOOM || 1));
   C.RADAR_X = C.SIDEBAR_X;
   C.MM_X = C.SIDEBAR_X + ((C.SIDEBAR_W - C.MM_S) >> 1);
-  C.STRIP_BX = C.SIDEBAR_X + 8;
-  C.STRIP_UX = C.SIDEBAR_X + 8 + C.CAMEO_PW + 8;
+  // build strips sit centered in the panel (two cameo columns, 8px gutter)
+  C.STRIP_BX = C.SIDEBAR_X + ((C.SIDEBAR_W - C.CAMEO_PW * 2 - 8) >> 1);
+  C.STRIP_UX = C.STRIP_BX + C.CAMEO_PW + 8;
 }
 
 // Coarse-pointer (touch) UI: a wider sidebar with bigger build icons —

@@ -272,10 +272,10 @@ const Render = (function () {
     if (x < C.VIEW_PW) return { zone: 'viewport' };
     if (x >= C.RADAR_X && y >= C.RADAR_Y && y < C.RADAR_Y + C.RADAR_H) return { zone: 'radar' };
     if (y >= C.BTN_Y && y < C.BTN_Y + C.BTN_H) {
-      const b0 = C.SIDEBAR_X + 8;
-      if (x >= b0 && x < b0 + 96) return { zone: 'btn', which: 'repair' };
-      if (x >= b0 + 104 && x < b0 + 200) return { zone: 'btn', which: 'sell' };
-      if (x >= b0 + 208 && x < b0 + 304) return { zone: 'btn', which: 'map' };
+      const b0 = C.SIDEBAR_X + 8, bw = ((C.SIDEBAR_W - 32) / 3) | 0;
+      if (x >= b0 && x < b0 + bw) return { zone: 'btn', which: 'repair' };
+      if (x >= b0 + bw + 8 && x < b0 + bw * 2 + 8) return { zone: 'btn', which: 'sell' };
+      if (x >= b0 + bw * 2 + 16 && x < b0 + bw * 3 + 16) return { zone: 'btn', which: 'map' };
       return { zone: 'sidebar' };
     }
     if (game && game.human) {
@@ -1804,31 +1804,32 @@ const Render = (function () {
     const p = _viewP(g);
     ctx.fillStyle = PAL.uiMetal;
     ctx.fillRect(C.SIDEBAR_X, C.TAB_H, C.SIDEBAR_W, C.SCREEN_H - C.TAB_H);
-    // lit seam where the sidebar meets the battlefield (a warm gold hairline
-    // over a bright/dark bevel) — frames the viewport
-    ctx.fillStyle = 'rgba(224,184,64,0.30)';
-    ctx.fillRect(C.SIDEBAR_X, C.TAB_H, 1, C.SCREEN_H - C.TAB_H);
-    ctx.fillStyle = PAL.uiMetalLight;
-    ctx.fillRect(C.SIDEBAR_X + 1, C.TAB_H, 2, C.SCREEN_H - C.TAB_H);
-    ctx.fillStyle = PAL.uiMetalDark;
-    ctx.fillRect(C.SIDEBAR_X + 3, C.TAB_H, 1, C.SCREEN_H - C.TAB_H);
+    // seam where the sidebar meets the battlefield: a narrow dark gap so the
+    // panel reads as one clean slab beside the viewport
+    ctx.fillStyle = '#0d0d0a';
+    ctx.fillRect(C.SIDEBAR_X, C.TAB_H - 1, 4, C.SCREEN_H - C.TAB_H + 1);
 
-    // power bar along the sidebar's left edge
+    // power readout set into the seam below the radar
     const pb = p.power;
     const barTop = C.RADAR_Y + C.RADAR_H, barH = C.SCREEN_H - barTop;
-    ctx.fillStyle = PAL.uiMetalDark;
+    ctx.fillStyle = '#0d0d0a';
     ctx.fillRect(C.SIDEBAR_X, barTop, 8, barH);
     const scale = Math.max(pb.out, pb.drain, 100) * 1.2;
     const outH = Math.round(pb.out / scale * barH);
     const low = pb.drain > pb.out;
     ctx.fillStyle = low ? PAL.uiRed : (pb.drain > pb.out * 0.8 ? '#d8c020' : PAL.uiGreen);
-    ctx.fillRect(C.SIDEBAR_X, barTop + barH - outH, 8, outH);
+    ctx.fillRect(C.SIDEBAR_X + 2, barTop + barH - outH, 5, outH);
     const drainY = barTop + barH - Math.round(pb.drain / scale * barH);
     ctx.fillStyle = '#fff';
-    ctx.fillRect(C.SIDEBAR_X, drainY, 8, 4);
+    ctx.fillRect(C.SIDEBAR_X + 2, drainY, 5, 3);
+    // gold hairline on the viewport's right edge — continues the tab bar's
+    // baseline and runs unbroken over both the seam and the power channel
+    ctx.fillStyle = 'rgba(224,184,64,0.35)';
+    ctx.fillRect(C.SIDEBAR_X, C.TAB_H - 1, 1, C.SCREEN_H - C.TAB_H + 1);
 
-    // radar — recessed bezel with a gold inner hairline
-    const rx = C.RADAR_X + 8, rw = C.RADAR_W - 8;
+    // radar — recessed bezel with a gold inner hairline, set into the panel
+    // with even shoulders on both sides
+    const rx = C.SIDEBAR_X + 16, rw = C.SIDEBAR_W - 32;
     _bevel(rx - 3, C.RADAR_Y - 3, rw + 6, C.RADAR_H + 6, false);
     ctx.fillStyle = '#000';
     ctx.fillRect(rx, C.RADAR_Y, rw, C.RADAR_H);
@@ -1852,19 +1853,22 @@ const Render = (function () {
       const logo = SPRITES.logo[baseSide(_viewSideOf(g))];
       if (logo) {
         const lw = logo.width * 2, lh = logo.height * 2;
-        ctx.drawImage(logo, C.RADAR_X + (C.RADAR_W - lw) / 2 + 4,
+        ctx.drawImage(logo, C.SIDEBAR_X + (C.SIDEBAR_W - lw) / 2,
           C.RADAR_Y + (C.RADAR_H - lh) / 2, lw, lh);
       }
     }
 
-    // buttons
-    const btns = [['REPAIR', C.SIDEBAR_X + 8, 'repair'], ['SELL', C.SIDEBAR_X + 112, 'sell'], ['MAP', C.SIDEBAR_X + 216, 'map']];
+    // buttons — three equal bevels sharing the panel width (matches hitTest)
+    const bw = ((C.SIDEBAR_W - 32) / 3) | 0;
+    const btns = [['REPAIR', C.SIDEBAR_X + 8, 'repair'],
+      ['SELL', C.SIDEBAR_X + 8 + bw + 8, 'sell'],
+      ['MAP', C.SIDEBAR_X + 8 + (bw + 8) * 2, 'map']];
     ctx.font = '16px monospace';
     for (const [label, bx, which] of btns) {
       const active = Input.mode === which;
-      _bevel(bx, C.BTN_Y + 4, 96, C.BTN_H - 8, active);
+      _bevel(bx, C.BTN_Y + 4, bw, C.BTN_H - 8, active);
       ctx.fillStyle = which === 'map' ? '#7a7a70' : (active ? PAL.uiGold : PAL.uiText);
-      ctx.fillText(label, bx + 48 - label.length * 5, C.BTN_Y + 14);
+      ctx.fillText(label, bx + bw / 2 - label.length * 5, C.BTN_Y + 14);
     }
 
     // strips
