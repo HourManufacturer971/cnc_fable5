@@ -637,15 +637,15 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - **Water depth + shoreline foam** (render-only, per visible water cell gated by shroud):
   deep cells darken by their 8-neighbour water count (grades shore→channel), shore cells
   brighten turquoise with a shimmering foam rim on every land-facing edge.
-- **HUD chrome**: `_bevel` builds a per-call vertical brushed-metal gradient; the tab bar
-  gets a gradient + a warm-gold baseline seam. The viewport/sidebar seam is one 8px dark
-  channel under a single gold hairline that continues the tab bar's baseline down the
-  screen (no grey bevel stack); below the radar the power readout glows inside that same
-  channel. Every sidebar module — radar/logo screen (beveled bezel + gold inner
-  hairline), REPAIR/SELL/MAP row (`_btnRects`, shared by draw and hitTest), build strips
-  and their scroll arrows, the tab-bar side label and right-aligned clock — snaps to one
-  shared content column `C.SB_X0..C.SB_X1` (seam + 24px shoulder each side, derived in
-  `applyScreenAspect`), so all edges align at any sidebar width.
+- **HUD chrome** (flat, no gradients): `_bevel` is a solid fill + 1px line chip; the tab
+  bar is a flat dark fill with a warm-gold baseline. The viewport/sidebar seam is one 8px
+  dark channel under a single gold hairline that continues the tab bar's baseline down
+  the screen; below the radar the power readout glows inside that same channel. Every
+  sidebar module — radar/logo screen (flat black + gold hairline border),
+  REPAIR/SELL/MAP row (`_btnRects`, shared by draw and hitTest), build strips and their
+  scroll arrows, the tab-bar side label and right-aligned clock — snaps to one shared
+  content column `C.SB_X0..C.SB_X1` (seam + 12px shoulder each side, derived in
+  `applyScreenAspect`), sized so the content is exactly two cameo columns wide.
 - **Living menu backdrop** (`_menuBackdrop`, drawn by `frame(null)` when no game exists):
   a cached dawn gradient, a warm horizon glow, a slowly drifting tactical grid, ~46 additive
   embers (seeded once with `Math.random`, advanced by a `performance.now` dt), a cached
@@ -804,19 +804,21 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - **Adaptive width on touch devices** (`core.js` `applyScreenAspect` + `main.js`
   `_fitScreen` + `Render.resize`): `C.SCREEN_W` and every derived x-constant
   (`SIDEBAR_X`, `VIEW_PW/W`, `RADAR_X`, `MM_X`, `STRIP_BX/UX`) are recomputed from the
-  visual viewport's aspect (clamped 1.6–2.4, sidebar keeps its 320px on the right, the
+  visual viewport's aspect (clamped 1.6–2.4, sidebar keeps its 296px on the right, the
   battlefield viewport absorbs the rest), the canvas bitmap is resized to match (which
   resets context state — `Render.resize` re-asserts `imageSmoothingEnabled=false`), and
   the CSS box fills the screen exactly. Every consumer reads `C.*` live so the whole UI
   re-flows; re-run on visualViewport/window resize, orientationchange and
   fullscreenchange. Fine-pointer devices keep the fixed 1600×1000 layout untouched.
 - **Wide touch sidebar** (`core.js` `applyTouchSidebar`, called once at boot on
-  coarse pointers BEFORE the first layout pass): `SIDEBAR_W/RADAR_W` 320→448,
+  coarse pointers BEFORE the first layout pass): `SIDEBAR_W/RADAR_W` 296→392,
   cameo slots 128×96→176×132, strip spacing 100→138 with 4 visible rows —
-  finger-sized build icons on phone-sized screens. `applyScreenAspect` derives
-  `STRIP_UX` and `MM_X` from `CAMEO_PW`/`SIDEBAR_W`, so the whole sidebar
-  re-flows from the two base numbers; hit zones and strip scrolling follow the
-  constants automatically.
+  finger-sized build icons on phone-sized screens. Both widths are exact fits:
+  8px seam + 12px shoulder + two cameo columns with an 8px gutter + 12px
+  shoulder — no dead margin at either size. `applyScreenAspect` derives
+  `SB_X0/SB_X1`, `STRIP_BX/UX` and `MM_X` from `CAMEO_PW`/`SIDEBAR_W`, so the
+  whole sidebar re-flows from the two base numbers; hit zones and strip
+  scrolling follow the constants automatically.
 - **Pinch-to-zoom** (`Render.setViewZoom(f)`, `C.VZOOM`): render.js splits its
   scale into `BZ` (the fixed bake scale — terrain cache, tree sprites and the
   cursor stay authored at `C.ZOOM`) and a live `Z = BZ × C.VZOOM` used by every

@@ -14,20 +14,20 @@ const C = {
   SCREEN_W: 1600,
   SCREEN_H: 1000,
   TAB_H: 32,
-  VIEW_W: 640,   // viewport span in WORLD px (640 world = 1280 screen)
+  VIEW_W: 652,   // viewport span in WORLD px (652 world = 1304 screen)
   VIEW_H: 484,
-  VIEW_PW: 1280, // viewport span in SCREEN px
+  VIEW_PW: 1304, // viewport span in SCREEN px
   VIEW_PH: 968,
-  SIDEBAR_X: 1280,
-  SIDEBAR_W: 320,
-  RADAR_X: 1280, RADAR_Y: 32, RADAR_W: 320, RADAR_H: 260,
+  SIDEBAR_X: 1304,
+  SIDEBAR_W: 296, // 8px seam + 12px shoulder + 264px content + 12px shoulder
+  RADAR_X: 1304, RADAR_Y: 32, RADAR_W: 296, RADAR_H: 260,
   GROUP_X: 140, GROUP_W: 60, GROUP_SPACING: 68, GROUP_N: 5, // tab-bar control-group chips
   // sidebar content column: the radar screen, button row and build strips all
-  // share these edges (8px seam channel + 24px shoulder left, 24px shoulder right)
-  SB_X0: 1312, SB_X1: 1576,
-  MM_X: 1316, MM_Y: 34, MM_S: 256,      // radar minimap blit rect (4px/cell)
+  // share these edges — the content is exactly two cameo columns wide
+  SB_X0: 1324, SB_X1: 1588,
+  MM_X: 1328, MM_Y: 34, MM_S: 256,      // radar minimap blit rect (4px/cell)
   BTN_Y: 292, BTN_H: 40,
-  STRIP_BX: 1312, STRIP_UX: 1448, STRIP_Y: 344, STRIP_SPACING: 100, STRIP_VISIBLE: 6,
+  STRIP_BX: 1324, STRIP_UX: 1460, STRIP_Y: 344, STRIP_SPACING: 100, STRIP_VISIBLE: 6,
   CAMEO_W: 64, CAMEO_H: 48,             // cameo layout unit (art authored at 2x = 128x96)
   CAMEO_PW: 128, CAMEO_PH: 96,          // cameo SCREEN slot size (1:1 with the 2x art)
   HARV_CAP: 700,
@@ -62,8 +62,8 @@ function applyScreenAspect(aspect) {
   C.RADAR_X = C.SIDEBAR_X;
   // shared content column (see the static defaults above): every sidebar
   // module snaps to SB_X0/SB_X1 so their edges align at any sidebar width
-  C.SB_X0 = C.SIDEBAR_X + 32;
-  C.SB_X1 = C.SIDEBAR_X + C.SIDEBAR_W - 24;
+  C.SB_X0 = C.SIDEBAR_X + 20;
+  C.SB_X1 = C.SIDEBAR_X + C.SIDEBAR_W - 12;
   C.MM_X = C.SB_X0 + ((C.SB_X1 - C.SB_X0 - C.MM_S) >> 1);
   C.STRIP_BX = C.SB_X0;
   C.STRIP_UX = C.SB_X1 - C.CAMEO_PW;
@@ -75,8 +75,10 @@ function applyScreenAspect(aspect) {
 // stay visible per strip (they scroll); the icons themselves grow ~40%.
 function applyTouchSidebar() {
   C.TOUCH_UI = true;
-  C.SIDEBAR_W = 448;
-  C.RADAR_W = 448;
+  // 8px seam + 12px shoulder + two 176px cameo columns + 8px gutter + 12px
+  // shoulder — the icons stay finger-sized, the battlefield keeps the rest
+  C.SIDEBAR_W = 392;
+  C.RADAR_W = 392;
   C.CAMEO_PW = 176;
   C.CAMEO_PH = 132;
   C.STRIP_SPACING = 138;

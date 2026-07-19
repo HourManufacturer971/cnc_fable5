@@ -1707,27 +1707,17 @@ const Render = (function () {
   // ---- tab bar ------------------------------------------------------------------------------
 
   function _bevel(x, y, w, h, lit) {
-    // brushed-metal body: vertical gradient (lit from above) + chunky edges
-    const bg = ctx.createLinearGradient(x, y, x, y + h);
-    if (lit) { bg.addColorStop(0, '#82826f'); bg.addColorStop(1, '#55554a'); }
-    else { bg.addColorStop(0, '#5e5e53'); bg.addColorStop(0.5, PAL.uiMetal); bg.addColorStop(1, '#3a3a33'); }
-    ctx.fillStyle = bg;
+    // flat chip: solid fill + 1px line — no gradients anywhere in the HUD
+    ctx.fillStyle = lit ? '#6a6a5c' : '#52524a';
     ctx.fillRect(x, y, w, h);
-    ctx.fillStyle = lit ? '#9a9a88' : PAL.uiMetalLight;
-    ctx.fillRect(x, y, w, 2);
-    ctx.fillRect(x, y, 2, h);
-    ctx.fillStyle = PAL.uiMetalDark;
-    ctx.fillRect(x, y + h - 2, w, 2);
-    ctx.fillRect(x + w - 2, y, 2, h);
+    ctx.strokeStyle = lit ? '#a8a894' : '#26261f';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
   }
 
   function _drawTabBar(g) {
-    // lit metal bar with a warm gold baseline separating HUD from viewport
-    const tg = ctx.createLinearGradient(0, 0, 0, C.TAB_H);
-    tg.addColorStop(0, '#3c3c34');
-    tg.addColorStop(0.5, PAL.uiMetalDark);
-    tg.addColorStop(1, '#1c1c18');
-    ctx.fillStyle = tg;
+    // flat dark bar with a warm gold baseline separating HUD from viewport
+    ctx.fillStyle = '#26261f';
     ctx.fillRect(0, 0, C.SCREEN_W, C.TAB_H);
     ctx.fillStyle = 'rgba(224,184,64,0.35)';
     ctx.fillRect(0, C.TAB_H - 1, C.VIEW_PW, 1);
@@ -1837,9 +1827,8 @@ const Render = (function () {
     ctx.fillRect(C.SIDEBAR_X, C.TAB_H - 1, 1, C.SCREEN_H - C.TAB_H + 1);
 
     // radar — recessed bezel with a gold inner hairline, flush with the
-    // shared content column
+    // shared content column: flat black screen, one gold hairline border
     const rx = C.SB_X0, rw = C.SB_X1 - C.SB_X0;
-    _bevel(rx - 3, C.RADAR_Y - 3, rw + 6, C.RADAR_H + 6, false);
     ctx.fillStyle = '#000';
     ctx.fillRect(rx, C.RADAR_Y, rw, C.RADAR_H);
     ctx.strokeStyle = 'rgba(224,184,64,0.35)';
