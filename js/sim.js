@@ -526,10 +526,11 @@ function _stepAlongPath(u, d) {
     u.y += (ny - u.y) / dd * spd;
     u.anim++;
   }
-  // dust kicked up by vehicles rolling over bare dirt (cosmetic;
+  // dust kicked up by vehicles rolling over bare dirt or sand (cosmetic;
   // hash-timed off tick+id, never game.rng)
+  const dustT = g.terrain[cellIdx(curCx, curCy)];
   if (!d.infantry && !d.air && !u.cloaked && (g.tick + u.id) % 8 === 0 &&
-      g.terrain[cellIdx(curCx, curCy)] === 1) {
+      (dustT === 1 || dustT === 8)) {
     const a = angleOf16(u.facing);
     spawnEffect('dust', u.x - Math.sin(a) * 8, u.y + Math.cos(a) * 8,
       { ttl: 14, vx: -Math.sin(a) * 0.3, vy: Math.cos(a) * 0.3 });

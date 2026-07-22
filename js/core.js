@@ -419,7 +419,9 @@ function clearOcc(cx, cy, id) {
   if (inMap(cx, cy) && game.occ[cellIdx(cx, cy)] === id) game.occ[cellIdx(cx, cy)] = 0;
 }
 
-function terrainPassable(t) { return t === 0 || t === 1 || t === 6; } // grass, dirt, bridge (7 = fallen span)
+// grass, dirt, bridge, sand, marsh, scrub (2 rock / 3 water / 4 tree /
+// 5 blossom / 7 fallen bridge span block)
+function terrainPassable(t) { return t === 0 || t === 1 || t === 6 || t >= 8; }
 
 // The live deck entity covering a cell, if any. Decks skip the occupancy
 // grid (they're walkable), so entity picking needs this dedicated lookup.

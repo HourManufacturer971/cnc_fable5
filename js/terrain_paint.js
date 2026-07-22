@@ -17,7 +17,8 @@
 // Math.random, never reads or writes game state besides terrain/tib/seed.
 
 const TERRAINPAINT = (function () {
-  const T_GRASS = 0, T_DIRT = 1, T_ROCK = 2, T_WATER = 3, T_TREE = 4, T_BLOSSOM = 5, T_BRIDGE = 6;
+  const T_GRASS = 0, T_DIRT = 1, T_ROCK = 2, T_WATER = 3, T_TREE = 4, T_BLOSSOM = 5, T_BRIDGE = 6,
+    T_SAND = 8, T_MARSH = 9, T_SCRUB = 10;
 
   // ---- hashing / noise -------------------------------------------------------
 
@@ -99,6 +100,10 @@ const TERRAINPAINT = (function () {
   const DR = ramp(['#59492c', '#6a5a38', '#7c6a42', '#8f7a4e', '#9c8656', '#ab9663']);
   const RK = ramp(['#464136', '#524c3f', '#5e5748', '#6a6251', '#766d5a', '#857b66']);
   const WET = ramp(['#41371f', '#4d4126', '#5a4c2d', '#665735']);
+  // sand: warm pale shore; marsh: dark waterlogged green; scrub: dry olive
+  const SD = ramp(['#7d6d47', '#8f7d51', '#9f8c5b', '#ad9a65', '#bba76f', '#c9b57b']);
+  const MR = ramp(['#2c381e', '#334120', '#3b4c26', '#44562c', '#4f6033', '#59683a']);
+  const SC = ramp(['#4d5629', '#59622f', '#666d36', '#73793d', '#7f8445', '#8b8f4d']);
   // waterline -> deep
   const WR = ramp(['#4b8292', '#3d7490', '#356690', '#2b5880', '#224a6e', '#1a3c5c', '#132e4a']);
   const U_FOAM = u32('#c2dcce'), U_FOAMD = u32('#8fb4ab');
@@ -414,16 +419,33 @@ const TERRAINPAINT = (function () {
     const seed = g.seed >>> 0;
     const GSEED = seed ^ 0x9e3779b9;
 
+    // bridge decks paint whatever ground the span was BUILT OVER first (the
+    // deck slabs go on top later) — so the shoreline runs beneath the bridge
+    // instead of retreating to the deck ends
+    const underOf = new Map();
+    for (const bi of (g.decor && g.decor.bridges) || []) {
+      for (let k = 0; k < bi.cells.length; k++) {
+        underOf.set(cellIdx(bi.cells[k].cx, bi.cells[k].cy), bi.under[k]);
+      }
+    }
+
     // per-cell material fields (what the ground blends toward between cells)
     const dirtF = new Float32Array(W * H);
     const waterF = new Float32Array(W * H);
     const rockF = new Float32Array(W * H);
+    const sandF = new Float32Array(W * H);
+    const marshF = new Float32Array(W * H);
+    const scrubF = new Float32Array(W * H);
     for (let i = 0; i < W * H; i++) {
-      const t = g.terrain[i];
-      dirtF[i] = t === T_DIRT ? 1 : t === T_ROCK ? 0.9 : (t === T_WATER || t === T_BRIDGE) ? 0.6 :
-                 t === T_BLOSSOM ? 0.5 : t === T_TREE ? 0.2 : 0;
-      waterF[i] = (t === T_WATER || t === T_BRIDGE) ? 1 : 0;   // water flows under decks
+      let t = g.terrain[i];
+      if (t === T_BRIDGE) t = underOf.has(i) ? underOf.get(i) : T_WATER;
+      dirtF[i] = t === T_DIRT ? 1 : t === T_ROCK ? 0.9 : t === T_WATER ? 0.6 :
+                 t === T_BLOSSOM ? 0.5 : t === T_SAND ? 0.3 : t === T_TREE ? 0.2 : 0;
+      waterF[i] = t === T_WATER ? 1 : t === T_MARSH ? 0.34 : 0; // marsh: boggy puddles
       rockF[i] = t === T_ROCK ? 1 : 0;
+      sandF[i] = t === T_SAND ? 1 : 0;
+      marshF[i] = t === T_MARSH ? 1 : 0;
+      scrubF[i] = t === T_SCRUB ? 1 : 0;
     }
 
     // shore-distance field: how many cells of open water lie between a cell
@@ -519,7 +541,9 @@ const TERRAINPAINT = (function () {
             continue;
           }
         }
-        // LAND: rocky ground / dirt / grass with dithered ragged boundaries
+        // LAND: rock / dirt / sand / marsh / scrub / grass, all with dithered
+        // ragged boundaries — the strongest material at this pixel wins, and
+        // the per-material edge noise makes every border organic
         const eB = gridAt(edgeB, x, y);
         let rampSel;
         const r = cellAt(rockF, x, y);
@@ -527,8 +551,17 @@ const TERRAINPAINT = (function () {
         if (rv > 0.55 || (rv > 0.45 && (rv - 0.45) * 10 > gr)) {
           rampSel = RK;
         } else {
+          const eA2 = gridAt(edgeA, x, y);
           const dv = cellAt(dirtF, x, y) + (eB - 0.5) * 0.62 + (m - 0.5) * 0.18;
-          rampSel = dv > 0.55 ? DR : dv > 0.45 ? ((dv - 0.45) * 10 > gr ? DR : GR) : GR;
+          const sv = cellAt(sandF, x, y) + (eA2 - 0.5) * 0.55;
+          const mv = cellAt(marshF, x, y) + (eB - 0.5) * 0.5;
+          const cv2 = cellAt(scrubF, x, y) + (eA2 - 0.5) * 0.5 + (m - 0.5) * 0.15;
+          rampSel = GR;
+          let bv = 0.5 + (gr - 0.5) * 0.1;   // grass holds until beaten; dither feathers ties
+          if (dv > bv) { bv = dv; rampSel = DR; }
+          if (sv > bv) { bv = sv; rampSel = SD; }
+          if (cv2 > bv) { bv = cv2; rampSel = SC; }
+          if (mv > bv) { bv = mv; rampSel = MR; }
         }
         let t = 0.5 + (m - 0.5) * 0.85 + (gr - 0.5) * 0.34;
         if (rampSel === RK && r > 0.8) t += 0.17;   // raised plateau tops read lighter
@@ -567,7 +600,8 @@ const TERRAINPAINT = (function () {
       for (let cx = 1; cx < W - 1; cx++) {
         const i = cellIdx(cx, cy);
         const t = g.terrain[i];
-        if ((t !== T_GRASS && t !== T_DIRT) || g.tib[i] > 0) continue;
+        if ((t !== T_GRASS && t !== T_DIRT && t !== T_SAND && t !== T_MARSH && t !== T_SCRUB) ||
+            g.tib[i] > 0) continue;
         const dh = h2(cx, cy, seed ^ 0xd00d);
         if (dh > 0.23) continue;
         const k = h2(cy, cx, seed ^ 0xd11d);
@@ -578,6 +612,22 @@ const TERRAINPAINT = (function () {
           else if (k < 0.60) bush(q, x, y);
           else if (k < 0.68) fallenLog(q, x, y, dh * 5 % 1);
           else if (k < 0.76) shrooms(q, x, y, dh * 5 % 1);
+          else pebbles(q, x, y, dh * 5 % 1);
+        } else if (t === T_SAND) {
+          // beach litter: stones, a bleached log, dry tufts
+          if (k < 0.45) pebbles(q, x, y, dh * 5 % 1);
+          else if (k < 0.62) tuft(q, x, y, true);
+          else if (k < 0.72) fallenLog(q, x, y, dh * 5 % 1);
+          else crack(q, x, y, dh * 5 % 1);
+        } else if (t === T_MARSH) {
+          // bog: reeds and mushrooms crowd the wet ground
+          if (k < 0.55) reeds(q, x, y);
+          else if (k < 0.75) shrooms(q, x, y, dh * 5 % 1);
+          else tuft(q, x, y, false);
+        } else if (t === T_SCRUB) {
+          // heath: dry tufts and hardy bushes
+          if (k < 0.5) tuft(q, x, y, true);
+          else if (k < 0.72) bush(q, x, y);
           else pebbles(q, x, y, dh * 5 % 1);
         } else {
           if (k < 0.32) pebbles(q, x, y, dh * 5 % 1);
@@ -591,12 +641,12 @@ const TERRAINPAINT = (function () {
     }
 
     // reed beds along the waterline: land cells with a water neighbour grow
-    // cattail clumps on the wet side (grass and dirt shores both)
+    // cattail clumps on the wet side (grass, dirt and marsh shores)
     for (let cy = 1; cy < H - 1; cy++) {
       for (let cx = 1; cx < W - 1; cx++) {
         const i = cellIdx(cx, cy);
         const t = g.terrain[i];
-        if ((t !== T_GRASS && t !== T_DIRT) || g.tib[i] > 0) continue;
+        if ((t !== T_GRASS && t !== T_DIRT && t !== T_MARSH) || g.tib[i] > 0) continue;
         if (h2(cx, cy, seed ^ 0xeed5) > 0.45) continue;
         const wN = g.terrain[cellIdx(cx, cy - 1)] === T_WATER;
         const wS = g.terrain[cellIdx(cx, cy + 1)] === T_WATER;

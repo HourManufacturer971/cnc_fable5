@@ -1289,10 +1289,9 @@ const Main = (function () {
         addBuilding(b);
       }
     }
-    // the river bridge is a real structure: shoot out its span to cut the
+    // river bridges are real structures: shoot out a span to cut the
     // crossing, send an engineer into a bank-side control room to rebuild it
-    if (game.decor && game.decor.bridgeInfo) {
-      const bi = game.decor.bridgeInfo;
+    for (const bi of (game.decor && game.decor.bridges) || []) {
       const deck = makeBuilding('bridge', 'civ', bi.rect.cx, bi.rect.cy);
       deck.w = bi.rect.w; deck.h = bi.rect.h;
       deck.buildProgress = 1;

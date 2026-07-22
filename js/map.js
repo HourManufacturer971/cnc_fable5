@@ -19,8 +19,11 @@
 const MAPGEN = (function () {
 
   // terrain ids (see SPEC): 0 grass, 1 dirt, 2 rock, 3 water, 4 tree,
-  // 5 blossom, 6 bridge deck (passable, drawn over water)
-  const T_GRASS = 0, T_DIRT = 1, T_ROCK = 2, T_WATER = 3, T_TREE = 4, T_BLOSSOM = 5, T_BRIDGE = 6;
+  // 5 blossom, 6 bridge deck (passable, drawn over water), 7 fallen span
+  // (sim-only), 8 sand, 9 marsh, 10 scrub — the last three are passable
+  // ground variants the painter blends seamlessly into grass/dirt
+  const T_GRASS = 0, T_DIRT = 1, T_ROCK = 2, T_WATER = 3, T_TREE = 4, T_BLOSSOM = 5, T_BRIDGE = 6,
+    T_SAND = 8, T_MARSH = 9, T_SCRUB = 10;
 
   function isImpassId(t) { return t === T_ROCK || t === T_WATER || t === T_TREE || t === T_BLOSSOM; }
 
@@ -123,8 +126,15 @@ const MAPGEN = (function () {
       for (let cx = 1; cx < W - 1; cx++) {
         const i = cellIdx(cx, cy);
         if (g.terrain[i] !== T_GRASS) continue;
-        if (elev[i] > dryCut && wd[i] > 5 && fbm(cx, cy, 11, 2, hseed ^ 0x2c9f) > 0.47) {
+        const f = fbm(cx, cy, 11, 2, hseed ^ 0x2c9f);
+        if (elev[i] > dryCut && wd[i] > 5 && f > 0.47) {
           g.terrain[i] = T_DIRT;
+          continue;
+        }
+        // scrub: the parched fringe around the dirt flats — same noise, a
+        // slightly looser cut, so every dry region grades grass→scrub→dirt
+        if (elev[i] > dryCut * 0.97 && wd[i] > 4 && f > 0.40) {
+          g.terrain[i] = T_SCRUB;
           continue;
         }
         // talus: ground at the foot of rock weathers to dirt
@@ -348,12 +358,14 @@ const MAPGEN = (function () {
     }
     let fordX2 = fordX1 + (rng() < 0.5 ? -1 : 1) * (10 + ((rng() * 8) | 0));
     fordX2 = clamp(fordX2, 6, W - 7);
+    // wider river: hold the fords' own columns a touch above the waterline
+    // (the ±2 skip below keeps them dry; nothing else needed)
 
     for (let x = 1; x < W - 1; x++) {
       if (Math.abs(x - fordX1) <= 2 || Math.abs(x - fordX2) <= 2) continue; // fords
-      // rivers gather water as they run: ~1 cell wide in the west, ~2.5 east
-      const hw = 1.0 + (x / W) * 1.1 + rng() * 0.3;
-      for (let dy = -3; dy <= 3; dy++) {
+      // rivers gather water as they run: ~1 cell wide in the west, ~3 east
+      const hw = 1.2 + (x / W) * 1.6 + rng() * 0.3;
+      for (let dy = -4; dy <= 4; dy++) {
         const yy = Math.round(yc[x]) + dy;
         if (yy < 1 || yy >= H - 1) continue;
         if (Math.abs(yy - yc[x]) > hw) continue;
@@ -365,14 +377,62 @@ const MAPGEN = (function () {
     return { yc, fordX1, fordX2 };
   }
 
+  // A north-south tributary: a narrow stream entering from the top or bottom
+  // rim and winding down the elevation grade until it joins the river. Gets
+  // its own 2-row ford near midstream so it never walls off a flank.
+  function tributary(g, rng, riv, hs, as, elev) {
+    const W = C.MAP_W, H = C.MAP_H;
+    const fromTop = rng() < 0.5;
+    let x = -1;
+    for (let a = 0; a < 30; a++) {
+      const cand = 8 + ((rng() * (W - 16)) | 0);
+      if (Math.abs(cand - riv.fordX1) < 8 || Math.abs(cand - riv.fordX2) < 8) continue;
+      if (Math.abs(cand - hs.cx) < 14 || Math.abs(cand - as.cx) < 14) continue;
+      x = cand; break;
+    }
+    if (x < 0) return null;
+    const path = [];
+    let y = fromTop ? 1 : H - 2;
+    const dir = fromTop ? 1 : -1;
+    for (let n = 0; n < H; n++) {
+      const ry = Math.round(riv.yc[x]);
+      if ((fromTop && y >= ry - 1) || (!fromTop && y <= ry + 1)) break; // joins the river band
+      path.push({ x, y });
+      let bx = x, be = Infinity;
+      for (const cand of [x - 1, x, x + 1]) {
+        if (cand < 6 || cand >= W - 6) continue;
+        if (Math.abs(cand - riv.fordX1) < 6 || Math.abs(cand - riv.fordX2) < 6) continue;
+        const e = elev[cellIdx(cand, y + dir)] + Math.abs(cand - x) * 0.008;
+        if (e < be) { be = e; bx = cand; }
+      }
+      x = bx; y += dir;
+    }
+    if (path.length < 8) return null;
+    const fi = (path.length / 2) | 0;
+    let carved = 0;
+    for (let k = 0; k < path.length; k++) {
+      if (k === fi || k === fi + 1) continue;   // the ford rows stay dry
+      const p = path[k];
+      for (const dx of [0, 1]) {
+        const xx = p.x + dx;
+        if (xx < 2 || xx >= W - 2) continue;
+        if (distC(xx, p.y, hs.cx, hs.cy) < 13 || distC(xx, p.y, as.cx, as.cy) < 13) continue;
+        const i = cellIdx(xx, p.y);
+        if (g.terrain[i] === T_GRASS || g.terrain[i] === T_DIRT) { g.terrain[i] = T_WATER; carved++; }
+      }
+    }
+    return carved >= 6 ? { fordX: path[fi].x, fordY: path[fi].y } : null;
+  }
+
   // Convert TWO adjacent river columns into a bridge deck (passable id 6),
   // well away from both fords so it forms a third, man-made crossing. Two
   // lanes wide: a single-file deck wedged harvester traffic head-to-head.
-  function placeBridge(g, rng, riv) {
+  // `avoid` lists the x of already-built bridges (crossings spread out).
+  function placeBridge(g, rng, riv, avoid) {
     const W = C.MAP_W, H = C.MAP_H;
     const colWater = x => {
       let n = 0;
-      for (let y = Math.max(1, Math.round(riv.yc[x]) - 4); y <= Math.min(H - 2, Math.round(riv.yc[x]) + 4); y++) {
+      for (let y = Math.max(1, Math.round(riv.yc[x]) - 6); y <= Math.min(H - 2, Math.round(riv.yc[x]) + 6); y++) {
         if (g.terrain[cellIdx(x, y)] === T_WATER) n++;
       }
       return n;
@@ -381,9 +441,10 @@ const MAPGEN = (function () {
     for (let x = 8; x < W - 9; x++) {
       const dFord = Math.min(Math.abs(x - riv.fordX1), Math.abs(x - riv.fordX2));
       if (dFord < 7) continue;
+      if (avoid && avoid.some(ax => Math.abs(x - ax) < 12)) continue;
       // both lanes must actually span water here
       const n1 = colWater(x), n2 = colWater(x + 1);
-      if (n1 >= 2 && n1 <= 5 && n2 >= 2 && n2 <= 5) cand.push({ x, dFord });
+      if (n1 >= 2 && n1 <= 7 && n2 >= 2 && n2 <= 7) cand.push({ x, dFord });
     }
     if (!cand.length) return null;
     cand.sort((a, b) => b.dFord - a.dFord);
@@ -391,20 +452,23 @@ const MAPGEN = (function () {
     // the water span across BOTH lanes (the part that falls when destroyed)
     let yTop = Infinity, yBot = -Infinity;
     for (const bx of [pick.x, pick.x + 1]) {
-      for (let y = Math.max(1, Math.round(riv.yc[bx]) - 4); y <= Math.min(H - 2, Math.round(riv.yc[bx]) + 4); y++) {
+      for (let y = Math.max(1, Math.round(riv.yc[bx]) - 6); y <= Math.min(H - 2, Math.round(riv.yc[bx]) + 6); y++) {
         if (g.terrain[cellIdx(bx, y)] === T_WATER) { yTop = Math.min(yTop, y); yBot = Math.max(yBot, y); }
       }
     }
     if (!isFinite(yTop)) return null;
     // deck rectangle: two lanes running TWO cells past the water onto each
     // bank, so the span lands on solid ground instead of stopping at the
-    // waterline — the painted abutments sit fully on the banks
+    // waterline — the painted abutments sit fully on the banks. `under`
+    // remembers what each cell was, so the painter can keep the shoreline
+    // running beneath the deck instead of retreating to the bridge ends.
     const y0 = Math.max(1, yTop - 2), y1 = Math.min(H - 2, yBot + 2);
-    const cells = [], water = [];
+    const cells = [], water = [], under = [];
     for (const bx of [pick.x, pick.x + 1]) {
       for (let y = y0; y <= y1; y++) {
         const idx = cellIdx(bx, y);
         if (g.terrain[idx] === T_WATER) water.push({ cx: bx, cy: y });
+        under.push(g.terrain[idx]);
         g.terrain[idx] = T_BRIDGE;
         cells.push({ cx: bx, cy: y });
       }
@@ -425,7 +489,7 @@ const MAPGEN = (function () {
     };
     tryHut([[pick.x - 2, y0], [pick.x + 3, y0], [pick.x - 2, y0 + 1], [pick.x + 3, y0 + 1]]);
     tryHut([[pick.x - 2, y1], [pick.x + 3, y1], [pick.x - 2, y1 - 1], [pick.x + 3, y1 - 1]]);
-    return { cells, rect: { cx: pick.x, cy: y0, w: 2, h: y1 - y0 + 1 }, water, huts };
+    return { cells, rect: { cx: pick.x, cy: y0, w: 2, h: y1 - y0 + 1 }, water, under, huts };
   }
 
   // Ragged rocky rim, 1..3 cells deep, depth varying smoothly along each edge.
@@ -724,14 +788,21 @@ const MAPGEN = (function () {
     const elev = buildElevation(hseed);
 
     // --- river in the valley (most seeds) ---------------------------------------
-    g.decor = { bridge: null, bridgeInfo: null, waterfall: null, village: null };
+    g.decor = { bridges: [], waterfall: null, village: null };
     const hasRiver = rng() < 0.62;
-    let riv = null;
+    let riv = null, trib = null;
     if (hasRiver) {
       riv = river(g, rng, hs, as, elev);
-      const bri = placeBridge(g, rng, riv);
-      g.decor.bridge = bri ? bri.cells : null;
-      g.decor.bridgeInfo = bri;   // rect + water span + hut sites (sim setup)
+      // most river maps also get a tributary — a second waterway with its
+      // own ford, so the country reads as a drainage, not a lone canal
+      if (rng() < 0.65) trib = tributary(g, rng, riv, hs, as, elev);
+      // one bridge always (when the water allows), often a second far away
+      const b1 = placeBridge(g, rng, riv, []);
+      if (b1) g.decor.bridges.push(b1);
+      if (b1 && rng() < 0.75) {
+        const b2 = placeBridge(g, rng, riv, [b1.rect.cx]);
+        if (b2) g.decor.bridges.push(b2);
+      }
     }
 
     // --- ponds pool in genuine depressions ---------------------------------------
@@ -743,12 +814,13 @@ const MAPGEN = (function () {
       if (riv) {
         crossings.push({ cx: riv.fordX1, cy: Math.round(riv.yc[riv.fordX1]) });
         crossings.push({ cx: riv.fordX2, cy: Math.round(riv.yc[riv.fordX2]) });
-        if (g.decor.bridge && g.decor.bridge.length) {
-          const mid = g.decor.bridge[(g.decor.bridge.length / 2) | 0];
+        for (const bi of g.decor.bridges) {
+          const mid = bi.cells[(bi.cells.length / 2) | 0];
           crossings.push({ cx: mid.cx, cy: mid.cy });
         }
+        if (trib) crossings.push({ cx: trib.fordX, cy: trib.fordY });
       }
-      const want = Math.round(((hasRiver ? 1 : 3) + ((rng() * 2) | 0)) * area);
+      const want = Math.round(((hasRiver ? 2 : 3) + ((rng() * 2) | 0)) * area);
       const cands = [];
       for (let cy = 4; cy < H - 4; cy++) {
         for (let cx = 4; cx < W - 4; cx++) {
@@ -773,8 +845,9 @@ const MAPGEN = (function () {
       }
       cands.sort((a, b) => a.e - b.e);
       for (let i = 0; i < Math.min(want, cands.length); i++) {
+        // the deepest depression always floods to a proper lake
         floodPond(g, rng, cands[i].cx, cands[i].cy, elev, starts,
-          hasRiver ? null : riv, i === 0 && !hasRiver);
+          hasRiver ? null : riv, i === 0);
       }
       // water finished: knock the cell noise off every shoreline
       smoothShores(g);
@@ -809,17 +882,40 @@ const MAPGEN = (function () {
       blob(g, rng, p.x, p.y, 1.7 + rng() * 1.4, T_ROCK);
     }
 
+    // sand and marsh dress the water margins AFTER the woods claim theirs:
+    // beaches come in noisy stretches on the drier banks, marsh pools in the
+    // low wet ground — both passable, both blended seamlessly by the painter
+    {
+      const medE = Array.from(elev).sort((a, b) => a - b)[(elev.length / 2) | 0];
+      for (let cy = 1; cy < H - 1; cy++) {
+        for (let cx = 1; cx < W - 1; cx++) {
+          const i = cellIdx(cx, cy);
+          const t = g.terrain[i];
+          if (t !== T_GRASS && t !== T_DIRT) continue;
+          if (wd[i] < 1 || wd[i] > 2) continue;
+          if (distC(cx, cy, hs.cx, hs.cy) < 13 || distC(cx, cy, as.cx, as.cy) < 13) continue;
+          if (elev[i] < medE && fbm(cx, cy, 9, 2, hseed ^ 0x33aa) > 0.52) {
+            g.terrain[i] = T_MARSH;
+          } else {
+            const f2 = fbm(cx, cy, 8, 2, hseed ^ 0x66b1);
+            if ((wd[i] === 1 && f2 > 0.40) || (wd[i] === 2 && f2 > 0.65)) g.terrain[i] = T_SAND;
+          }
+        }
+      }
+    }
+
     // gallery woods must never seal the crossings: fell the trees at the
     // ford mouths and bridge ends (only trees — the banks stay banks)
     if (riv) {
       for (const fx of [riv.fordX1, riv.fordX2]) {
         clearTrees(g, fx, Math.round(riv.yc[fx]), 3.2);
       }
-      if (g.decor.bridge && g.decor.bridge.length) {
-        const bTop = g.decor.bridge[0], bBot = g.decor.bridge[g.decor.bridge.length - 1];
+      for (const bi of g.decor.bridges) {
+        const bTop = bi.cells[0], bBot = bi.cells[bi.cells.length - 1];
         clearTrees(g, bTop.cx, bTop.cy - 1, 2.2);
         clearTrees(g, bBot.cx, bBot.cy + 1, 2.2);
       }
+      if (trib) clearTrees(g, trib.fordX, trib.fordY, 3.0);
     }
 
     // --- ragged rocky rim ---------------------------------------------------------
@@ -851,6 +947,7 @@ const MAPGEN = (function () {
     // Fields only grow on cells reachable from the starts (later passes just
     // clear MORE terrain, so reachability can only widen after this point).
     const reach = reachMask(g, starts);
+    const fieldCenters = [];   // every placed field's heart (spread checks)
     if (opts.holdout) {
       // the player's pocket INSIDE the walls is modest — enough to boot the
       // economy, not enough to sit on for the whole siege
@@ -879,6 +976,7 @@ const MAPGEN = (function () {
     } else {
       // One rich field 7-9 cells from each start, offset AWAY from the enemy
       // so your harvesters work the safe side of your base.
+      const homeC = [];
       for (let si = 0; si < starts.length; si++) {
         const st = starts[si];
         let foe = null, foeD = Infinity;
@@ -899,6 +997,42 @@ const MAPGEN = (function () {
         // large map the next field is a longer trek, so home pockets run deeper
         const count = Math.round((130 + ((rng() * 41) | 0)) * (area > 1.5 ? 1.2 : 1));
         placeField(g, rng, fx, fy, count, starts, reach);
+        homeC.push({ x: fx, y: fy });
+      }
+      // a SECOND pocket a short march out from each base: the natural first
+      // expansion — far enough to need escorting, near enough to reach before
+      // the war does
+      for (let si = 0; si < starts.length; si++) {
+        const st = starts[si];
+        let bestE = null;
+        for (let a = 0; a < 50; a++) {
+          const ang = rng() * Math.PI * 2;
+          const d = 12 + rng() * 5; // 12..17 cells out
+          const fx = clamp(Math.round(st.cx + Math.cos(ang) * d), 3, W - 4);
+          const fy = clamp(Math.round(st.cy + Math.sin(ang) * d), 3, opts.shore ? H - 13 : H - 4);
+          const ti = cellIdx(fx, fy);
+          if ((g.terrain[ti] !== T_GRASS && g.terrain[ti] !== T_DIRT) || !reach[ti]) continue;
+          if (distC(fx, fy, homeC[si].x, homeC[si].y) < 10) continue;
+          let ok = true;
+          for (const st2 of starts) {
+            if (st2 !== st && distC(fx, fy, st2.cx, st2.cy) < 15) { ok = false; break; }
+          }
+          if (!ok) continue;
+          let openN = 0;
+          for (let dy2 = -4; dy2 <= 4; dy2++) {
+            for (let dx2 = -4; dx2 <= 4; dx2++) {
+              const x2 = fx + dx2, y2 = fy + dy2;
+              if (x2 < 1 || y2 < 1 || x2 >= W - 1 || y2 >= H - 1) continue;
+              const i2 = cellIdx(x2, y2);
+              if ((g.terrain[i2] === T_GRASS || g.terrain[i2] === T_DIRT) && reach[i2]) openN++;
+            }
+          }
+          if (!bestE || openN > bestE.openN) bestE = { x: fx, y: fy, openN };
+        }
+        if (bestE) {
+          placeField(g, rng, bestE.x, bestE.y, 80 + ((rng() * 25) | 0), starts, reach);
+          fieldCenters.push({ x: bestE.x, y: bestE.y });
+        }
       }
     }
     // Medium fields beyond the home pockets, spread apart — chrysalite pools
@@ -906,7 +1040,6 @@ const MAPGEN = (function () {
     // one. The FIRST stays the classic contested prize near the map centre;
     // the rest scatter across the whole interior so the far country is worth
     // harvesting (and expanding toward) on any map size.
-    const fieldCenters = [];
     const mids = Math.round((3 + ((rng() * 2) | 0)) * area); // 3..4 classic, 6..8 large
     for (let i = 0; i < mids; i++) {
       // blue pockets are a PRIZE, never a doorstep: worth double, they hand
@@ -1040,7 +1173,7 @@ const MAPGEN = (function () {
         }
         for (let y = Math.max(1, top - 2); y < top; y++) {
           const idx = cellIdx(x, y);
-          if (g.terrain[idx] !== T_WATER) g.terrain[idx] = T_DIRT;   // the beach
+          if (g.terrain[idx] !== T_WATER) g.terrain[idx] = T_SAND;   // the beach
           g.tib[idx] = 0; g.tibType[idx] = 0;
         }
       }
@@ -1084,7 +1217,8 @@ const MAPGEN = (function () {
     // away from both bases (prefer close to the bridge — crossroads village)
     {
       let best = null, bestScore = -Infinity;
-      const bx = g.decor.bridge ? g.decor.bridge[(g.decor.bridge.length / 2) | 0] : null;
+      const b0 = g.decor.bridges[0];
+      const bx = b0 ? b0.cells[(b0.cells.length / 2) | 0] : null;
       // two passes: the strict one wants virgin ground; on crystal-crowded
       // maps (fields multiplied) the fallback may claim a fielded patch —
       // the settlers clear it (tib zeroed under the hamlet)
@@ -1135,8 +1269,9 @@ const MAPGEN = (function () {
         // and a lane out toward the nearest base
         const vcx = vx + 4, vcy = vy + 3;
         let crossing = null;
-        if (g.decor.bridge && g.decor.bridge.length) {
-          const mid = g.decor.bridge[(g.decor.bridge.length / 2) | 0];
+        if (g.decor.bridges.length) {
+          const bn = g.decor.bridges[0];
+          const mid = bn.cells[(bn.cells.length / 2) | 0];
           crossing = { cx: mid.cx, cy: mid.cy };
         } else if (riv) {
           const fx = Math.abs(riv.fordX1 - vcx) <= Math.abs(riv.fordX2 - vcx) ? riv.fordX1 : riv.fordX2;
@@ -1194,8 +1329,9 @@ const MAPGEN = (function () {
       const anchors = [];
       if (riv) {
         anchors.push({ cx: riv.fordX1, cy: Math.round(riv.yc[riv.fordX1]) });
-        if (g.decor.bridge && g.decor.bridge.length) {
-          const mid = g.decor.bridge[(g.decor.bridge.length / 2) | 0];
+        if (g.decor.bridges.length) {
+          const bn = g.decor.bridges[0];
+          const mid = bn.cells[(bn.cells.length / 2) | 0];
           anchors.push({ cx: mid.cx, cy: mid.cy });
         } else {
           anchors.push({ cx: riv.fordX2, cy: Math.round(riv.yc[riv.fordX2]) });
