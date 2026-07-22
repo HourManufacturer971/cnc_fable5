@@ -104,18 +104,102 @@ const MAPGEN = (function () {
   // Rock crowns the high ground: everything above the ~93rd elevation
   // percentile, broken up by detail noise so ridges read as ranges with
   // saddles instead of solid slabs.
-  function ridges(g, elev, hseed) {
+  // Highlands with character: 2-5 rounded MESAS crown the interior high
+  // ground — a crag ring around a walkable top, with one or two dirt ramps
+  // cut through the ring as the only ways up. Sited away from the rim (the
+  // map edge is already a barrier; stacking rock there wastes land), away
+  // from the starts and clear of water. Tops are recorded in g.decor.mesas
+  // so the painter can lift their tone (sunlit plateau).
+  function mesas(g, rng, elev, starts) {
     const W = C.MAP_W, H = C.MAP_H;
-    const vals = Array.from(elev).sort((a, b) => a - b);
-    const cut = vals[(vals.length * 0.93) | 0];
-    for (let cy = 1; cy < H - 1; cy++) {
-      for (let cx = 1; cx < W - 1; cx++) {
-        const i = cellIdx(cx, cy);
-        if (g.terrain[i] !== T_GRASS && g.terrain[i] !== T_DIRT) continue;
-        if (elev[i] > cut && fbm(cx, cy, 6, 2, hseed ^ 0x51ab) > 0.34) g.terrain[i] = T_ROCK;
+    const count = Math.min(5, Math.round((2 + rng() * 2) * Math.min((W * H) / 7056, 1.6)));
+    const list = [];
+    for (let m = 0; m < count; m++) {
+      const r = 5 + rng() * 2.5;
+      let best = null;
+      for (let a = 0; a < 70; a++) {
+        const cx = Math.round(r + 8 + rng() * (W - 2 * (r + 8)));
+        const cy = Math.round(r + 8 + rng() * (H - 2 * (r + 8)));
+        let ok = true;
+        for (const st of starts) {
+          if (distC(cx, cy, st.cx, st.cy) < r + 13) { ok = false; break; }
+        }
+        if (ok) {
+          for (const o of list) {
+            if (distC(cx, cy, o.cx, o.cy) < r + o.r + 8) { ok = false; break; }
+          }
+        }
+        if (!ok) continue;
+        // dry footing: no water or bridge deck anywhere under the footprint
+        let wet = false;
+        const R0 = Math.ceil(r + 1);
+        for (let dy = -R0; dy <= R0 && !wet; dy++) {
+          for (let dx = -R0; dx <= R0; dx++) {
+            const t = g.terrain[cellIdx(cx + dx, cy + dy)];
+            if (t === T_WATER || t === T_BRIDGE) { wet = true; break; }
+          }
+        }
+        if (wet) continue;
+        const score = elev[cellIdx(cx, cy)] + rng() * 0.05;   // crown the high ground
+        if (!best || score > best.score) best = { cx, cy, score };
       }
+      if (!best) continue;
+      const cx = best.cx, cy = best.cy;
+      const p1 = rng() * Math.PI * 2, p2 = rng() * Math.PI * 2;
+      // two ramps, roughly opposite — one exit can land in a dead pocket
+      // (lakeside pouch, forest), two almost never do
+      const rampA = rng() * Math.PI * 2;
+      const ramp2 = rampA + Math.PI * (0.7 + rng() * 0.6);
+      const top = [];
+      const R = Math.ceil(r + 2);
+      for (let dy = -R; dy <= R; dy++) {
+        for (let dx = -R; dx <= R; dx++) {
+          const x = cx + dx, y = cy + dy;
+          if (x < 2 || y < 2 || x >= W - 2 || y >= H - 2) continue;
+          const d = Math.sqrt(dx * dx + dy * dy);
+          const ang = Math.atan2(dy, dx);
+          // gently lobed outline: rounded, never spiky
+          const rr = r * (1 + 0.14 * Math.sin(2 * ang + p1) + 0.10 * Math.sin(3 * ang + p2));
+          if (d > rr) continue;
+          const i = cellIdx(x, y);
+          const t = g.terrain[i];
+          if (t === T_WATER || t === T_BRIDGE || t === T_BLOSSOM) continue;
+          const w1 = Math.abs(Math.atan2(Math.sin(ang - rampA), Math.cos(ang - rampA)));
+          const w2 = Math.abs(Math.atan2(Math.sin(ang - ramp2), Math.cos(ang - ramp2)));
+          const onRamp = Math.min(w1, w2) < 0.42;
+          if (d > rr - 1.9) {
+            // crag ring / dirt ramp — a ramp carves even through old crags
+            g.terrain[i] = onRamp ? T_DIRT : T_ROCK;
+          } else {
+            if (t === T_TREE || t === T_ROCK) g.terrain[i] = T_GRASS;   // tops are open ground
+            top.push(i);
+          }
+        }
+      }
+      // the ramps must OPEN somewhere: carve a short dirt lane from the top
+      // out past the outline, through any old crag or treeline in the way —
+      // a way up that dead-ends is no way up at all
+      for (const ra of [rampA, ramp2]) {
+        for (let s = r - 2; s <= r * 1.26 + 2.5; s += 0.5) {
+          const px = Math.round(cx + Math.cos(ra) * s);
+          const py = Math.round(cy + Math.sin(ra) * s);
+          for (let dy = 0; dy <= 1; dy++) {
+            for (let dx = 0; dx <= 1; dx++) {
+              const x = px + dx, y = py + dy;
+              if (x < 2 || y < 2 || x >= W - 2 || y >= H - 2) continue;
+              const i = cellIdx(x, y);
+              const t = g.terrain[i];
+              if (t === T_ROCK || t === T_TREE) g.terrain[i] = T_DIRT;
+            }
+          }
+        }
+        const mx = Math.round(cx + Math.cos(ra) * (r * 1.26 + 2));
+        const my = Math.round(cy + Math.sin(ra) * (r * 1.26 + 2));
+        clearTrees(g, mx, my, 2.6);
+      }
+      list.push({ cx, cy, r, top });
     }
-    return { cut, dry: vals[(vals.length * 0.72) | 0] };
+    g.decor.mesas = list;
   }
 
   // Dirt where the land is high and far from water (sun-baked flats), plus
@@ -210,7 +294,9 @@ const MAPGEN = (function () {
       const [x, y] = q.splice(bi, 1)[0];
       const i = cellIdx(x, y);
       if (elev[i] > level) continue;
-      if (x < 2 || y < 2 || x >= W - 2 || y >= H - 2) continue;
+      // lakes may run right up to the map rim — a bay against the world's
+      // edge reads as honest geography, not a clipped circle
+      if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
       if (g.terrain[i] !== T_GRASS && g.terrain[i] !== T_DIRT) continue;
       let nearStart = false;
       for (const st of starts) {
@@ -314,7 +400,10 @@ const MAPGEN = (function () {
   // are long and geologically motivated instead of sine-wave wiggle. It
   // widens downstream. Two fords; one is pinned where the river crosses the
   // start<->start line so the classic centre route always survives.
-  function river(g, rng, hs, as, elev) {
+  // The river is UNBROKEN: no fords, no gaps — bridges are the only way
+  // across. Cells it carves are stamped into riverMask so the shore passes
+  // can tell river banks (no sand) from lake shores (sandy).
+  function river(g, rng, hs, as, elev, riverMask) {
     const W = C.MAP_W, H = C.MAP_H;
     const yMin = Math.round(H * 0.28), yMax = Math.round(H * 0.69); // middle band, off both base plateaus
     // base plateaus repel the channel: without this the path can hug a start
@@ -336,16 +425,8 @@ const MAPGEN = (function () {
       if (e < bestE) { bestE = e; y = yy; }
     }
     const yc = new Float32Array(W);
-    const segX0 = Math.min(hs.cx, as.cx), segX1 = Math.max(hs.cx, as.cx);
-    let fordX1 = (W / 2) | 0, best = 1e9;
     for (let x = 0; x < W; x++) {
       yc[x] = y;
-      if (x >= segX0 && x <= segX1) {
-        const t = (x - hs.cx) / ((as.cx - hs.cx) || 1);
-        const sy = hs.cy + (as.cy - hs.cy) * t;
-        const d = Math.abs(y - sy);
-        if (d < best) { best = d; fordX1 = x; }
-      }
       if (x < W - 1) {
         let ny = y, be = Infinity;
         for (const cand of [y - 1, y, y + 1]) {
@@ -356,13 +437,7 @@ const MAPGEN = (function () {
         y = ny;
       }
     }
-    let fordX2 = fordX1 + (rng() < 0.5 ? -1 : 1) * (10 + ((rng() * 8) | 0));
-    fordX2 = clamp(fordX2, 6, W - 7);
-    // wider river: hold the fords' own columns a touch above the waterline
-    // (the ±2 skip below keeps them dry; nothing else needed)
-
     for (let x = 1; x < W - 1; x++) {
-      if (Math.abs(x - fordX1) <= 2 || Math.abs(x - fordX2) <= 2) continue; // fords
       // rivers gather water as they run: ~1 cell wide in the west, ~3 east
       const hw = 1.2 + (x / W) * 1.6 + rng() * 0.3;
       for (let dy = -4; dy <= 4; dy++) {
@@ -371,28 +446,31 @@ const MAPGEN = (function () {
         if (Math.abs(yy - yc[x]) > hw) continue;
         if (distC(x, yy, hs.cx, hs.cy) < 13 || distC(x, yy, as.cx, as.cy) < 13) continue;
         const idx = cellIdx(x, yy);
-        if (g.terrain[idx] === T_GRASS || g.terrain[idx] === T_DIRT) g.terrain[idx] = T_WATER;
+        if (g.terrain[idx] === T_GRASS || g.terrain[idx] === T_DIRT) {
+          g.terrain[idx] = T_WATER;
+          riverMask[idx] = 1;
+        }
       }
     }
-    return { yc, fordX1, fordX2 };
+    return { yc };
   }
 
-  // A north-south tributary: a narrow stream entering from the top or bottom
-  // rim and winding down the elevation grade until it joins the river. Gets
-  // its own 2-row ford near midstream so it never walls off a flank.
-  function tributary(g, rng, riv, hs, as, elev) {
+  // A spring-fed tributary: a narrow stream rising mid-map (never at the rim,
+  // so there is always dry ground around its head) and winding down the
+  // elevation grade until it joins the river. No ford — like the river it has
+  // no breaks; you go around the spring or over a bridge.
+  function tributary(g, rng, riv, hs, as, elev, riverMask) {
     const W = C.MAP_W, H = C.MAP_H;
     const fromTop = rng() < 0.5;
     let x = -1;
     for (let a = 0; a < 30; a++) {
       const cand = 8 + ((rng() * (W - 16)) | 0);
-      if (Math.abs(cand - riv.fordX1) < 8 || Math.abs(cand - riv.fordX2) < 8) continue;
       if (Math.abs(cand - hs.cx) < 14 || Math.abs(cand - as.cx) < 14) continue;
       x = cand; break;
     }
     if (x < 0) return null;
     const path = [];
-    let y = fromTop ? 1 : H - 2;
+    let y = fromTop ? 8 + ((rng() * 6) | 0) : H - 9 - ((rng() * 6) | 0);   // the spring
     const dir = fromTop ? 1 : -1;
     for (let n = 0; n < H; n++) {
       const ry = Math.round(riv.yc[x]);
@@ -401,58 +479,60 @@ const MAPGEN = (function () {
       let bx = x, be = Infinity;
       for (const cand of [x - 1, x, x + 1]) {
         if (cand < 6 || cand >= W - 6) continue;
-        if (Math.abs(cand - riv.fordX1) < 6 || Math.abs(cand - riv.fordX2) < 6) continue;
         const e = elev[cellIdx(cand, y + dir)] + Math.abs(cand - x) * 0.008;
         if (e < be) { be = e; bx = cand; }
       }
       x = bx; y += dir;
     }
     if (path.length < 8) return null;
-    const fi = (path.length / 2) | 0;
     let carved = 0;
-    for (let k = 0; k < path.length; k++) {
-      if (k === fi || k === fi + 1) continue;   // the ford rows stay dry
-      const p = path[k];
+    for (const p of path) {
       for (const dx of [0, 1]) {
         const xx = p.x + dx;
         if (xx < 2 || xx >= W - 2) continue;
         if (distC(xx, p.y, hs.cx, hs.cy) < 13 || distC(xx, p.y, as.cx, as.cy) < 13) continue;
         const i = cellIdx(xx, p.y);
-        if (g.terrain[i] === T_GRASS || g.terrain[i] === T_DIRT) { g.terrain[i] = T_WATER; carved++; }
+        if (g.terrain[i] === T_GRASS || g.terrain[i] === T_DIRT) {
+          g.terrain[i] = T_WATER;
+          riverMask[i] = 1;
+          carved++;
+        }
       }
     }
-    return carved >= 6 ? { fordX: path[fi].x, fordY: path[fi].y } : null;
+    return carved >= 6 ? {} : null;
   }
 
-  // Convert TWO adjacent river columns into a bridge deck (passable id 6),
-  // well away from both fords so it forms a third, man-made crossing. Two
-  // lanes wide: a single-file deck wedged harvester traffic head-to-head.
-  // `avoid` lists the x of already-built bridges (crossings spread out).
-  function placeBridge(g, rng, riv, avoid) {
+  // Convert TWO adjacent river columns into a bridge deck (passable id 6).
+  // With the river unbroken these ARE the crossings, so placement prefers
+  // columns near the start↔start axis where the fighting happens. Two lanes
+  // wide: a single-file deck wedged harvester traffic head-to-head.
+  // `avoid` lists the x of already-built bridges (crossings spread out);
+  // `loose` relaxes the span limits when a crossing MUST be found.
+  function placeBridge(g, rng, riv, avoid, loose) {
     const W = C.MAP_W, H = C.MAP_H;
+    const scan = loose ? 8 : 6, spanMax = loose ? 9 : 7;
     const colWater = x => {
       let n = 0;
-      for (let y = Math.max(1, Math.round(riv.yc[x]) - 6); y <= Math.min(H - 2, Math.round(riv.yc[x]) + 6); y++) {
+      for (let y = Math.max(1, Math.round(riv.yc[x]) - scan); y <= Math.min(H - 2, Math.round(riv.yc[x]) + scan); y++) {
         if (g.terrain[cellIdx(x, y)] === T_WATER) n++;
       }
       return n;
     };
+    const midX = (W / 2) | 0;
     const cand = [];
     for (let x = 8; x < W - 9; x++) {
-      const dFord = Math.min(Math.abs(x - riv.fordX1), Math.abs(x - riv.fordX2));
-      if (dFord < 7) continue;
       if (avoid && avoid.some(ax => Math.abs(x - ax) < 12)) continue;
       // both lanes must actually span water here
       const n1 = colWater(x), n2 = colWater(x + 1);
-      if (n1 >= 2 && n1 <= 7 && n2 >= 2 && n2 <= 7) cand.push({ x, dFord });
+      if (n1 >= 2 && n1 <= spanMax && n2 >= 2 && n2 <= spanMax) cand.push({ x, dc: Math.abs(x - midX) });
     }
     if (!cand.length) return null;
-    cand.sort((a, b) => b.dFord - a.dFord);
+    cand.sort((a, b) => a.dc - b.dc);
     const pick = cand[(rng() * Math.min(6, cand.length)) | 0];
     // the water span across BOTH lanes (the part that falls when destroyed)
     let yTop = Infinity, yBot = -Infinity;
     for (const bx of [pick.x, pick.x + 1]) {
-      for (let y = Math.max(1, Math.round(riv.yc[bx]) - 6); y <= Math.min(H - 2, Math.round(riv.yc[bx]) + 6); y++) {
+      for (let y = Math.max(1, Math.round(riv.yc[bx]) - scan); y <= Math.min(H - 2, Math.round(riv.yc[bx]) + scan); y++) {
         if (g.terrain[cellIdx(bx, y)] === T_WATER) { yTop = Math.min(yTop, y); yBot = Math.max(yBot, y); }
       }
     }
@@ -493,6 +573,8 @@ const MAPGEN = (function () {
   }
 
   // Ragged rocky rim, 1..3 cells deep, depth varying smoothly along each edge.
+  // WATER at the rim stays water — a lake meeting the map edge reads as a bay
+  // against the world's boundary, not a pool walled off by convenient crags.
   function borderFringe(g, rng) {
     const W = C.MAP_W, H = C.MAP_H;
     function series(n) {
@@ -505,16 +587,17 @@ const MAPGEN = (function () {
       }
       return out;
     }
+    const rock = i => { if (g.terrain[i] !== T_WATER) g.terrain[i] = T_ROCK; };
     const top = series(W), bot = series(W), lef = series(H), rig = series(H);
     for (let x = 0; x < W; x++) {
       const dt = 1 + Math.round(top[x] * 2.2), db = 1 + Math.round(bot[x] * 2.2);
-      for (let y = 0; y < dt; y++) g.terrain[cellIdx(x, y)] = T_ROCK;
-      for (let y = 0; y < db; y++) g.terrain[cellIdx(x, H - 1 - y)] = T_ROCK;
+      for (let y = 0; y < dt; y++) rock(cellIdx(x, y));
+      for (let y = 0; y < db; y++) rock(cellIdx(x, H - 1 - y));
     }
     for (let y = 0; y < H; y++) {
       const dl = 1 + Math.round(lef[y] * 2.2), dr = 1 + Math.round(rig[y] * 2.2);
-      for (let x = 0; x < dl; x++) g.terrain[cellIdx(x, y)] = T_ROCK;
-      for (let x = 0; x < dr; x++) g.terrain[cellIdx(C.MAP_W - 1 - x, y)] = T_ROCK;
+      for (let x = 0; x < dl; x++) rock(cellIdx(x, y));
+      for (let x = 0; x < dr; x++) rock(cellIdx(C.MAP_W - 1 - x, y));
     }
   }
 
@@ -603,7 +686,10 @@ const MAPGEN = (function () {
 
   // Carve a passable corridor along the segment between the two starts.
   // Square brush of Chebyshev radius `rad` => corridor width 2*rad+1 (>=3).
-  function carveCorridor(g, a, b, rad) {
+  // `sparing` clears rock/trees but leaves WATER alone — with the river
+  // unbroken, bridges must stay the only way across; the full carve is the
+  // absolute last resort for a map that cannot otherwise connect.
+  function carveCorridor(g, a, b, rad, sparing) {
     const steps = Math.max(1, Math.ceil(distC(a.cx, a.cy, b.cx, b.cy)) * 2);
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
@@ -614,7 +700,9 @@ const MAPGEN = (function () {
           const x = px + dx, y = py + dy;
           if (x < 1 || y < 1 || x >= C.MAP_W - 1 || y >= C.MAP_H - 1) continue;
           const idx = cellIdx(x, y);
-          if (isImpassId(g.terrain[idx])) g.terrain[idx] = T_GRASS;
+          const tt = g.terrain[idx];
+          if (sparing && tt === T_WATER) continue;
+          if (isImpassId(tt)) g.terrain[idx] = T_GRASS;
         }
       }
     }
@@ -788,20 +876,28 @@ const MAPGEN = (function () {
     const elev = buildElevation(hseed);
 
     // --- river in the valley (most seeds) ---------------------------------------
-    g.decor = { bridges: [], waterfall: null, village: null };
+    g.decor = { bridges: [], mesas: [], waterfall: null, village: null };
     const hasRiver = rng() < 0.62;
-    let riv = null, trib = null;
+    const riverMask = new Uint8Array(n);   // river/tributary water (banks get no sand)
+    let riv = null;
     if (hasRiver) {
-      riv = river(g, rng, hs, as, elev);
-      // most river maps also get a tributary — a second waterway with its
-      // own ford, so the country reads as a drainage, not a lone canal
-      if (rng() < 0.65) trib = tributary(g, rng, riv, hs, as, elev);
-      // one bridge always (when the water allows), often a second far away
-      const b1 = placeBridge(g, rng, riv, []);
+      riv = river(g, rng, hs, as, elev, riverMask);
+      // most river maps also get a spring-fed tributary, so the country
+      // reads as a drainage, not a lone canal
+      if (rng() < 0.65) tributary(g, rng, riv, hs, as, elev, riverMask);
+      // the river is UNBROKEN, so bridges are the only crossings: always
+      // try for two (loose retry if the water is awkward), sometimes three
+      let b1 = placeBridge(g, rng, riv, []);
+      if (!b1) b1 = placeBridge(g, rng, riv, [], true);
       if (b1) g.decor.bridges.push(b1);
-      if (b1 && rng() < 0.75) {
-        const b2 = placeBridge(g, rng, riv, [b1.rect.cx]);
+      if (b1) {
+        let b2 = placeBridge(g, rng, riv, [b1.rect.cx]);
+        if (!b2) b2 = placeBridge(g, rng, riv, [b1.rect.cx], true);
         if (b2) g.decor.bridges.push(b2);
+        if (b2 && rng() < 0.4) {
+          const b3 = placeBridge(g, rng, riv, [b1.rect.cx, b2.rect.cx]);
+          if (b3) g.decor.bridges.push(b3);
+        }
       }
     }
 
@@ -811,14 +907,9 @@ const MAPGEN = (function () {
       // clear of the crossings — a pond fused onto a ford or bridge approach
       // would seal the very gap the river carver left open
       const crossings = [];
-      if (riv) {
-        crossings.push({ cx: riv.fordX1, cy: Math.round(riv.yc[riv.fordX1]) });
-        crossings.push({ cx: riv.fordX2, cy: Math.round(riv.yc[riv.fordX2]) });
-        for (const bi of g.decor.bridges) {
-          const mid = bi.cells[(bi.cells.length / 2) | 0];
-          crossings.push({ cx: mid.cx, cy: mid.cy });
-        }
-        if (trib) crossings.push({ cx: trib.fordX, cy: trib.fordY });
+      for (const bi of g.decor.bridges) {
+        const mid = bi.cells[(bi.cells.length / 2) | 0];
+        crossings.push({ cx: mid.cx, cy: mid.cy });
       }
       const want = Math.round(((hasRiver ? 2 : 3) + ((rng() * 2) | 0)) * area);
       const cands = [];
@@ -853,16 +944,13 @@ const MAPGEN = (function () {
       smoothShores(g);
     }
 
-    // --- rock ridges on the high ground, dirt on the dry flats and talus ---------
-    const cuts = ridges(g, elev, hseed);
+    // --- dirt on the dry flats and talus (mesas come after the woods) ------------
+    const vals = Array.from(elev).sort((a, b) => a - b);
     const wd = waterDist(g);
-    dryGround(g, elev, wd, cuts.dry, hseed);
+    dryGround(g, elev, wd, vals[(vals.length * 0.72) | 0], hseed);
 
     // --- woods follow the moisture -----------------------------------------------
-    {
-      const vals = Array.from(elev).sort((a, b) => a - b);
-      woods(g, elev, wd, vals[(vals.length / 2) | 0], hseed);
-    }
+    woods(g, elev, wd, vals[(vals.length / 2) | 0], hseed);
     // a few free-standing clumps and lone trees for texture
     const clumps = Math.round((3 + ((rng() * 3) | 0)) * area); // 3..5 classic
     for (let i = 0; i < clumps; i++) {
@@ -882,11 +970,27 @@ const MAPGEN = (function () {
       blob(g, rng, p.x, p.y, 1.7 + rng() * 1.4, T_ROCK);
     }
 
+    // --- mesas: rounded walkable highlands with ramp entrances -------------------
+    // (after the woods so the stamping clears every tree off the tops)
+    mesas(g, rng, elev, starts);
+
     // sand and marsh dress the water margins AFTER the woods claim theirs:
-    // beaches come in noisy stretches on the drier banks, marsh pools in the
-    // low wet ground — both passable, both blended seamlessly by the painter
+    // SANDY shores belong to the standing water — lakes, ponds and the sea —
+    // while river banks stay earthen (grass/dirt/marsh); marsh pools in any
+    // low wet ground. Both passable, both blended seamlessly by the painter.
     {
-      const medE = Array.from(elev).sort((a, b) => a - b)[(elev.length / 2) | 0];
+      const medE = vals[(vals.length / 2) | 0];
+      const lakeNear = (cx, cy) => {
+        for (let dy = -2; dy <= 2; dy++) {
+          for (let dx = -2; dx <= 2; dx++) {
+            const x2 = cx + dx, y2 = cy + dy;
+            if (x2 < 0 || y2 < 0 || x2 >= W || y2 >= H) continue;
+            const j = cellIdx(x2, y2);
+            if (g.terrain[j] === T_WATER && !riverMask[j]) return true;
+          }
+        }
+        return false;
+      };
       for (let cy = 1; cy < H - 1; cy++) {
         for (let cx = 1; cx < W - 1; cx++) {
           const i = cellIdx(cx, cy);
@@ -896,36 +1000,33 @@ const MAPGEN = (function () {
           if (distC(cx, cy, hs.cx, hs.cy) < 13 || distC(cx, cy, as.cx, as.cy) < 13) continue;
           if (elev[i] < medE && fbm(cx, cy, 9, 2, hseed ^ 0x33aa) > 0.52) {
             g.terrain[i] = T_MARSH;
-          } else {
+          } else if (lakeNear(cx, cy)) {
             const f2 = fbm(cx, cy, 8, 2, hseed ^ 0x66b1);
-            if ((wd[i] === 1 && f2 > 0.40) || (wd[i] === 2 && f2 > 0.65)) g.terrain[i] = T_SAND;
+            if ((wd[i] === 1 && f2 > 0.34) || (wd[i] === 2 && f2 > 0.60)) g.terrain[i] = T_SAND;
           }
         }
       }
     }
 
     // gallery woods must never seal the crossings: fell the trees at the
-    // ford mouths and bridge ends (only trees — the banks stay banks)
-    if (riv) {
-      for (const fx of [riv.fordX1, riv.fordX2]) {
-        clearTrees(g, fx, Math.round(riv.yc[fx]), 3.2);
-      }
-      for (const bi of g.decor.bridges) {
-        const bTop = bi.cells[0], bBot = bi.cells[bi.cells.length - 1];
-        clearTrees(g, bTop.cx, bTop.cy - 1, 2.2);
-        clearTrees(g, bBot.cx, bBot.cy + 1, 2.2);
-      }
-      if (trib) clearTrees(g, trib.fordX, trib.fordY, 3.0);
+    // bridge ends (only trees — the banks stay banks)
+    for (const bi of g.decor.bridges) {
+      const bTop = bi.cells[0], bBot = bi.cells[bi.cells.length - 1];
+      clearTrees(g, bTop.cx, bTop.cy - 1, 2.2);
+      clearTrees(g, bBot.cx, bBot.cy + 1, 2.2);
     }
 
     // --- ragged rocky rim ---------------------------------------------------------
     borderFringe(g, rng);
 
     // --- constraints: buildable start zones + guaranteed corridors -------------
+    // sparing carve: rock and trees give way, the river does NOT — crossings
+    // stay bridge-only; the connectivity check below force-places a bridge
+    // (or, in the absolute worst case, carves) if the map still won't connect
     for (const st of starts) clearZone(g, st.cx, st.cy, 12);
     for (let i = 0; i < starts.length; i++) {
       for (let j = i + 1; j < starts.length; j++) {
-        carveCorridor(g, starts[i], starts[j], 1); // 3 cells wide
+        carveCorridor(g, starts[i], starts[j], 1, true); // 3 cells wide
       }
     }
 
@@ -933,14 +1034,20 @@ const MAPGEN = (function () {
     // (one facing the enemy — the carved corridor threads through it)
     if (opts.holdout) fortressRing(g, rng, hs, as);
 
-    // --- hard map border ring = rock ---------------------------------------------
-    for (let x = 0; x < W; x++) {
-      g.terrain[cellIdx(x, 0)] = T_ROCK;
-      g.terrain[cellIdx(x, H - 1)] = T_ROCK;
-    }
-    for (let y = 0; y < H; y++) {
-      g.terrain[cellIdx(0, y)] = T_ROCK;
-      g.terrain[cellIdx(W - 1, y)] = T_ROCK;
+    // --- hard map border ring: rock, except where water reaches the edge — the
+    // lake then runs to the world's true boundary instead of hitting a rock lip
+    {
+      const rim = (bi, ni) => {
+        g.terrain[bi] = (g.terrain[bi] === T_WATER || g.terrain[ni] === T_WATER) ? T_WATER : T_ROCK;
+      };
+      for (let x = 0; x < W; x++) {
+        rim(cellIdx(x, 0), cellIdx(x, 1));
+        rim(cellIdx(x, H - 1), cellIdx(x, H - 2));
+      }
+      for (let y = 0; y < H; y++) {
+        rim(cellIdx(0, y), cellIdx(1, y));
+        rim(cellIdx(W - 1, y), cellIdx(W - 2, y));
+      }
     }
 
     // --- tiberium fields ---------------------------------------------------------
@@ -1010,6 +1117,9 @@ const MAPGEN = (function () {
           const d = 12 + rng() * 5; // 12..17 cells out
           const fx = clamp(Math.round(st.cx + Math.cos(ang) * d), 3, W - 4);
           const fy = clamp(Math.round(st.cy + Math.sin(ang) * d), 3, opts.shore ? H - 13 : H - 4);
+          // shore ops: boats put reinforcements ashore east of the southern
+          // start — that landing lane stays crystal-free
+          if (opts.shore && fx > hs.cx + 2 && fy > hs.cy - 6) continue;
           const ti = cellIdx(fx, fy);
           if ((g.terrain[ti] !== T_GRASS && g.terrain[ti] !== T_DIRT) || !reach[ti]) continue;
           if (distC(fx, fy, homeC[si].x, homeC[si].y) < 10) continue;
@@ -1057,6 +1167,7 @@ const MAPGEN = (function () {
         // shrivels to a speck
         const ti = cellIdx(mx, my);
         if ((g.terrain[ti] !== T_GRASS && g.terrain[ti] !== T_DIRT) || !reach[ti]) continue;
+        if (opts.shore && mx > hs.cx + 2 && my > hs.cy - 6) continue;   // landing lane
         let ok = true;
         for (const st of starts) {
           if (distC(mx, my, st.cx, st.cy) < minStartD) { ok = false; break; }
@@ -1180,12 +1291,134 @@ const MAPGEN = (function () {
       smoothShores(g);
     }
 
-    // --- validate connectivity; widen the corridor if something snuck in --------
+    // --- validate connectivity; escalate gently -------------------------------
+    // 1) wider sparing carve (rock/trees only), 2) force one more bridge over
+    // the river, 3) full carve — the only case that may ever cut water, kept
+    // as the cannot-fail floor under everything above
     for (const st of starts) {
       if (st === hs) continue;
       if (!connected(g, hs, st)) {
-        carveCorridor(g, hs, st, 2); // 5 wide
-        if (!connected(g, hs, st)) carveCorridor(g, hs, st, 3); // 7 wide, cannot fail
+        carveCorridor(g, hs, st, 2, true); // 5 wide, water untouched
+        if (!connected(g, hs, st) && riv) {
+          const bf = placeBridge(g, rng, riv, g.decor.bridges.map(b => b.rect.cx), true);
+          if (bf) g.decor.bridges.push(bf);
+        }
+        if (!connected(g, hs, st)) carveCorridor(g, hs, st, 3); // cannot fail
+      }
+    }
+
+    // --- stitch orphan land -------------------------------------------------------
+    // Rock and woods can wall off whole pockets of good ground (likelier on
+    // the bigger maps). Any sizable sealed region gets a dirt lane punched
+    // through the rock/trees to the mainland. Water is never crossed — true
+    // islands keep their moats and bridges stay the only river crossings.
+    {
+      let reachM = reachMask(g, [hs]);
+      const seenR = new Uint8Array(n);
+      for (let i0 = 0; i0 < n; i0++) {
+        if (seenR[i0] || reachM[i0] || isImpassId(g.terrain[i0])) continue;
+        const region = [];
+        const q2 = [i0]; seenR[i0] = 1;
+        while (q2.length) {
+          const j = q2.pop(); region.push(j);
+          const x = j % W, y = (j / W) | 0;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const xx = x + dx, yy = y + dy;
+            if (xx < 1 || yy < 1 || xx >= W - 1 || yy >= H - 1) continue;
+            const k = cellIdx(xx, yy);
+            if (!seenR[k] && !reachM[k] && !isImpassId(g.terrain[k])) { seenR[k] = 1; q2.push(k); }
+          }
+        }
+        if (region.length < 40) continue;
+        // multi-source BFS from the region through anything but water until
+        // the wave touches the mainland, then carve that path to dirt
+        const par = new Int32Array(n).fill(-1);
+        const inQ = new Uint8Array(n);
+        let wave = [];
+        for (const j of region) { inQ[j] = 1; wave.push(j); }
+        let hit = -1;
+        while (wave.length && hit < 0) {
+          const next = [];
+          for (const j of wave) {
+            const x = j % W, y = (j / W) | 0;
+            for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+              const xx = x + dx, yy = y + dy;
+              if (xx < 1 || yy < 1 || xx >= W - 1 || yy >= H - 1) continue;
+              const k = cellIdx(xx, yy);
+              if (inQ[k]) continue;
+              const tt = g.terrain[k];
+              if (tt === T_WATER || tt === T_BRIDGE) continue;
+              inQ[k] = 1; par[k] = j; next.push(k);
+              if (reachM[k]) { hit = k; break; }
+            }
+            if (hit >= 0) break;
+          }
+          wave = next;
+        }
+        if (hit < 0) continue;   // an island — leave its moat alone
+        for (let j = hit; j >= 0; j = par[j]) {
+          const x = j % W, y = (j / W) | 0;
+          for (let dy2 = 0; dy2 <= 1; dy2++) {
+            for (let dx2 = 0; dx2 <= 1; dx2++) {
+              const x2 = x + dx2, y2 = y + dy2;
+              if (x2 < 1 || y2 < 1 || x2 >= W - 1 || y2 >= H - 1) continue;
+              const j2 = cellIdx(x2, y2);
+              if (g.terrain[j2] === T_ROCK || g.terrain[j2] === T_TREE) g.terrain[j2] = T_DIRT;
+            }
+          }
+        }
+        reachM = reachMask(g, [hs]);   // the new lane may have joined more land
+      }
+    }
+
+    // --- every mesa top must be climbable ---------------------------------------
+    // If both ramps opened into sealed pouches (a lakeside pocket, a walled
+    // wood), cut one more dirt lane from the top to the nearest ground the
+    // player can actually reach. Lanes never cross water — bridges stay the
+    // only crossings; a truly landlocked mesa keeps its mystery.
+    {
+      const reachM = reachMask(g, [hs]);
+      for (const ms of g.decor.mesas) {
+        if (ms.top.some(i => reachM[i])) continue;
+        const cands = [];
+        const R2 = Math.ceil(ms.r * 1.26 + 5);
+        for (let dy = -R2; dy <= R2; dy++) {
+          for (let dx = -R2; dx <= R2; dx++) {
+            const d = Math.sqrt(dx * dx + dy * dy);
+            if (d < ms.r * 1.26 + 1 || d > R2) continue;
+            const x = ms.cx + dx, y = ms.cy + dy;
+            if (x < 2 || y < 2 || x >= W - 2 || y >= H - 2) continue;
+            if (reachM[cellIdx(x, y)]) cands.push({ x, y, d });
+          }
+        }
+        cands.sort((a, b) => a.d - b.d);
+        for (const c of cands) {
+          const steps = Math.max(1, Math.ceil(distC(ms.cx, ms.cy, c.x, c.y)) * 2);
+          let wet = false;
+          for (let s2 = 0; s2 <= steps && !wet; s2++) {
+            const t2 = s2 / steps;
+            const px = Math.round(ms.cx + (c.x - ms.cx) * t2);
+            const py = Math.round(ms.cy + (c.y - ms.cy) * t2);
+            const tt = g.terrain[cellIdx(px, py)];
+            if (tt === T_WATER || tt === T_BRIDGE) wet = true;
+          }
+          if (wet) continue;
+          for (let s2 = 0; s2 <= steps; s2++) {
+            const t2 = s2 / steps;
+            const px = Math.round(ms.cx + (c.x - ms.cx) * t2);
+            const py = Math.round(ms.cy + (c.y - ms.cy) * t2);
+            for (let dy2 = 0; dy2 <= 1; dy2++) {
+              for (let dx2 = 0; dx2 <= 1; dx2++) {
+                const x2 = px + dx2, y2 = py + dy2;
+                if (x2 < 2 || y2 < 2 || x2 >= W - 2 || y2 >= H - 2) continue;
+                const j2 = cellIdx(x2, y2);
+                const tt = g.terrain[j2];
+                if (tt === T_ROCK || tt === T_TREE) g.terrain[j2] = T_DIRT;
+              }
+            }
+          }
+          break;
+        }
       }
     }
 
@@ -1270,12 +1503,13 @@ const MAPGEN = (function () {
         const vcx = vx + 4, vcy = vy + 3;
         let crossing = null;
         if (g.decor.bridges.length) {
-          const bn = g.decor.bridges[0];
-          const mid = bn.cells[(bn.cells.length / 2) | 0];
-          crossing = { cx: mid.cx, cy: mid.cy };
-        } else if (riv) {
-          const fx = Math.abs(riv.fordX1 - vcx) <= Math.abs(riv.fordX2 - vcx) ? riv.fordX1 : riv.fordX2;
-          crossing = { cx: fx, cy: Math.round(riv.yc[fx]) };
+          // the NEAREST bridge — the village grew at its crossroads
+          let bd = Infinity;
+          for (const bn of g.decor.bridges) {
+            const mid = bn.cells[(bn.cells.length / 2) | 0];
+            const d = distC(mid.cx, mid.cy, vcx, vcy);
+            if (d < bd) { bd = d; crossing = { cx: mid.cx, cy: mid.cy }; }
+          }
         }
         if (crossing) road(g, vcx, vcy, crossing.cx, crossing.cy);
         const nb = distC(vcx, vcy, hs.cx, hs.cy) <= distC(vcx, vcy, as.cx, as.cy) ? hs : as;
@@ -1327,18 +1561,12 @@ const MAPGEN = (function () {
     if (!opts.holdout) {
       g.decor.depots = [];
       const anchors = [];
-      if (riv) {
-        anchors.push({ cx: riv.fordX1, cy: Math.round(riv.yc[riv.fordX1]) });
-        if (g.decor.bridges.length) {
-          const bn = g.decor.bridges[0];
-          const mid = bn.cells[(bn.cells.length / 2) | 0];
-          anchors.push({ cx: mid.cx, cy: mid.cy });
-        } else {
-          anchors.push({ cx: riv.fordX2, cy: Math.round(riv.yc[riv.fordX2]) });
-        }
-      } else {
-        anchors.push({ cx: W >> 1, cy: H >> 1 }, { cx: W >> 1, cy: H >> 1 });
+      // bridges are the crossings now — depots gravitate to them
+      for (const bn of g.decor.bridges.slice(0, 2)) {
+        const mid = bn.cells[(bn.cells.length / 2) | 0];
+        anchors.push({ cx: mid.cx, cy: mid.cy });
       }
+      while (anchors.length < 2) anchors.push({ cx: W >> 1, cy: H >> 1 });
       // big maps: two more depots anchored off-centre, so the frontier
       // quadrants hold prizes of their own
       if (area > 1.5) {

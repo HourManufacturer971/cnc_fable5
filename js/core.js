@@ -8,8 +8,8 @@ const C = {
   CELL: 24,
   ZOOM: 2,
   VZOOM: 1,      // runtime view zoom (pinch): multiplies ZOOM at draw time
-  MAP_W: 64,
-  MAP_H: 64,
+  MAP_W: 84,   // classic battlefield (large skirmish maps: 100)
+  MAP_H: 84,
   TPS: 15,
   SCREEN_W: 1600,
   SCREEN_H: 1000,

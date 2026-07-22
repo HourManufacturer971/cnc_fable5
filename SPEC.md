@@ -583,8 +583,10 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_handshake()` — the host rolls a FRESH seed and the match relaunches over the
   same connection, sides kept, no new code exchange. `NET.onRematch('remote'|'gone')`
   drives the button labels ("opponent is ready" / hide when the peer leaves);
-  `_peerGone` outside a live game only tears down + notifies. PROTO = 17 (bumped
-  for the mapgen rework — wider river + tributary + always-a-lake, up to two
+  `_peerGone` outside a live game only tears down + notifies. PROTO = 18 (bumped
+  for mapgen v3 — 84/100 maps, unbroken river with bridge-only crossings,
+  edge-reaching lakes, walkable mesas, orphan-land stitching; 17 covered
+  the first mapgen rework — wider river + tributary + always-a-lake, up to two
   bridges with under-terrain, sand/marsh/scrub ids 8-10, guaranteed expansion
   fields; 16 covered
   destroyable bridges — deck/hut entities at battle start, terrain 7 fallen
@@ -1093,7 +1095,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   the thresholds).
 
 ### Map generation (`map.js`)
-- 64×64 classic or 88×88 Large. Discrete feature counts (ponds, tree clumps/singles,
+- 84×84 classic or 100×100 Large (~30% wider and taller than the original 64/88 — room for the mesas, lakes and tributaries to breathe). Discrete feature counts (ponds, tree clumps/singles,
   boulder outcrops, mid-map fields, hamlets, depots, concurrent crates) scale with the
   `area` factor `(W*H)/4096` so a Large map's far country stays busy: ~4-6 midfields
   spread across the WHOLE interior (only the first is pinned near the centre; each
@@ -1108,16 +1110,26 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   reads, so the landscape is internally consistent:
   - the west→east river FOLLOWS THE VALLEY (per column, step ±1 to the lowest-elevation
     cell ahead; base plateaus repel the channel so the start-safety guard never censors
-    it into visible gaps), widens downstream (~1 cell west to ~3 east), keeps two
-    fords — one pinned where it crosses the start↔start segment — and on most
-    river seeds a narrow TRIBUTARY winds in from the north or south rim down the
-    elevation grade to join it (2-wide, its own 2-row ford, never near the main
-    fords or the bases). The deepest pond depression always floods to a proper
-    lake, and sand beaches / marsh pockets dress the water margins (noise-gated,
-    passable, blended by the painter; scrub fringes every dry dirt flat). Most
-    seeds get a stone bridge and often a SECOND ≥12 columns away (TWO
-    adjacent deck columns — a single-file deck wedged harvester traffic head-to-head;
-    the painter draws rails only on true outer edges so the lanes read as one span).
+    it into visible gaps), widens downstream (~1 cell west to ~3 east) and is
+    UNBROKEN — no fords, no gaps: bridges are the only way across (2 guaranteed
+    when the water allows, sometimes 3, spread ≥12 columns apart and biased
+    toward the start↔start axis). On most river seeds a narrow spring-fed
+    TRIBUTARY rises mid-map (never at the rim, so its head can be walked
+    around) and winds down the grade to join the river — also unbroken.
+    River/tributary cells are stamped into a riverMask: their banks stay
+    earthen, while SANDY shores belong to the standing water — lakes, ponds
+    and the sea. The deepest depression always floods to a proper lake, and
+    lakes may run to the MAP EDGE (borderFringe and the hard rim ring skip
+    water, extending it to the true boundary — a bay against the world's
+    edge). Marsh pools in any low wet ground; scrub fringes every dry flat.
+    The always-carved corridors and the escalating connectivity fallback are
+    water-SPARING (rock/trees only) — a blocked map first force-places one
+    more bridge, and only the cannot-fail last resort may ever cut water. An
+    orphan-land stitcher lanes any ≥40-cell sealed pocket to the mainland
+    through rock/trees (never water — islands keep their moats). Bridges: TWO
+    adjacent deck columns — a single-file deck wedged harvester traffic
+    head-to-head; the painter draws rails only on true outer edges so the
+    lanes read as one span.
     The deck rectangle runs TWO cells past the water onto each bank so the abutments
     sit on solid ground and the road continues from the deck ends. `placeBridge`
     returns `{ cells, rect, water, under, huts }` (`under` = the pre-deck terrain per
@@ -1135,12 +1147,20 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
     `_bridgeRepair`: span cells back to 6, a fresh full-hp deck entity, engineer
     consumed — an intact bridge refuses the crew. All of it flows through existing
     'atk'/'ent' orders, so MP/replay/save need no new command plumbing;
-  - rock crowns the ~93rd elevation percentile, broken by detail noise into ridge lines
-    with saddles; grass at the foot of rock weathers to talus dirt; high, dry (far from
-    water) flats bake to dirt regions;
+  - the high grounds are MESAS (`mesas()`, 2-5 per map scaled by area): rounded,
+    gently lobed crag rings around WALKABLE tops, crowned on interior high ground —
+    never hugging the map edge (the rim is already a barrier), never on water, away
+    from starts and each other. Every mesa gets TWO dirt ramps cut through the ring
+    (roughly opposite bearings), each with a carved lane out past the outline through
+    any old crag or treeline; a final pass guarantees at least one top cell is
+    reachable from the player (extra lane to the nearest mainland cell, never across
+    water). Tops are recorded in `g.decor.mesas[].top` and the painter lifts their
+    tone (+0.13, bilinear-bled) so they read sunlit. Grass at the foot of rock
+    weathers to talus dirt; high, dry (far from water) flats bake to dirt regions
+    wrapped in scrub fringes;
   - woods follow moisture (BFS distance-to-water): dense gallery forest on the banks,
     groves in the lowlands gated by a broad meadow mask (no mega-forests), sparse stands
-    up high; tree clumps + lone trees for texture; ford mouths and bridge ends are
+    up high; tree clumps + lone trees for texture; bridge ends and mesa ramp mouths are
     deliberately felled clear (`clearTrees`);
   - ponds pool at genuine local elevation minima but never within 7 cells of a ford or
     the bridge (depressions cluster on the valley floor — an unguarded pond would fuse
@@ -1149,7 +1169,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
     village to the river crossing and toward the nearest base (`road`, grass-only brush).
   A ragged 1-3 cell rocky rim rings the map (never blocking the two base areas or the
   corridor between them; BFS connectivity check widens the corridor as a last resort).
-- Two start zones: player SW-ish (around 12,50), AI NE-ish (around 52,12) — keep a 12-cell
+- Two start zones (fractional anchors, scaled to the map): player SW-ish, AI NE-ish — keep a 12-cell
   radius buildable (grass/dirt only). Chrysalite fields: a rich HOME field beside each
   base (~130-170 cells, offset away from the enemy), a guaranteed EXPANSION pocket
   12-17 cells out from each start (~80-105 cells, sited on the openest reachable
@@ -1191,7 +1211,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - **Skirmish setup** (the `#skirmish` window, skirmish only — missions/MP ignore
   it): SIDE toggle (UDC/Serpent), DIFFICULTY (Easy/Normal/Hard presets),
   COMBATANTS (`You vs AI` / `You vs 2 AI` / `You vs 3 AI` free-for-alls, or
-  `Watch 2-4 AI` spectator battles), MAP (Classic 64×64 / Large 88×88), starting
+  `Watch 2-4 AI` spectator battles), MAP (Classic 84×84 / Large 100×100), starting
   funds 3000/5000/8000/12000 (applies to EVERY war chest, then the EASY/HARD
   preset still overrides the AIs'), crates ON/OFF (`game._noCrates` gates only
   the random-drop roll in `_tickCrates`; pickup/expiry sweeps and mission

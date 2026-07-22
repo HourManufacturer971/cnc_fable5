@@ -1200,7 +1200,7 @@ const Main = (function () {
       : (sk && sk.seed !== undefined) ? sk.seed : undefined;
     // map size is per-game state carried in C: LARGE only via skirmish setup,
     // every other path (missions, MP, menu battles) plays the classic 64
-    C.MAP_W = C.MAP_H = (sk && sk.big) ? 88 : 64;
+    C.MAP_W = C.MAP_H = (sk && sk.big) ? 100 : 84;
     const pcfg = (sk && SK_PLAYERS[sk.players]) || SK_PLAYERS['1v1'];
     const sides = SIDE_ORDER.slice(0, pcfg.n);
     game = makeGame({ side, seed, sides, spectate: pcfg.spectate });

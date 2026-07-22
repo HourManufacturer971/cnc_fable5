@@ -447,6 +447,12 @@ const TERRAINPAINT = (function () {
       marshF[i] = t === T_MARSH ? 1 : 0;
       scrubF[i] = t === T_SCRUB ? 1 : 0;
     }
+    // mesa tops read sunlit: the plateau interiors recorded by mapgen lift
+    // the ground tone, bilinear-bled so the brightening rolls off at the rim
+    const highF = new Float32Array(W * H);
+    for (const ms of (g.decor && g.decor.mesas) || []) {
+      for (const i of ms.top) highF[i] = 1;
+    }
 
     // shore-distance field: how many cells of open water lie between a cell
     // and the nearest bank (capped). Depth shading samples THIS instead of
@@ -565,6 +571,7 @@ const TERRAINPAINT = (function () {
         }
         let t = 0.5 + (m - 0.5) * 0.85 + (gr - 0.5) * 0.34;
         if (rampSel === RK && r > 0.8) t += 0.17;   // raised plateau tops read lighter
+        t += cellAt(highF, x, y) * 0.13;            // sunlit mesa tops
         if (wv > 0.33 && rampSel !== RK) {
           // wet shoreline band on the land side, dither-blended
           // (rock stays rock at the waterline — cliffs drop straight in)
