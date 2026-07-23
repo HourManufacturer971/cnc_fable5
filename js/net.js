@@ -19,7 +19,7 @@
 // execution itself (NET.applying) go to the real implementations.
 
 const NET = (function () {
-  const PROTO = 18;         // bump when commands/handshake OR sim rules change shape
+  const PROTO = 19;         // bump when commands/handshake OR sim rules change shape
   const DELAY = 5;         // ticks between issuing and executing an order
   const CK_EVERY = 128;    // checksum exchange cadence (ticks)
 

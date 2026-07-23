@@ -97,7 +97,9 @@ DATA.buildings = {
   brik: { name: 'Concrete Wall', cost: 100, hp: 300, w: 1, h: 1, armor: 'concrete', sight: 1, power: 0, drain: 0, side: null, prereq: [], defense: true, wall: true },
   gate: { name: 'Wall Gate', cost: 250, hp: 600, w: 1, h: 1, armor: 'concrete', sight: 1, power: 0, drain: 0, side: null, prereq: [], defense: true, wall: true, gate: true }, // placed as a 3-cell span (w/h set at placement)
   gtwr: { name: 'Guard Tower', cost: 500, hp: 400, w: 1, h: 1, armor: 'wood', sight: 4, power: 0, drain: 10, side: 'udc', prereq: ['pyle'], weapon: 'gtwrMg', defense: true, threat: 0.4 },
-  atwr: { name: 'Adv. Guard Tower', cost: 1000, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 60, side: 'udc', prereq: ['hq'], weapon: 'atwrMissile', needsPower: true, defense: true, threat: 0.9 },
+  // podMuzzles: launch points in WORLD px from the building's top-left anchor
+  // — the twin missile boxes on the tower platform, fired alternately
+  atwr: { name: 'Adv. Guard Tower', cost: 1000, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 60, side: 'udc', prereq: ['hq'], weapon: 'atwrMissile', needsPower: true, defense: true, threat: 0.9, podMuzzles: [[7, -22], [18, -22]] },
   gun:  { name: 'Gun Turret', cost: 600, hp: 400, w: 1, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 20, side: 'srp', prereq: ['hand'], weapon: 'gunTurret', turret: true, defense: true, threat: 0.5 },
   obli: { name: 'Beam Spire', cost: 1500, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 150, side: 'srp', prereq: ['hq'], weapon: 'obelisk', needsPower: true, defense: true, threat: 0.9 },
   sam:  { name: 'SAM Site', cost: 550, hp: 300, w: 2, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 25, side: 'srp', prereq: ['hand'], weapon: 'samMissile', needsPower: true, defense: true, threat: 0.3 },

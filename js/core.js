@@ -322,6 +322,7 @@ function makeGame(opts) {
     visible: new Uint8Array(n), // cells currently within human sight (recomputed by Fog)
     startPos: null,
     bridges: [],   // { entId, rect, water, hutIds, down } — built in startGame
+    treeHp: new Float32Array(n),   // splash damage soaked per tree cell
     status: 'playing',
     paused: false,
     speed: 1,

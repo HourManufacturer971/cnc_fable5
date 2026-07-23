@@ -906,7 +906,7 @@ const TERRAINPAINT = (function () {
         const uq = up.getContext('2d');
         uq.imageSmoothingEnabled = false;
         uq.drawImage(tc, 0, 0, up.width, up.height);
-        trees.push({ kind: 'tree', canvas: up, wx: ox, wy: oy, base: gy });
+        trees.push({ kind: 'tree', canvas: up, wx: ox, wy: oy, base: gy, cx, cy });
       }
     }
 

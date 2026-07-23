@@ -116,6 +116,7 @@ function spawnBullet(shooter, w, target, opts) {
   game.bullets.push({
     x: sx, y: sy, tx, ty,
     targetId: w.homing ? target.id : 0,
+    aimId: target.id,   // the ORDERED target (deliberate bridge fire lands)
     w, key: w.key, owner: shooter.owner, shooterId: shooter.id,
     total: Math.max(1, dist(sx, sy, tx, ty)), traveled: 0, z: 0,
   });
@@ -129,12 +130,43 @@ function _splashDamage(x, y, dmg, warhead, splash, attacker) {
     if (_distTo(x, y, u) <= splash) victims.push(u);
   }
   for (const b of g.buildings.values()) {
+    // bridge decks shrug off stray splash: dropping a span is a deliberate
+    // act (Ctrl+click focus fire), never collateral from a nearby firefight
+    if (DATA.buildings[b.type].deck) continue;
     if (_distTo(x, y, b) <= splash) victims.push(b);
   }
   for (const v of victims) {
     const d = _distTo(x, y, v);
     const factor = 1 - 0.6 * Math.min(1, d / splash);
     applyDamage(v, dmg * factor, warhead, attacker);
+  }
+  _splashTrees(g, x, y, dmg, warhead, splash);
+}
+
+// Splash ordnance also fells trees — enough shelling clears a lane through
+// any forest (fire is twice as hungry). Blossom trees are crystal hearts and
+// stay rooted. Damage accumulates in g.treeHp; at 140 the tree comes down,
+// the cell opens to grass and the renderer drops its canopy.
+function _splashTrees(g, x, y, dmg, warhead, splash) {
+  const reach = splash + 10;
+  const c0x = Math.max(1, worldToCell(x - reach)), c1x = Math.min(C.MAP_W - 2, worldToCell(x + reach));
+  const c0y = Math.max(1, worldToCell(y - reach)), c1y = Math.min(C.MAP_H - 2, worldToCell(y + reach));
+  for (let cy = c0y; cy <= c1y; cy++) {
+    for (let cx = c0x; cx <= c1x; cx++) {
+      const i = cellIdx(cx, cy);
+      if (g.terrain[i] !== 4) continue;
+      const d = dist(x, y, cellCenterX(cx), cellCenterY(cy));
+      if (d > reach) continue;
+      const factor = 1 - 0.6 * Math.min(1, d / reach);
+      const mult = warhead === 'fire' ? 2 : 1;
+      g.treeHp[i] += Math.round(dmg * factor * mult);
+      if (g.treeHp[i] >= 140) {
+        g.terrain[i] = 0;   // timber! the cell opens up
+        spawnEffect('scorch', cellCenterX(cx), cellCenterY(cy));
+        spawnEffect('dust', cellCenterX(cx), cellCenterY(cy) - 6, { ttl: 18 });
+        EV.emit('treeDown', cx, cy);
+      }
+    }
   }
 }
 
@@ -143,6 +175,12 @@ function _bulletImpact(b) {
   const target = getEnt(b.targetId);
   if (w.splash > 0) {
     _splashDamage(b.tx, b.ty, w.dmg, w.warhead, w.splash, getEnt(b.shooterId));
+    // splash skips bridge decks, but a shell AIMED at the deck still lands —
+    // focus fire is the one deliberate way to drop a span
+    const aim = getEnt(b.aimId);
+    if (aim && !aim._dead && aim.kind === 'building' && DATA.buildings[aim.type].deck) {
+      applyDamage(aim, w.dmg, w.warhead, getEnt(b.shooterId));
+    }
     spawnEffect(w.warhead === 'fire' ? 'flame' : 'expS', b.tx, b.ty);
     _maybePlay('expS', b.tx, b.ty);
   } else if (target && !target._dead) {
@@ -205,6 +243,10 @@ function _dischargeWeapon(shooter, w, target, m) {
     }
     if (w.splash > 0) {
       _splashDamage(tx, ty, dmg, w.warhead, w.splash, shooter);
+      // deliberate fire at a deck lands even though splash skips decks
+      if (target.kind === 'building' && DATA.buildings[target.type].deck) {
+        applyDamage(target, dmg, w.warhead, shooter);
+      }
     } else {
       applyDamage(target, dmg, w.warhead, shooter);
     }
@@ -243,6 +285,17 @@ function _fireWeapon(shooter, w, target) {
     const half = Object.assign({}, w, { dmg: w.dmg / 2 });
     _dischargeWeapon(shooter, half, target, _muzzleXY(shooter, facing, -3));
     _dischargeWeapon(shooter, half, target, _muzzleXY(shooter, facing, 3));
+    return;
+  }
+  // pod launchers (Adv. Guard Tower): missiles rise from the missile boxes
+  // on the platform, alternating pods shot to shot
+  if (shooter.kind === 'building' && d.podMuzzles) {
+    shooter._pod = ((shooter._pod || 0) + 1) % d.podMuzzles.length;
+    const off = d.podMuzzles[shooter._pod];
+    _dischargeWeapon(shooter, w, target, {
+      x: shooter.cx * C.CELL + off[0],
+      y: shooter.cy * C.CELL + off[1],
+    });
     return;
   }
   _dischargeWeapon(shooter, w, target, _muzzleXY(shooter, facing));

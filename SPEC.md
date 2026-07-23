@@ -133,8 +133,11 @@ rally {cx,cy}|null, spawnTick`.
 
 ## Terrain ids
 
-`0 grass, 1 dirt, 2 rock (impassable), 3 water (impassable), 4 tree (impassable),
-5 blossom tree (impassable, regrows chrysalite around it), 6 bridge deck (passable,
+`0 grass, 1 dirt, 2 rock (impassable), 3 water (impassable), 4 tree (impassable,
+DESTROYABLE: splash ordnance accumulates in g.treeHp — fire counts double — and at
+140 the tree falls, the cell opens to grass and the renderer drops its canopy; EV
+'treeDown'), 5 blossom tree (impassable, regrows chrysalite around it, NOT
+destroyable), 6 bridge deck (passable,
 drawn over water), 7 fallen bridge span (impassable open water; set by
 `_bridgeCollapse`, restored to 6 by `_bridgeRepair`), 8 sand, 9 marsh, 10 scrub
 (all three passable ground variants — beaches/wetland/dry heath — blended
@@ -583,7 +586,10 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_handshake()` — the host rolls a FRESH seed and the match relaunches over the
   same connection, sides kept, no new code exchange. `NET.onRematch('remote'|'gone')`
   drives the button labels ("opponent is ready" / hide when the peer leaves);
-  `_peerGone` outside a live game only tears down + notifies. PROTO = 18 (bumped
+  `_peerGone` outside a live game only tears down + notifies. PROTO = 19 (bumped
+  for splash rules — decks splash-immune with aimed fire tracked via bullet
+  `aimId`, trees felled by splash via `g.treeHp`, atwr pod muzzles, hut-plot
+  scrubbing; 18 covered
   for mapgen v3 — 84/100 maps, unbroken river with bridge-only crossings,
   edge-reaching lakes, walkable mesas, orphan-land stitching; 17 covered
   the first mapgen rework — wider river + tributary + always-a-lake, up to two
@@ -753,9 +759,10 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - **Right-click**: deselect / cancel mode (placement, repair, sell, super target). NO
   right-click orders — authentic to the original.
 - Shift+click adds/removes from selection. Double-click a COMBAT unit selects every
-  own on-screen unit except harvesters and MCVs (`_selectArmyOnScreen`); double-click
-  a harvester/MCV keeps the classic same-type select (economy management). T hotkey
-  still selects same-type.
+  own on-screen unit of the same DOMAIN — ground units grab the ground army, aircraft
+  grab the wing; air and ground never mix (`_selectArmyOnScreen(air)`), harvesters and
+  MCVs always excluded; double-click a harvester/MCV keeps the classic same-type select
+  (economy management). T hotkey still selects same-type.
 - Ctrl+click on open GROUND with combat units selected = attack-move to that spot (`A` also
   arms an attack-move mode: attack cursor, next left-click sweeps there in formation).
   Ctrl+click on an ENTITY stays focus-fire — entity beats ground.
@@ -856,6 +863,11 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   for ~11s, oldest fading — the record the transient banner doesn't keep;
   cleared whenever `frame()` sees a new game object so chatter never leaks
   across battles.
+- **Superweapon clocks** (`_drawSuperClocks`, RA2-style): every armed
+  superweapon on the field shows a countdown chip at the battlefield's top
+  right — yours AND the enemy's, bordered and lettered in the owner's color
+  ("ORBITAL LANCE 04:32" / "NUCLEAR MISSILE 02:10"); READY blinks white until
+  the strike is called. Reads straight from `players[side].super`.
 
 ### AI opponent (`ai.js`)
 - Skirmish AI. Starts with deployed base (see map/main setup) + same credits as player.
@@ -1137,9 +1149,13 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
     span instead of retreating to the bridge ends); `g.decor.bridges` carries them to
     startGame, which spawns a neutral 'bridge' deck entity per crossing (walkable —
     `deck: true` skips the occupancy stamp; no sprite, the art is baked terrain) plus
-    a 'bhut' control room on each bank, recorded in `g.bridges`. The deck is a real target:
-    Ctrl+click force-fires on it (`bridgeDeckAt` supplements occ-based picking) and
-    splash damage reaches it; at 0 hp `_bridgeCollapse` marks the record down, turns
+    a 'bhut' control room on each bank, recorded in `g.bridges` (hut plots are scrubbed
+    LAST in mapgen — trees/crags/crystal cleared, drowned plots re-landed, a doorway
+    drained if a lake lapped every side — the repair crew always gets in). The deck is
+    a real target but ONLY for deliberate fire: Ctrl+click force-fires on it
+    (`bridgeDeckAt` supplements occ-based picking) and a shell AIMED at the deck lands
+    (bullet `aimId`), while stray SPLASH from nearby fighting never touches it
+    (`_splashDamage` skips decks); at 0 hp `_bridgeCollapse` marks the record down, turns
     the water-span cells to terrain 7 (impassable), kills ground units standing on
     them and leaves the land stubs walkable, with `_drawBrokenBridges` covering the
     baked deck with open water + charred tear lines (radar shows water too). An

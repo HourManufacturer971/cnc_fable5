@@ -910,6 +910,8 @@ const MAPGEN = (function () {
       for (const bi of g.decor.bridges) {
         const mid = bi.cells[(bi.cells.length / 2) | 0];
         crossings.push({ cx: mid.cx, cy: mid.cy });
+        // control-room plots too: a pond flooding a hut drowns the repair crew
+        for (const hc of bi.huts) crossings.push({ cx: hc.cx, cy: hc.cy });
       }
       const want = Math.round(((hasRiver ? 2 : 3) + ((rng() * 2) | 0)) * area);
       const cands = [];
@@ -1247,6 +1249,41 @@ const MAPGEN = (function () {
     for (let i = 0; i < starts.length; i++) {
       for (let j = i + 1; j < starts.length; j++) {
         clearTibCorridor(g, starts[i], starts[j], 2);
+      }
+    }
+
+    // --- bridge control rooms stay unobstructed ---------------------------------
+    // Woods, crags, mesa rings and crystal fields all come after the bridges
+    // are sited, so scrub the hut plots LAST: the repair engineer must always
+    // have a clear doorway
+    for (const bi of g.decor.bridges) {
+      for (const hc of bi.huts) {
+        const hi = cellIdx(hc.cx, hc.cy);
+        if (g.terrain[hi] === T_WATER) g.terrain[hi] = T_GRASS;   // a pond drowned the plot
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const x = hc.cx + dx, y = hc.cy + dy;
+            if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) continue;
+            const i = cellIdx(x, y);
+            const t = g.terrain[i];
+            if (t === T_TREE || t === T_ROCK || t === T_BLOSSOM) g.terrain[i] = T_GRASS;
+            g.tib[i] = 0;
+            if (g.tibType) g.tibType[i] = 0;
+          }
+        }
+        // still walled in (a lake lapped every side): drain a doorway
+        let open = 0;
+        const doors = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+        for (const [dx, dy] of doors) {
+          const t = g.terrain[cellIdx(hc.cx + dx, hc.cy + dy)];
+          if (t === T_GRASS || t === T_DIRT || t === T_BRIDGE || t >= T_SAND) open++;
+        }
+        if (open === 0) {
+          for (const [dx, dy] of doors) {
+            const i = cellIdx(hc.cx + dx, hc.cy + dy);
+            if (g.terrain[i] === T_WATER) { g.terrain[i] = T_GRASS; break; }
+          }
+        }
       }
     }
 

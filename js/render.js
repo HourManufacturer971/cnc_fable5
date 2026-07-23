@@ -32,6 +32,7 @@ const Render = (function () {
   let terrainCache = null;      // full-map prerender at screen scale
   let terrainCacheSeed = -1;
   let treeSprites = [];   // baseline-sorted canopy sprites (terrain_paint)
+  const deadTrees = new Set();   // 'cx,cy' of felled trees (canopy dropped)
   let animCells = [];           // water/blossom cells redrawn live
   let minimap = null, minimapTick = -10;
   let creditsShown = 0;
@@ -203,6 +204,8 @@ const Render = (function () {
         evaLog.unshift(evaMsg);
         if (evaLog.length > 4) evaLog.length = 4;
       });
+      // splash felled a tree: drop its canopy sprite from the world pass
+      EV.on('treeDown', function (cx, cy) { deadTrees.add(cx + ',' + cy); });
     }
   }
 
@@ -324,6 +327,7 @@ const Render = (function () {
       terrainCache = res.canvas;
       animCells = res.anim;
       treeSprites = res.trees || [];
+      deadTrees.clear();   // fresh battle, fresh forest
       terrainCacheSeed = g.seed;
       _buildMinimapBase();
       return;
@@ -1435,8 +1439,10 @@ const Render = (function () {
     for (const b of g.buildings.values()) ground.push(b);
     for (const u of units) if (!DATA.units[u.type].air && _unitSeen(g, u)) ground.push(u);
     // tree canopies join the same depth sort: a building north of a tree is
-    // occluded by its crown, one south of it draws over the trunk
+    // occluded by its crown, one south of it draws over the trunk. Felled
+    // trees (splash damage) drop out of the pass entirely.
     for (const t of treeSprites) {
+      if (deadTrees.has(t.cx + ',' + t.cy)) continue;
       if (t.wx > ox + C.VIEW_W + 8 || t.wx + 48 < ox - 8 ||
           t.wy > oy + C.VIEW_H + 8 || t.wy + 56 < oy - 8) continue;
       ground.push(t);
@@ -2051,6 +2057,39 @@ const Render = (function () {
 
   // ---- EVA announcement banner ----------------------------------------------------------------
 
+  // RA2-style superweapon clocks: every armed superweapon on the field shows
+  // its countdown at the top right of the battlefield — yours AND theirs, in
+  // the owner's color. READY blinks until the strike is called.
+  function _drawSuperClocks(g) {
+    let y = C.TAB_H + 8;
+    ctx.font = '14px monospace';
+    ctx.textBaseline = 'top';
+    for (const s of g.sides) {
+      const p = g.players[s];
+      if (!p || !p.super || !p.super.key) continue;
+      const name = p.super.key === 'ion' ? 'ORBITAL LANCE' : 'NUCLEAR MISSILE';
+      const ready = p.super.timer <= 0;
+      let label;
+      if (ready) {
+        label = name + ' READY';
+      } else {
+        const secs = Math.ceil(p.super.timer / C.TPS);
+        label = name + ' ' + String((secs / 60) | 0).padStart(2, '0') + ':' +
+          String(secs % 60).padStart(2, '0');
+      }
+      const w = ctx.measureText(label).width + 14;
+      const x = C.VIEW_PW - w - 10;
+      ctx.fillStyle = 'rgba(10,10,8,0.72)';
+      ctx.fillRect(x, y, w, 22);
+      ctx.strokeStyle = OWNER_COLOR[s] || '#ccc';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, w - 1, 21);
+      ctx.fillStyle = ready && ((g.tick >> 3) & 1) ? '#fff' : (OWNER_COLOR[s] || '#ccc');
+      ctx.fillText(label, x + 7, y + 4);
+      y += 26;
+    }
+  }
+
   function _drawEvaBanner() {
     if (!evaMsg) return;
     const LIFE = 3.9;
@@ -2509,6 +2548,7 @@ const Render = (function () {
     _drawTabBar(g);
     _drawSidebar(g);
     _drawObjective(g);
+    _drawSuperClocks(g);
     _drawNetStall(g);
     _drawReplayBadge(g);
     _drawViewHint(g);
