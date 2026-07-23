@@ -213,7 +213,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - Default factory rally (`_defaultRally`) is 2 cells south of the factory but dodges to
   the nearest cell that isn't on/adjacent to an own refinery dock — fresh units must never
   congregate where harvesters unload. An explicitly-set `fac.rally` is respected as-is.
-- Storage: refinery 1000, silo 1500. `player.storage` = sum over owned finished buildings.
+- Storage: refinery 1000, silo 3000. `player.storage` = sum over owned finished buildings.
   Credits over storage bleed away (clamped on add).
 - Chrysalite growth: every ~75 ticks a few random chrysalite cells with value ≥ 125 spread 25 to
   a random adjacent grass/dirt cell (new cells start at 25, cap C.TIB_MAX=300); blossom
@@ -300,7 +300,9 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - Units auto-acquire: idle combat units scan every 8 ticks for nearest enemy within
   `sight+1` cells and attack (harvester/mcv/apc/engineer never auto-attack; they FLEE:
   harvester heads to refinery when hit). Attackers chase up to ~4 cells past their
-  guardAnchor then return.
+  guardAnchor then return. On capture ops the capturing side's `_nearestEnemy` skips
+  buildings matching the objective `btype` (per-side objects resolved) — stray guard
+  fire and attack-move sweeps can't burn the prize; explicit focus fire still can.
 - **Civilians** carry `civgun` (4 dmg, range 3, slow rof) but are excluded from
   `_autoAcquire` — they NEVER start fights and nobody auto-guns them. The 'damaged'
   handler makes a shot villager return fire on a reachable attacker (guardAnchor leash
@@ -586,8 +588,10 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_handshake()` — the host rolls a FRESH seed and the match relaunches over the
   same connection, sides kept, no new code exchange. `NET.onRematch('remote'|'gone')`
   drives the button labels ("opponent is ready" / hide when the peer leaves);
-  `_peerGone` outside a live game only tears down + notifies. PROTO = 20 (bumped
-  for the contiguous-channel bridge fix — spans must cross ONE unbroken run of
+  `_peerGone` outside a live game only tears down + notifies. PROTO = 21 (bumped
+  for silo storage 1500→3000 plus the capture-op guard — the capturing side's
+  units and towers never AUTO-target the mission's capture building; 20 covered
+  the contiguous-channel bridge fix — spans must cross ONE unbroken run of
   water, never a meander; 19 covered
   splash rules — decks splash-immune with aimed fire tracked via bullet
   `aimId`, trees felled by splash via `g.treeHp`, atwr pod muzzles, hut-plot

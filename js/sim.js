@@ -72,9 +72,19 @@ function _nearestEnemy(e, rangeCells, opts) {
     if (d <= maxD && d < bestD) { bestD = d; best = u; }
   }
   if (!opts.airOnly && !opts.unitsOnly) {
+    // capture ops: the capturing side never AUTO-targets the prize — stray
+    // guard fire or an attack-move sweep must not burn the very building the
+    // mission needs intact (explicit focus fire still works)
+    let protectedType = null;
+    if (g.mission && g.mission.objective && g.mission.objective.type === 'capture' &&
+        e.owner === g.humanSide) {
+      const obt = g.mission.objective.btype;
+      protectedType = typeof obt === 'object' ? obt[g.humanSide] : obt;
+    }
     for (const b of g.buildings.values()) {
       if (b.owner === e.owner || b._dead) continue;
       if (b.owner === 'civ' && e.owner !== 'mut') continue;
+      if (protectedType && b.type === protectedType) continue;
       if (DATA.buildings[b.type].wall && !opts.walls) continue; // walls aren't worth auto-fire
       const d = _distTo(ex, ey, b);
       if (d > maxD) continue;
