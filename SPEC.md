@@ -39,8 +39,8 @@ Inspired by the classic RTS genre; contains no assets, names, or code from any o
 - **Map viewport**: x 0..480, y 16..400 (480×384 → 20×16 cells of 24px).
 - **Sidebar**: x 480..640, y 16..400 (160×384), metal grey panel:
   - **Radar** area: 480..640 × 16..146 (160×130). Shows faction logo (drawn: UDC gold
-    heater shield on navy — rank pips over a chief divider, slim flat chevron / Basilisk
-    Order angular stencil-basilisk in a segmented ring on black — straight mitred
+    heater shield on navy — rank pips over a chief divider, slim flat chevron / Brotherhood
+    Brotherhood angular stencil-serpent in a segmented ring on black — straight mitred
     segments, kite head, slit eye; both flat-shaded, no gleam pixels) until player owns a powered
     `hq`; then a 128×128 minimap centered (2px per cell, terrain colors, chrysalite green,
     units as 2px team-color dots, buildings 2px blocks, shroud black, white viewport
@@ -52,7 +52,7 @@ Inspired by the classic RTS genre; contains no assets, names, or code from any o
     Each strip shows **4 cameo icons** of 64×48 stacked from y 172 (spacing 50px: 172, 222,
     272, 322), and at the strip bottom (y 372..384) a pair of 32×12 up/down scroll arrow
     buttons. Strips scroll independently (`game.human.scroll.b` / `.u`).
-  - Superweapon cameos (`ion` for UDC w/ eye, `nuke` for the Basilisk Order w/ tmpl) appear in the units
+  - Superweapon cameos (`ion` for UDC w/ eye, `nuke` for the Brotherhood of Seth w/ tmpl) appear in the units
     strip when their building exists; overlay text shows charge countdown m:ss or "READY".
 - Cursor: OS cursor hidden over canvas; custom cursor sprite drawn by render at
   `Input.mouse` position using `Input.cursorKind`.
@@ -81,7 +81,7 @@ define **exactly** the globals listed and may freely call any global listed for 
 | sprites_infantry.js | fills `SPRITES.infantry[key][side]` for every infantry type, and their `SPRITES.cameo[key]` |
 | sprites_buildings.js | fills `SPRITES.buildings[key][side]` for every building, and their `SPRITES.cameo[key]`, plus `SPRITES.cameo.ion` / `SPRITES.cameo.nuke` |
 | audio.js | `AUDIO` (`init, play, eva, ack, setEnabled, enabled, setVoiceEnabled, voiceEnabled, tickCredits`) |
-| music.js | `MUSIC` (`start(side), stop, setEnabled, enabled` — original procedural soundtrack, twelve tracks in faction playlists: Coalition T1–T8, Basilisk Order S1–S4 ritual tracks; the session's first battle opens on the faction theme, later starts re-roll; rotates after two loops) |
+| music.js | `MUSIC` (`start(side), stop, setEnabled, enabled` — original procedural soundtrack, twelve tracks in faction playlists: Coalition T1–T8, Brotherhood of Seth S1–S4 ritual tracks; the session's first battle opens on the faction theme, later starts re-roll; rotates after two loops) |
 | missions.js | `MISSIONS` (campaign definitions: seed, credits, AI knobs, objective, per-side briefings), `MissionProgress` (localStorage `hw_progress` unlock tracking) |
 | map.js | `MAPGEN` (`generate(game, seed, opts?)` — `opts.holdout` centers the human start inside a three-gated rock fortress ring (gate mouths stashed on `g.decor.gates`); the plateau interior is scrubbed after field placement to ONE finite pocket hugging the wall away from the enemy — no other crystal, no blossom trees, bare gate mouths — so the base is buildable and the passes defensible; the midfield fallback goes to the hs/as midpoint, never the map center (which IS the fortress). `opts.shore` floods the southern edge with a rolling 3-7 row sea under a two-row bare-sand beach (own rng stream, carved after fields so nothing recolonizes the waterline; home/mid fields are held above it, and the waterfall scan stops short of the sea). Bridges get short worn dirt-road approaches stamped off both ends) |
 | path.js | `findPath(unit, destCx, destCy, opts?) -> [{cx,cy},...]` |
@@ -256,7 +256,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   animation (buildProgress 0→1 over ~25 ticks, rendered as bottom-up reveal + scaffold
   flicker), then EVA `newOptions` if it unlocked anything.
 - Units: when done, spawn at primary factory (barracks/hand for infantry, weap for
-  vehicles, hpad for aircraft, afld for Basilisk Order vehicles: a cargo plane effect flies across and
+  vehicles, hpad for aircraft, afld for Brotherhood of Seth vehicles: a cargo plane effect flies across and
   the vehicle appears at the airstrip), EVA `unitReady`, walk to rally point (building
   `rally`, set by clicking a factory then left-clicking ground... keep: rally = 2 cells south
   of factory). Aircraft prefer the PRIMARY helipad when it is unclaimed, then any free
@@ -389,7 +389,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   900hp conyard at sliver hp instead of one-shotting it). Then recharges.
 - Both fires push a radar `strike` ping AND a `g._strikes` entry — render draws a pulsing
   red reticle + cross at the aim point during the warning seconds (explored cells only).
-- Basilisk Order: `tmpl` finished → nuke, `C.SUPER_TICKS.nuke = 6300`. EVA `nukeReady`/`nukeLaunched`;
+- Brotherhood of Seth: `tmpl` finished → nuke, `C.SUPER_TICKS.nuke = 6300`. EVA `nukeReady`/`nukeLaunched`;
   missile drops after 3s: `600 dmg` warhead `he`, splash 84px, leaves scorch, screen flash
   + shake. Superweapon state lives on `player.super`; timers tick in Production.tick; only
   while the granting building exists (destroyed → super removed).
@@ -497,15 +497,15 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   the map holds Skirmish — Battle Setup (`#btnSkirmish` → the skirmish window)
   and Back; a phone media query shrinks padding and caps the map height so the
   whole panel fits a landscape phone unscrolled. The briefing
-  tactical survey (`_drawBriefMap`) wears FACTION colors: a Basilisk commander
+  tactical survey (`_drawBriefMap`) wears FACTION colors: a Brotherhood commander
   is RED and the Coalition enemy GOLD, never the seat-based inverse. `MissionProgress` is per faction (`hw_progress_udc/srp`,
   `get/unlockUpTo/unlocked` take a side) and records live at
   `hw_rec_<side>_<n>`. New objective type `demolish {btype}` (arms while a
   building of the type stands anywhere, wins when the last is rubble — capture
   doesn't count) powers the new archetypes: the no-base COMMANDO RAIDS (UDC 4
-  BROKEN SPEAR / Basilisk 4 FANGS IN THE DARK — `noHumanSpawn` + a
+  BROKEN SPEAR / Brotherhood 4 FANGS IN THE DARK — `noHumanSpawn` + a
   rmbo/fire-team/apc squad against a pre-built, garrisoned enemy `hq`) and the
-  SABOTAGE ops (UDC 7 SILENCE THE TEMPLE / Basilisk 7 BLIND THE LANCE — a full
+  SABOTAGE ops (UDC 7 SILENCE THE TEMPLE / Brotherhood 7 BLIND THE LANCE — a full
   base game against a pre-built charging enemy superweapon). Replay meta now
   carries `p: NET.PROTO` from `REPLAY.arm` and `watchData` refuses other
   versions. UDC arc: 1 FIRST FOOTHOLD (STAGED LANDING — `shore: true` puts a
@@ -524,14 +524,14 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   tmpl), 8 INSIDE JOB (capture the tmpl INTACT, prize pre-built + revealed,
   damage warnings, engineer detachment), 9 SEVERED HEAD (annihilate stronghold),
   10 AVALANCHE (annihilate a fully pre-built fortress; reinforcement/supply
-  drip). Basilisk arc mirrors the shapes with its own story: FIRST SERMON
+  drip). Brotherhood arc mirrors the shapes with its own story: FIRST SERMON
   (the classic NO-BASE SQUAD OP — `allow: []` locks production for both seats,
   `credits/aiCredits: 0`, setup strips the stock enemy spawn down to a
   hand-built listening post (hq + power + infantry pickets) and hands the
   player a five-strong cell; reinforcement cells at 150s/340s; annihilate),
   TITHES OF THE EARTH, THE SANCTUM HOLDS, FANGS IN THE DARK, STARVE THE
   MACHINE, THE RELIC ROAD, BLIND THE LANCE (demolish eye), CHANGED VOICES
-  (capture eye), BREAK THE BASTION, AGE OF THE BASILISK.
+  (capture eye), BREAK THE BASTION, AGE OF SETH.
 - AI difficulty knobs read from `game.mission` by ai.js: `aiCalm` multiplies wave-cadence
   delays (first strike + between waves), `aiWaveCap` caps units per strike wave.
   Campaign ops without an explicit `aiWaveCap` keep the classic 9; open skirmish
@@ -873,7 +873,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 
 ### AI opponent (`ai.js`)
 - Skirmish AI. Starts with deployed base (see map/main setup) + same credits as player.
-  Personality by side (UDC: tanks+AGT; Basilisk: turrets/spire+buggy/ltnk/arty swarm).
+  Personality by side (UDC: tanks+AGT; Brotherhood: turrets/spire+buggy/ltnk/arty swarm).
 - Loop (~every 30 ticks): strict-priority build goals: power ahead of drain → proc →
   barracks/hand → weap/afld → proc #2 → hq → defenses (want grows with wave count AND the
   game clock, up to 9, arced toward the player; only the first 4 block tech) → tech
@@ -941,11 +941,11 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   credit on replacement units could never save for the second refinery and
   starved forever; this loop decided most one-sided AI battles.
 - **Faction balance** (measured by AI-vs-AI soaks, scratchpad balance53, both
-  map orientations): Basilisk builds the Repair Facility too (was udc-gated — the
-  Basilisk could never field an MCV or heal armor); Basilisk DEF_PLAN moves its
+  map orientations): Brotherhood builds the Repair Facility too (was udc-gated — the
+  Brotherhood could never field an MCV or heal armor); Brotherhood DEF_PLAN moves its
   air-only SAMs late; WEIGHTS retuned (srp ltnk 6 / arty 3 / ftnk 3, e1 3 /
   e4 1 — flamers die crossing open ground to rifles; udc mtnk 4 / htnk 1);
-  DATA: ltnk 550/330hp (Basilisk's cheap-fast identity), nuke strike 850 dmg (the
+  DATA: ltnk 550/330hp (Brotherhood's cheap-fast identity), nuke strike 850 dmg (the
   warhead must still DELETE what it lands on now that buildings auto-repair
   after superweapon hits — a survivable blast was quietly worth far less than
   the ion's pinpoint kill). Measured result: from UDC 7–0 sweeps to ~parity
@@ -1029,7 +1029,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - All sprites drawn programmatically on offscreen canvases at 1× with integer `fillRect`
   pixels; NO anti-aliasing, no gradients except tiny dithers; dark outline (#111-ish) around
   readable silhouettes; light source top-left; palettes from `PAL` in core.js.
-- Team colors: UDC = desert gold/tan (`PAL.udc*`), Basilisk Order = steel grey with red accents
+- Team colors: UDC = desert gold/tan (`PAL.udc*`), Brotherhood of Seth = steel grey with red accents
   (`PAL.srp*`). Same shapes, different palette per `side`.
 - Vehicles: 24×24 canonical facing NORTH, then `rotFrames(c, 16)` (core helper) for 16
   facings; turreted vehicles (ltnk, mtnk, htnk, gun turret) supply separate `body` and
@@ -1203,10 +1203,10 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `Production.tick(each player)` → `Sim.tick` → `AI.tick` → `Fog.update`; render every RAF
   with `Render.frame`. Pause when menu open (`game.paused`).
 - Menu DOM (#menu overlays in index.html): title screen with the two faction emblems
-  (canvas-drawn logos injected), faction buttons UDC / Basilisk Order → Operations
+  (canvas-drawn logos injected), faction buttons UDC / Brotherhood of Seth → Operations
   (the theater map, ONE accent-highlighted SKIRMISH link row, then the campaign
   ops) → Briefing → game. The skirmish link opens the dedicated `#skirmish`
-  window (`_showSkirmish`): a settings sheet with a UDC/Basilisk side toggle,
+  window (`_showSkirmish`): a settings sheet with a UDC/Brotherhood side toggle,
   a DIFFICULTY select (Easy/Normal/Hard — the old three ledger rows), the
   full `#skOpts` option set, `#btnSkLaunch` (Commence Battle) and Back (which
   returns to the theater that opened it, tracked in `skFrom`). The briefing is a full sitrep screen (main.js
@@ -1227,7 +1227,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   score screen (+ Rematch in MP). The main menu shows Resume Battle when a compatible
   `hw_save` exists. Esc toggles.
 - **Skirmish setup** (the `#skirmish` window, skirmish only — missions/MP ignore
-  it): SIDE toggle (UDC/Basilisk), DIFFICULTY (Easy/Normal/Hard presets),
+  it): SIDE toggle (UDC/Brotherhood), DIFFICULTY (Easy/Normal/Hard presets),
   COMBATANTS (`You vs AI` / `You vs 2 AI` / `You vs 3 AI` free-for-alls, or
   `Watch 2-4 AI` spectator battles), MAP (Classic 84×84 / Large 100×100), starting
   funds 3000/5000/8000/12000 (applies to EVERY war chest, then the EASY/HARD
@@ -1246,7 +1246,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   faction whose DATA (build lists, side-locked items, superweapon key, free helipad
   aircraft, crate tank) and sprites they use. Slots 3/4 wear lazily generated
   recolors (`SPRITES.ensureSideArt`, end of sprites_buildings.js): exact team-ramp
-  remap (UDC AZURE = steel blue; BASILISK AMETHYST = violet accents — green was
+  remap (UDC AZURE = steel blue; SETH AMETHYST = violet accents — green was
   retired, it read as chrysalite ore) plus, for AMETHYST, a violet tilt on the base
   faction's many auxiliary greys. Combat hostility was
   already owner-inequality — FFA needs no rule changes. `AI` keeps one state per AI

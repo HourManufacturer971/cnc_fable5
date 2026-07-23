@@ -6,7 +6,7 @@
 //
 // CLASSIC STRUCTURE, ORIGINAL FICTION. Each faction fights its OWN ten-
 // mission campaign (MISSIONS.udc / MISSIONS.srp, picked via MISSIONS.arc):
-// the UDC counter-offensive and the Basilisk ascension are different wars
+// the UDC counter-offensive and the ascension of the Brotherhood are different wars
 // told from different sides, built from the classic mission archetypes —
 // beachhead, economy, holdout, commando raid, economy hunt, convoy escort,
 // sabotage, capture-intact, stronghold assault, fortress finale. All text,
@@ -58,9 +58,9 @@ udc: [
     // mission, so the enemy garrison lives by the same rules.)
     allow: ['nuke', 'proc', 'silo', 'pyle', 'hand', 'e1', 'e2', 'e3', 'e4', 'e6', 'harv'],
     objective: { type: 'annihilate' },
-    objText: 'Hold the beach until the MCV lands, then destroy the Basilisk Order outpost.',
+    objText: 'Hold the beach until the MCV lands, then destroy the Brotherhood of Seth outpost.',
     brief: [
-      'Commander. The Coalition is coming back to this frontier, and it starts on this beach. A Basilisk Order cell runs the valley from a fortified outpost — light garrison, a standing gun, no armor worth the name. What it does not have is any idea we are coming.',
+      'Commander. The Coalition is coming back to this frontier, and it starts on this beach. A Brotherhood of Seth cell runs the valley from a fortified outpost — light garrison, a standing gun, no armor worth the name. What it does not have is any idea we are coming.',
       'You land first: one rifle team to hold the shore while the boats cycle. The MCV comes in behind you — deploy it, raise power and a refinery, and train infantry. Heavy equipment cannot come ashore this far south, so rifles and rockets will have to do. This is your proving ground, Commander — burn that outpost off the map.',
     ],
     setup(g, o) {
@@ -108,7 +108,7 @@ udc: [
     objective: { type: 'harvest', amount: 6000 },
     objText: 'Hold a treasury of 6000 credits at once. Storage silos will be essential.',
     brief: [
-      'The war effort runs on chrysalite, Commander, and headquarters is running on fumes. This sector holds some of the richest fields we have charted — and a Basilisk Order garrison that knows it.',
+      'The war effort runs on chrysalite, Commander, and headquarters is running on fumes. This sector holds some of the richest fields we have charted — and a Brotherhood of Seth garrison that knows it.',
       'Your task is not conquest. Establish refining operations and amass a WAR CHEST of six thousand credits — held in your treasury at one time, so raise storage silos and spend with care. Defend the harvest chain; wipe the enemy out if you must, but the balance is the mission.',
     ],
     events: [
@@ -144,7 +144,7 @@ udc: [
     objective: { type: 'survive', minutes: 15 },
     objText: 'Hold the plateau for 15 minutes. Fortify the three passes.',
     brief: [
-      'Bad news, Commander. The Basilisk Order has massed for a counter-offensive, and the only ground worth holding is this walled plateau in the dead center of the sector — high rock all around, three passes in.',
+      'Bad news, Commander. The Brotherhood of Seth has massed for a counter-offensive, and the only ground worth holding is this walled plateau in the dead center of the sector — high rock all around, three passes in.',
       'There is a chrysalite pocket inside the walls, but it will not carry you fifteen minutes — the rich fields lie OUTSIDE the passes, and every convoy you send is a convoy you must cover. Wall the gaps, keep the power humming, and hold until the relief column arrives.',
     ],
     events: [
@@ -172,13 +172,13 @@ udc: [
   },
   {
     n: 4, title: 'BROKEN SPEAR',
-    sector: 'THE SPINE — BASILISK SIGNAL RIDGE', terr: [0.24, 0.40], seed: 2718,
+    sector: 'THE SPINE — BROTHERHOOD SIGNAL RIDGE', terr: [0.24, 0.40], seed: 2718,
     credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0, aiNoSell: true,
     noHumanSpawn: true,
     objective: { type: 'demolish', btype: 'hq' },
-    objText: 'Destroy the Basilisk command hub with your raid team. No base. No reinforcements.',
+    objText: 'Destroy the Brotherhood command hub with your raid team. No base. No reinforcements.',
     brief: [
-      'Forget everything you know about building a base, Commander — tonight you are a knife. The Basilisk Order coordinates every raid on this front through one command hub on the ridge, and the Coalition cannot advance while it stands.',
+      'Forget everything you know about building a base, Commander — tonight you are a knife. The Brotherhood of Seth coordinates every raid on this front through one command hub on the ridge, and the Coalition cannot advance while it stands.',
       'You get a commando, a fire team, and one transport. Patrols walk the approaches and towers watch the ridge road. Slip the pickets or silence them fast, put the hub in the dirt, and get your people out. The team is the mission — spend it wisely.',
     ],
     setup(g, o) {
@@ -228,9 +228,9 @@ udc: [
     sector: 'ASHFIELD BASIN — THE ENEMY BREADBASKET', terr: [0.42, 0.62], seed: 3141,
     credits: 6000, aiCredits: 7000,
     objective: { type: 'killEconomy' },
-    objText: 'Destroy every Basilisk Order refinery and harvester in the sector.',
+    objText: 'Destroy every Brotherhood of Seth refinery and harvester in the sector.',
     brief: [
-      'We cannot beat their army head-on in this sector, Commander — but an army is only as strong as its purse. The Basilisk Order feeds this entire front from the refineries here.',
+      'We cannot beat their army head-on in this sector, Commander — but an army is only as strong as its purse. The Brotherhood of Seth feeds this entire front from the refineries here.',
       'Cut the artery. Every refinery, every harvester — hunt them down and burn them. You do not need to level their base; starve it and the front collapses on its own.',
     ],
     events: [
@@ -258,7 +258,7 @@ udc: [
     noHumanSpawn: true,
     objText: 'Deliver the transport to the extraction beacon. If it dies, the mission dies with it.',
     brief: [
-      'No base this time, Commander. Salvage teams pulled a sealed Basilisk prototype core out of the ridge wreckage, and every warlord in the valley wants it back. It rides in an armored transport, and you ride with it.',
+      'No base this time, Commander. Salvage teams pulled a sealed Brotherhood prototype core out of the ridge wreckage, and every warlord in the valley wants it back. It rides in an armored transport, and you ride with it.',
       'Your escort is what you see — no MCV, no reinforcements, no second chances. Checkpoints and gun nests line the valley road. Scout ahead, pick your route, and put that transport on the extraction beacon in one piece.',
     ],
     setup(g, o) {
@@ -308,9 +308,9 @@ udc: [
     sector: 'EMBER VALE — THE TEMPLE GROUNDS', terr: [0.47, 0.30], seed: 4004,
     credits: 6000, aiCredits: 10000, aiCalm: 0.8,
     objective: { type: 'demolish', btype: 'tmpl' },
-    objText: 'Destroy the Basilisk Temple before its fire falls. Everything else is optional.',
+    objText: 'Destroy the Temple of Seth before its fire falls. Everything else is optional.',
     brief: [
-      'The Basilisk Order has finished a Temple in this valley, Commander, and it is not for praying. Their warheads charge inside it RIGHT NOW — the first launch will land on the relief columns massing behind you.',
+      'The Brotherhood of Seth has finished a Temple in this valley, Commander, and it is not for praying. Their warheads charge inside it RIGHT NOW — the first launch will land on the relief columns massing behind you.',
       'You have a base, a war chest, and no time to be thorough. Their garrison will fight you for every field; ignore what you can and put every gun that matters on the Temple. When it falls, the sky over this front belongs to us again.',
     ],
     setup(g, o) {
@@ -350,9 +350,9 @@ udc: [
     sector: 'BLACKWATER CROSSING — DEEP BEHIND THE LINES', terr: [0.63, 0.55], seed: 7414,
     credits: 7000, aiCredits: 9000, aiCalm: 0.9,
     objective: { type: 'capture', btype: 'tmpl' },
-    objText: 'Capture the Basilisk Temple INTACT with an engineer. If it falls, the mission fails.',
+    objText: 'Capture the Temple of Seth INTACT with an engineer. If it falls, the mission fails.',
     brief: [
-      'Listen carefully, Commander, because this one is delicate. The Basilisk Order operates a second Temple in this sector — and after Ember Vale, our analysts want this one breathing, not burning. Its launch codes, its doctrine archives, everything, intact.',
+      'Listen carefully, Commander, because this one is delicate. The Brotherhood of Seth operates a second Temple in this sector — and after Ember Vale, our analysts want this one breathing, not burning. Its launch codes, its doctrine archives, everything, intact.',
       'It will be charging a nuclear strike the entire time you are on the ground, so you have a clock even though nobody set one. Fight through the garrison, but keep your guns OFF the Temple — the day an engineer walks through its door, the war changes.',
     ],
     setup(g, o) {
@@ -393,13 +393,13 @@ udc: [
   },
   {
     n: 9, title: 'SEVERED HEAD',
-    sector: "THE BASILISK'S THROAT — FORTIFIED GORGE", terr: [0.72, 0.36], seed: 6008,
+    sector: "SETH'S THROAT — FORTIFIED GORGE", terr: [0.72, 0.36], seed: 6008,
     credits: 8000, aiCredits: 12000, aiCalm: 0.7, aiWaveCap: 12,
     objective: { type: 'annihilate' },
-    objText: 'Annihilate the Basilisk Order stronghold. Total victory.',
+    objText: 'Annihilate the Brotherhood of Seth stronghold. Total victory.',
     brief: [
-      'This is the one, Commander. The Basilisk Order’s regional stronghold — deep coffers, layered defenses, and a Temple that will be charging a nuclear strike from the moment you arrive.',
-      'There is no quota and no clock. Build, grind, and take them apart piece by piece. Expect their heaviest armor and constant pressure. Cut off the basilisk’s head, and the region is free.',
+      'This is the one, Commander. The Brotherhood of Seth’s regional stronghold — deep coffers, layered defenses, and a Temple that will be charging a nuclear strike from the moment you arrive.',
+      'There is no quota and no clock. Build, grind, and take them apart piece by piece. Expect their heaviest armor and constant pressure. Cut off the serpent’s head, and the region is free.',
     ],
     events: [
       { at: 25, eva: 'Their Temple is already charging. Watch the sky, Commander.' },
@@ -428,7 +428,7 @@ udc: [
     objective: { type: 'annihilate' },
     objText: 'Annihilate the fortress. Everything they have is already built — and pointed at you.',
     brief: [
-      'No preamble, Commander. The last Basilisk fortress in the theater is dug in across this valley — refineries running, factories hot, defense grid live, Temple charging. They have had years to prepare and they know you are coming.',
+      'No preamble, Commander. The last Brotherhood fortress in the theater is dug in across this valley — refineries running, factories hot, defense grid live, Temple charging. They have had years to prepare and they know you are coming.',
       'You get a war chest, a steady trickle of reinforcements, and the truth: this will be a grind. Take ground, hold it, and bring the mountain down on them. Win here, and the war is over.',
     ],
     setup(g, o) {
@@ -467,7 +467,7 @@ udc: [
 ],
 
 // =============================================================================
-// THE BASILISK CAMPAIGN — the ascension of the Order
+// THE BROTHERHOOD CAMPAIGN — the ascension of Seth
 // =============================================================================
 srp: [
   {
@@ -482,14 +482,14 @@ srp: [
     objective: { type: 'annihilate' },
     objText: 'No base, no production. Wipe out the UDC listening post with the faithful you are given.',
     brief: [
-      'There is no base tonight, child of the Basilisk. No factories, no harvest, no war machine — the Order asks for something older: faith, and a knife in the dark. A Coalition listening post has taken root upriver, and its antennas drink every whisper the Order breathes.',
-      'Take your cell and silence it. Kill the garrison, flatten the post, leave nothing standing that flies their colors. More of the faithful will find you on the road — the Order provides. Prove tonight that the Basilisk needs no engine of war to win one.',
+      'There is no base tonight, child of Seth. No factories, no harvest, no war machine — the Brotherhood asks for something older: faith, and a knife in the dark. A Coalition listening post has taken root upriver, and its antennas drink every whisper the Brotherhood breathes.',
+      'Take your cell and silence it. Kill the garrison, flatten the post, leave nothing standing that flies their colors. More of the faithful will find you on the road — the Brotherhood provides. Prove tonight that the Brotherhood needs no engine of war to win one.',
     ],
     setup(g, o) {
       // strip the stock enemy base: the listening post is hand-built below
       for (const id of [...g.ai.buildingIds]) { const b = g.buildings.get(id); if (b) removeBuilding(b); }
       for (const id of [...g.ai.unitIds]) { const u = g.units.get(id); if (u) removeUnit(u); }
-      // your cell — everything the Order grants you tonight
+      // your cell — everything the Brotherhood grants you tonight
       MISSIONS.squad(g, o.side, ['e1', 'e1', 'e1', 'e1', 'e3'], o.hs);
       // the listening post: comm array, its power, and a standing garrison
       MISSIONS.placeB(g, o.aiSide, 'hq', o.as.cx, o.as.cy);
@@ -518,7 +518,7 @@ srp: [
         eva: 'More of the faithful have answered the call. Flame walks with them.',
         reinforce: { types: ['e1', 'e1', 'e4'] } },
       { at: 340,
-        eva: 'The Order sends rockets for the antennas. Bring them down.',
+        eva: 'The Brotherhood sends rockets for the antennas. Bring them down.',
         reinforce: { types: ['e3', 'e3'] } },
       { when: g => {
           for (const b of g.buildings.values()) {
@@ -534,9 +534,9 @@ srp: [
     sector: 'THE GREENBELT — CONTESTED FIELDS', terr: [0.76, 0.44], seed: 4257,
     credits: 3000, aiCredits: 5000, aiCalm: 1.4,
     objective: { type: 'harvest', amount: 6000 },
-    objText: 'Hold a treasury of 6000 credits at once. Build silos — the Order audits the vault, not the ledger.',
+    objText: 'Hold a treasury of 6000 credits at once. Build silos — the Brotherhood audits the vault, not the ledger.',
     brief: [
-      'Faith does not fuel the war machine, disciple. Chrysalite does. The Order requires a war chest of six thousand credits from this sector, and the Coalition squats upon the richest fields.',
+      'Faith does not fuel the war machine, disciple. Chrysalite does. The Brotherhood requires a war chest of six thousand credits from this sector, and the Coalition squats upon the richest fields.',
       'Take what is ours beneath their noses. The quota is counted in the vault, not the ledger — six thousand credits held at once. Raise silos, guard your harvesters as you would your own blood, and spend only what the harvest can replace.',
     ],
     events: [
@@ -559,7 +559,7 @@ srp: [
         eva: 'Another raiding party is closing on the harvest line.',
         attack: { types: { udc: ['jeep', 'jeep', 'e3'], srp: ['bike', 'bike', 'e3'] }, target: 'harv' } },
       { at: 430,
-        eva: 'The Order has diverted a spare harvester to your tithe.',
+        eva: 'The Brotherhood has diverted a spare harvester to your tithe.',
         reinforce: { types: ['harv'] } },
       { when: g => g.human.credits >= 4800,
         eva: 'The tithe is nearly gathered. Guard the vault.' },
@@ -572,7 +572,7 @@ srp: [
     objective: { type: 'survive', minutes: 15 },
     objText: 'Hold the sanctum for 15 minutes. Seal the three passes with stone and flame.',
     brief: [
-      'The Coalition storm is coming, disciple, and the Order has chosen its ground: the old hill sanctum at the heart of the sector, ringed in stone with three gates.',
+      'The Coalition storm is coming, disciple, and the Brotherhood has chosen its ground: the old hill sanctum at the heart of the sector, ringed in stone with three gates.',
       'The crystal within the walls is thin — the true harvest lies beyond the passes, under their guns. Weigh every convoy against the risk. Seal the gates with turret and flame, endure for fifteen minutes, and their offensive breaks on our walls like water.',
     ],
     events: [
@@ -606,8 +606,8 @@ srp: [
     objective: { type: 'demolish', btype: 'hq' },
     objText: 'Destroy the UDC command post with your infiltration team. No base. No reinforcements.',
     brief: [
-      'The Basilisk does not always come as an army, disciple. Sometimes it comes as a whisper. The Coalition routes every patrol on this front through a command post in the Lantern Hills — and its silence is worth a thousand soldiers.',
-      'You are given a champion of the Order, a fire team, and one transport. Their pickets walk the hills and their towers never blink. Move as the Basilisk moves — unseen, then absolute. Burn the post and vanish. The team is the mission.',
+      'Seth does not always come as an army, disciple. Sometimes it comes as a whisper. The Coalition routes every patrol on this front through a command post in the Lantern Hills — and its silence is worth a thousand soldiers.',
+      'You are given a champion of the Brotherhood, a fire team, and one transport. Their pickets walk the hills and their towers never blink. Move as Seth moves — unseen, then absolute. Burn the post and vanish. The team is the mission.',
     ],
     setup(g, o) {
       MISSIONS.squad(g, o.side, ['rmbo', 'e4', 'e4', 'apc'], o.hs);
@@ -656,7 +656,7 @@ srp: [
     objText: 'Destroy every UDC refinery and harvester in the sector.',
     brief: [
       'The Coalition war chest overflows with stolen harvest, disciple. Their refineries in this sector fill it by the hour, and their generals grow bold on the surplus.',
-      'The Basilisk strikes not the shield but the hand that feeds the arm. Their refineries, their harvesters — all of it to ash. Leave their soldiers standing in a base that cannot pay them.',
+      'Seth strikes not the shield but the hand that feeds the arm. Their refineries, their harvesters — all of it to ash. Leave their soldiers standing in a base that cannot pay them.',
     ],
     events: [
       { at: 45, eva: 'Their ore trucks run the midfield at all hours. Hunt them where they harvest.' },
@@ -683,8 +683,8 @@ srp: [
     noHumanSpawn: true,
     objText: 'Deliver the transport to the extraction beacon. Its cargo is worth more than your column.',
     brief: [
-      'The Order entrusts you with a relic, disciple: a Coalition targeting core, sealed in an armored transport. What it knows must reach the Temple vaults — and the valley between is thick with their patrols.',
-      'You command only the column before you. No foundries will answer, no reinforcements will come. The road is watched by towers and idle armor. Move like the Basilisk — quietly, then all at once — and deliver the transport to the beacon.',
+      'The Brotherhood entrusts you with a relic, disciple: a Coalition targeting core, sealed in an armored transport. What it knows must reach the Temple vaults — and the valley between is thick with their patrols.',
+      'You command only the column before you. No foundries will answer, no reinforcements will come. The road is watched by towers and idle armor. Move like Seth — quietly, then all at once — and deliver the transport to the beacon.',
     ],
     setup(g, o) {
       for (const id of g.ai.buildingIds.slice()) {
@@ -736,7 +736,7 @@ srp: [
     objText: 'Destroy the uplink station that feeds their orbital lance. Everything else is optional.',
     brief: [
       'The Coalition’s weapon in the sky sees everything, disciple — because a station on this mesa tells it where to look. Every gathering of the faithful, every convoy, every temple: the lance finds them all through this one uplink.',
-      'Their garrison will bleed you for every field between here and the mesa. Do not oblige them. Build fast, strike where it matters, and tear the uplink out by the roots. When it falls, the sky goes dark — and the Basilisk moves unseen once more.',
+      'Their garrison will bleed you for every field between here and the mesa. Do not oblige them. Build fast, strike where it matters, and tear the uplink out by the roots. When it falls, the sky goes dark — and the Brotherhood moves unseen once more.',
     ],
     setup(g, o) {
       const b = MISSIONS.placeB(g, o.aiSide, 'eye', o.as.cx + 3, o.as.cy + 2);
@@ -777,7 +777,7 @@ srp: [
     objective: { type: 'capture', btype: 'eye' },
     objText: 'Capture the Advanced Comm. Center INTACT with an engineer. If it falls, the mission fails.',
     brief: [
-      'The Coalition uplink station in this sector speaks to their weapon in the sky, disciple. After Mirror Mesa they built its twin — and this time the Order does not want it silenced. The Order wants it to change WHOSE voice it obeys.',
+      'The Coalition uplink station in this sector speaks to their weapon in the sky, disciple. After Mirror Mesa they built its twin — and this time the Brotherhood does not want it silenced. The Brotherhood wants it to change WHOSE voice it obeys.',
       'Their orbital lance will hunt you the whole while, so move with purpose. Break the garrison, spare the prize — one stray shell and the uplink is ash and the mission with it. Deliver an engineer to its door and the sky itself changes sides.',
     ],
     setup(g, o) {
@@ -823,8 +823,8 @@ srp: [
     objective: { type: 'annihilate' },
     objText: 'Annihilate the UDC fortress. Total victory.',
     brief: [
-      'The final trial before the last, child of the Basilisk. The Coalition’s regional fortress stands across this wasteland — rich, walled, and armed with an orbital lance that will hunt your every gathering.',
-      'The Order empties its coffers for you. Build without mercy, endure the light from the sky, and grind their fortress to dust. When the last UDC banner falls, this land belongs to the Basilisk — forever.',
+      'The final trial before the last, child of Seth. The Coalition’s regional fortress stands across this wasteland — rich, walled, and armed with an orbital lance that will hunt your every gathering.',
+      'The Brotherhood empties its coffers for you. Build without mercy, endure the light from the sky, and grind their fortress to dust. When the last UDC banner falls, this land belongs to Seth — forever.',
     ],
     events: [
       { at: 25, eva: 'Their orbital lance is already charging. Do not gather in the open.' },
@@ -847,14 +847,14 @@ srp: [
     ],
   },
   {
-    n: 10, title: 'AGE OF THE BASILISK',
+    n: 10, title: 'AGE OF SETH',
     sector: 'AVALANCHE FOOTHILLS — THE LAST FORTRESS', terr: [0.15, 0.74], seed: 9091,
     credits: 10000, aiCredits: 16000, aiCalm: 0.5, aiWaveCap: 14,
     objective: { type: 'annihilate' },
     objText: 'Annihilate the fortress. Their whole war machine is awake — bury it.',
     brief: [
-      'The end of the road, child of the Basilisk. The Coalition’s final fortress works at full song — harvesters streaming, factories pouring armor, the lance in the sky drinking from three uplinks. They are strongest here. So must you be.',
-      'The Order gives you its last coffers and its blessing. Grind their walls, starve their vaults, and when their final banner burns, the age of the Basilisk begins.',
+      'The end of the road, child of Seth. The Coalition’s final fortress works at full song — harvesters streaming, factories pouring armor, the lance in the sky drinking from three uplinks. They are strongest here. So must you be.',
+      'The Brotherhood gives you its last coffers and its blessing. Grind their walls, starve their vaults, and when their final banner burns, the age of Seth begins.',
     ],
     setup(g, o) {
       const A = o.aiSide, as = o.as;

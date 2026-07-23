@@ -13,8 +13,8 @@ or publisher.
 | | |
 |---|---|
 | ![Title screen](promo/01_title.jpg) | ![A thriving UDC base](promo/02_udc_base.jpg) |
-| ![A Basilisk Order war camp](promo/03_serpent_base.jpg) | ![Armored battle](promo/04_battle.jpg) |
-| ![Nuclear strike](promo/05_nuke.jpg) | ![The orbital lance striking a Basilisk temple](promo/06_lance.jpg) |
+| ![A Brotherhood of Seth war camp](promo/03_serpent_base.jpg) | ![Armored battle](promo/04_battle.jpg) |
+| ![Nuclear strike](promo/05_nuke.jpg) | ![The orbital lance striking a Temple of Seth](promo/06_lance.jpg) |
 | ![An armored column rolling through a checkpoint gate](promo/07_checkpoint.jpg) | ![Harvesting blue chrysalite on the frontier](promo/08_frontier.jpg) |
 
 ## Running it
@@ -29,7 +29,7 @@ python3 -m http.server 8000
 
 (Opening `index.html` directly with `file://` also works in most browsers.)
 
-Pick your side — United Defense Coalition or The Basilisk Order — then pick
+Pick your side — United Defense Coalition or The Brotherhood of Seth — then pick
 your battle: a **skirmish** on a random map, or your faction's **campaign**.
 In the classic style, each faction fights its own ten-operation war with its
 own original storyline, chosen from a **Theater of War** map where secured
@@ -177,7 +177,7 @@ than one factory of a kind speeds that line up, and `P` designates which one
 new units spawn from. Left-click an in-progress structure icon to pause it,
 right-click any icon to cancel/dequeue with refund. REPAIR and SELL buttons
 toggle wrench/sell cursor modes. The radar comes online with a powered
-Communications Center; owning more than one Advanced Comm. Center or Basilisk
+Communications Center; owning more than one Advanced Comm. Center or Seth
 Temple charges the Orbital Lance / nuke proportionally faster.
 
 ## What's simulated
@@ -263,7 +263,7 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   you can type in to refight a favorite map — the pause menu shows the
   current seed so you can share it
 - **Four armies on one field** — the extra combatants fly recolored
-  faction banners: UDC Azure in steel blue and the Basilisk Amethyst in
+  faction banners: UDC Azure in steel blue and the Seth Amethyst in
   royal violet, so a four-way brawl reads at a glance
 - **A frontier worth fighting for** — Large maps scale their riches with
   their size: crystal fields scattered across the whole interior (plus a
@@ -275,11 +275,11 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   and buildings hit by superweapons get repaired when the treasury allows
 - **A fair fight** — faction balance is measured, not guessed: AI-vs-AI
   soak runs from both map corners drove out a string of hidden biases —
-  the Basilisk never built Repair Facilities (so never MCVs), attack waves
+  the Brotherhood never built Repair Facilities (so never MCVs), attack waves
   launched by headcount (cheap rosters attacked early and light), a
   poverty trap kept a battered army from ever saving for its second
   refinery, and early SAM sites sat useless against a capped air wing.
-  UDC and the Basilisk now trade blows at roughly even odds
+  UDC and the Brotherhood now trade blows at roughly even odds
 - **Base discipline** — the AI always keeps the wrench on a damaged
   Construction Yard (even flat broke), leaves breathing room between its
   buildings so one nuke can't gut three and its own traffic isn't walled
@@ -296,7 +296,7 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   difficulty grabs convenient crates, held supply depots pay a trickle
   that's actually worth capturing, and river bridges are two lanes wide so
   harvester traffic stops wedging head-to-head
-- **Two campaigns, one war** — the UDC counter-offensive and the Basilisk
+- **Two campaigns, one war** — the UDC counter-offensive and the Brotherhood
   ascension are separate ten-mission arcs with their own stories, fought
   across a Theater of War map drawn like a real country under invasion:
   a coastline, rivers, mountain ranges, named towns on supply roads, your
@@ -306,7 +306,7 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   landing on a real coastline: open sea spans the southern edge, your
   rifle team starts on the sand, and the second boat and the MCV come in
   over the surf; only the early tech tree (power, refinery, barracks,
-  infantry) is on the menu. The Basilisk opens with a pure squad op — no
+  infantry) is on the menu. The Brotherhood opens with a pure squad op — no
   base, no production for anyone, just your cell, reinforcement cells on
   the road, and a listening post to erase. Missions can now carry a tech
   whitelist, so the arsenal grows one operation at a time
@@ -328,7 +328,7 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   up at the same credits-per-point rate building repairs cost
 - **Original soundtrack** — twelve synthesized tracks in the dark mid-90s
   RTS style, sequenced live with WebAudio — and each faction fights to its
-  own score: the Coalition marches to the original eight, while the Basilisk
+  own score: the Coalition marches to the original eight, while the Brotherhood
   Order gets four tracks of its own — driving phrygian bass pumps,
   octave-jump riffs, a 134 bpm gallop, and hooks that circle back like the
   snake on their banner. Toggle with Music: ON/OFF in the options menu
@@ -377,7 +377,7 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   Artillery, Rocket Launcher, Harvester, MCV; Kestrel and Gunship fly home to
   rearm on their own after a strike (and resume the target if it still
   stands), pads hand off automatically between airframes, and selected
-  aircraft show their remaining ammo as pips; Basilisk Order vehicles arrive
+  aircraft show their remaining ammo as pips; Brotherhood of Seth vehicles arrive
   by cargo plane at the Airstrip. The Behemoth
   Tank is visibly bigger than the rest and fires twin cannon shots.
 - **Defenses** — Guard Tower, Advanced Guard Tower, Gun Turret, SAM Site, and
@@ -387,8 +387,8 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   existing wall segments and they make way; the gate orients itself to the
   run, lowers automatically for your own units, and stays shut to the
   enemy — seal your base without boxing your army in
-- **Superweapons** — the UDC Orbital Lance (Advanced Comm. Center) and the Basilisk Order's nuclear
-  strike (Basilisk Temple)
+- **Superweapons** — the UDC Orbital Lance (Advanced Comm. Center) and the Brotherhood's nuclear
+  strike (Temple of Seth)
 - **Combat details** — warhead vs. armor tables, turret rotation, homing
   rockets, artillery arcs, splash damage with friendly fire, tanks crush
   infantry underfoot when a move order paths over them, stealth tank

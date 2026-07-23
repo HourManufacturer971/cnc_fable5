@@ -503,7 +503,7 @@ const Production = (function () {
     }
 
     if (d.factory === 'vehicle' && fac.type === 'afld') {
-      // Basilisk airstrip: cargo plane flies across, unit appears at the strip
+      // Brotherhood airstrip: cargo plane flies across, unit appears at the strip
       const y = (fac.cy + 1) * C.CELL;
       spawnEffect('plane', -48, y, { vx: 10, ttl: Math.ceil((C.MAP_W * C.CELL + 96) / 10) });
     }
@@ -660,7 +660,7 @@ const Production = (function () {
       }
     }
 
-    // superweapon charge — more Adv. Comm. Centers / Temples of Basilisk charge
+    // superweapon charge — more Adv. Comm. Centers / Temples of Seth charge
     // the orbital lance / nuke proportionally faster (capped so it can't be
     // instant-fired by spamming the tech building)
     const superKey = baseSide(player.side) === 'udc' ? 'eye' : 'tmpl';

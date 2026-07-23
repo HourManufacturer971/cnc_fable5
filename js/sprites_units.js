@@ -101,7 +101,7 @@
     px(g, x + (w >> 1), y + (h >> 1), HUB);
   }
 
-  // faction insignia: UDC = tiny gold star w/ white core, Basilisk = crimson chevron
+  // faction insignia: UDC = tiny gold star w/ white core, Seth = crimson chevron
   function emblem(g, P, x, y) {
     if (P.side === 'udc') {
       R(g, x - 1, y, 3, 1, PAL.uiGold);
@@ -149,7 +149,7 @@
       R(g, 11, 7, 2, 1, GUN_D); px(g, 11, 11, GUN_L);
     },
 
-    // Basilisk Buggy: fat rear tires, narrow tapered hull, cage MG, vented engine.
+    // Brotherhood Buggy: fat rear tires, narrow tapered hull, cage MG, vented engine.
     bggy(g, P) {
       R(g, 6, 5, 4, 2, GUN_D); R(g, 14, 5, 4, 2, GUN_D);   // front axles
       R(g, 6, 15, 4, 2, GUN_D); R(g, 14, 15, 4, 2, GUN_D); // rear axles

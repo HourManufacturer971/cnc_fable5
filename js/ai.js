@@ -258,7 +258,7 @@ const AI = (function () {
     udc: ['gtwr', 'gtwr', 'atwr', 'gtwr', 'atwr', 'gtwr', 'atwr', 'atwr', 'gtwr'],
     // SAMs moved late: they are air-ONLY, and with the enemy wing capped at
     // a few gunships an early SAM was a dead slot exactly when the ground
-    // waves arrived — the Basilisk now meets those with guns and Spires
+    // waves arrived — the Brotherhood now meets those with guns and Spires
     srp: ['gun', 'gun', 'obli', 'gun', 'obli', 'sam', 'obli', 'gun', 'sam'],
   };
 
@@ -352,7 +352,7 @@ const AI = (function () {
 
     // BOTH war machines run a Repair Facility: wounded armor gets a pad to
     // limp to, and the expansion MCV (prereq 'fix') opens up for either
-    // side — this was udc-gated, so the Basilisk never fielded an MCV at all
+    // side — this was udc-gated, so the Brotherhood never fielded an MCV at all
     if (_planned(g, p, 'fix') < 1 &&
         Production.prereqOk(p, 'fix') && !blocked('fix')) return pick('fix', 1500);
     if (!st.builtHpad && Production.prereqOk(p, 'hpad') && !blocked('hpad')) return pick('hpad', 2000);
@@ -372,7 +372,7 @@ const AI = (function () {
   }
 
   // measured, not guessed: the mixes are tuned by AI-vs-AI soak runs
-  // (scratchpad balance53) toward an even UDC/Basilisk win rate
+  // (scratchpad balance53) toward an even UDC/Brotherhood win rate
   const WEIGHTS = {
     udc: [['e1', 2], ['e2', 2], ['e3', 2], ['jeep', 2], ['mtnk', 4], ['msam', 2], ['htnk', 1], ['orca', 1]],
     srp: [['e1', 3], ['e3', 2], ['e4', 1], ['e5', 1], ['bggy', 2], ['bike', 2], ['ltnk', 6], ['arty', 3], ['ftnk', 3], ['stnk', 1], ['heli', 1]],
