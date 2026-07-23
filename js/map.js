@@ -511,32 +511,44 @@ const MAPGEN = (function () {
   function placeBridge(g, rng, riv, avoid, loose) {
     const W = C.MAP_W, H = C.MAP_H;
     const scan = loose ? 8 : 6, spanMax = loose ? 9 : 7;
-    const colWater = x => {
-      let n = 0;
-      for (let y = Math.max(1, Math.round(riv.yc[x]) - scan); y <= Math.min(H - 2, Math.round(riv.yc[x]) + scan); y++) {
-        if (g.terrain[cellIdx(x, y)] === T_WATER) n++;
+    // The CONTIGUOUS water run under a column, nearest the river's own
+    // centerline. Counting scattered water cells is how you get a bridge
+    // spanning a whole meander of dry land: a candidate column must cross
+    // ONE unbroken channel, nothing else.
+    const colRun = x => {
+      const yc = Math.round(riv.yc[x]);
+      const y0 = Math.max(1, yc - scan), y1 = Math.min(H - 2, yc + scan);
+      let best = null, run = null;
+      for (let y = y0; y <= y1 + 1; y++) {
+        const wet = y <= y1 && g.terrain[cellIdx(x, y)] === T_WATER;
+        if (wet) { if (!run) run = { a: y, b: y }; else run.b = y; }
+        else if (run) {
+          const d = Math.min(Math.abs(run.a - yc), Math.abs(run.b - yc));
+          if (!best || d < best.d) best = { a: run.a, b: run.b, d };
+          run = null;
+        }
       }
-      return n;
+      return best;
     };
     const midX = (W / 2) | 0;
     const cand = [];
     for (let x = 8; x < W - 9; x++) {
       if (avoid && avoid.some(ax => Math.abs(x - ax) < 12)) continue;
-      // both lanes must actually span water here
-      const n1 = colWater(x), n2 = colWater(x + 1);
-      if (n1 >= 2 && n1 <= spanMax && n2 >= 2 && n2 <= spanMax) cand.push({ x, dc: Math.abs(x - midX) });
+      // both lanes must cross one clean channel of sane width, and the two
+      // runs must actually overlap (same channel, not two arms of a bend)
+      const r1 = colRun(x), r2 = colRun(x + 1);
+      if (!r1 || !r2) continue;
+      const l1 = r1.b - r1.a + 1, l2 = r2.b - r2.a + 1;
+      if (l1 < 2 || l1 > spanMax || l2 < 2 || l2 > spanMax) continue;
+      if (r1.b < r2.a || r2.b < r1.a) continue;   // disjoint runs
+      const uTop = Math.min(r1.a, r2.a), uBot = Math.max(r1.b, r2.b);
+      if (uBot - uTop + 1 > spanMax + 1) continue;
+      cand.push({ x, uTop, uBot, dc: Math.abs(x - midX) });
     }
     if (!cand.length) return null;
     cand.sort((a, b) => a.dc - b.dc);
     const pick = cand[(rng() * Math.min(6, cand.length)) | 0];
-    // the water span across BOTH lanes (the part that falls when destroyed)
-    let yTop = Infinity, yBot = -Infinity;
-    for (const bx of [pick.x, pick.x + 1]) {
-      for (let y = Math.max(1, Math.round(riv.yc[bx]) - scan); y <= Math.min(H - 2, Math.round(riv.yc[bx]) + scan); y++) {
-        if (g.terrain[cellIdx(bx, y)] === T_WATER) { yTop = Math.min(yTop, y); yBot = Math.max(yBot, y); }
-      }
-    }
-    if (!isFinite(yTop)) return null;
+    const yTop = pick.uTop, yBot = pick.uBot;
     // deck rectangle: two lanes running TWO cells past the water onto each
     // bank, so the span lands on solid ground instead of stopping at the
     // waterline — the painted abutments sit fully on the banks. `under`

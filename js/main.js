@@ -535,7 +535,7 @@ const Main = (function () {
         : 'Skirmish — ' + (d.meta.skirmish || 'NORMAL');
       const sub = $('resumeSaveSub');
       if (sub) {
-        sub.textContent = (d.meta.side === 'srp' ? 'Serpent Order' : 'UDC') +
+        sub.textContent = (d.meta.side === 'srp' ? 'Basilisk Order' : 'UDC') +
           ' · ' + what + ' · ' + mm + ':' + ss;
       }
     }
@@ -1068,7 +1068,7 @@ const Main = (function () {
     };
     const you = fake.startPos[mySide] || fake.startPos.human;
     const foe = fake.startPos[mySide === 'udc' ? 'srp' : 'udc'] || fake.startPos.ai;
-    // markers wear FACTION colors: a Serpent commander is RED on their own
+    // markers wear FACTION colors: a Basilisk commander is RED on their own
     // survey and the Coalition enemy is gold — never the other way around
     const meRed = baseSide(mySide) === 'srp';
     const YOU = meRed
@@ -1139,7 +1139,7 @@ const Main = (function () {
     $('briefSector').textContent = 'SECTOR ' + m.seed + ' · ' + (m.sector || 'UNCHARTED') +
       (rec ? ' · PERSONAL BEST ' + rec : '');
     $('briefClass').textContent = mySide === 'udc'
-      ? 'UDC TACTICAL NET — EYES ONLY' : 'SERPENT WHISPERS — FOR THE FAITHFUL';
+      ? 'UDC TACTICAL NET — EYES ONLY' : 'BASILISK WHISPERS — FOR THE FAITHFUL';
     _teletype($('briefBody'), m.brief);
     $('briefBody').scrollTop = 0;   // the element persists across briefings
     $('briefObjective').textContent = 'OBJECTIVE: ' + m.objText;
@@ -1231,7 +1231,7 @@ const Main = (function () {
       : game._spectate ? 'BATTLE SIMULATION — ' + game.sides.length + ' ARMIES'
       : 'SKIRMISH — ' + ((mySkirmish && mySkirmish.skirmish) || 'NORMAL');
     window.game = game;
-    MUSIC.start(side);   // faction playlist: the Serpent Order has its own score
+    MUSIC.start(side);   // faction playlist: the Basilisk Order has its own score
     MAPGEN.generate(game, game.seed,
       mission ? { holdout: mission.holdout, shore: mission.shore } : undefined);
     Fog.init(game);

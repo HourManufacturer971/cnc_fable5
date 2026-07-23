@@ -44,7 +44,7 @@ const C = {
   SCROLL_SPEED: 12,        // WORLD px per frame while scrolling
   // display names for the internal side keys (the keys themselves are legacy
   // identifiers baked into save-free game state; only the labels are shown)
-  SIDE_NAME: { udc: 'UDC', srp: 'SERPENT', ud2: 'UDC AZURE', sr2: 'SERPENT AMETHYST' },
+  SIDE_NAME: { udc: 'UDC', srp: 'BASILISK', ud2: 'UDC AZURE', sr2: 'BASILISK AMETHYST' },
 };
 
 // Widen the fixed 16:10 layout to a device's real aspect (phones in landscape
@@ -90,7 +90,7 @@ const PAL = {
   outline: '#101008',
   // UDC: desert gold/tan
   udc: '#c8a84c', udcDark: '#8a7230', udcLight: '#e8d088', udcShadow: '#5c4c20',
-  // Serpent Order: steel grey + red accents
+  // Basilisk Order: steel grey + red accents
   srp: '#8a8a94', srpDark: '#54545e', srpLight: '#b8b8c2', srpShadow: '#36363e',
   srpRed: '#b02818', srpRedLight: '#e05038',
   // terrain

@@ -3,7 +3,7 @@
 // Twelve original tracks composed for this project, synthesized live with
 // WebAudio and sequenced on a lookahead clock: dark, driving electronic /
 // industrial in the spirit of mid-90s RTS scores — eight for the Coalition,
-// four ritual tracks reserved for the Serpent Order. All note data here is
+// four ritual tracks reserved for the Basilisk Order. All note data here is
 // original. Mixed low and glued with a compressor so it sits under the SFX.
 //
 // MUSIC.start(side)        begin playback with the faction's playlist
@@ -369,12 +369,12 @@ const MUSIC = (function () {
     order: ['a', 'b', 'b', 'c', 'b', 'c', 'd', 'e', 'f', 'b', 'c', 'd', 'd'],
   };
 
-  // ---- Serpent Order playlist (faction-exclusive tracks) ------------------------
+  // ---- Basilisk Order playlist (faction-exclusive tracks) ------------------------
   // The Order does not march to Coalition drums. Four tracks built on driving
   // syncopated bass pumps, octave-jump riffs and short hooks that keep coming
   // back — dark phrygian identity with actual groove.
 
-  // S1 'Coil' — E phrygian anthem, the Serpent theme. A tresillo bass pump
+  // S1 'Coil' — E phrygian anthem, the Basilisk theme. A tresillo bass pump
   // with the b2 sting and a zigzag hook that answers itself.
   const S1 = {
     bpm: 120,
@@ -490,7 +490,7 @@ const MUSIC = (function () {
 
   const TRACKS = [T1, T2, T3, T4, T5, T6, T7, T8];
   // faction playlists: the Coalition marches to the original eight; the
-  // Serpent Order plays only its own liturgy
+  // Basilisk Order plays only its own liturgy
   const PLAYLISTS = { udc: TRACKS, srp: [S1, S2, S3, S4] };
   let list = TRACKS;
 
@@ -558,7 +558,7 @@ const MUSIC = (function () {
   function start(side) {
     if (!enabled) return;
     // each faction fights to its own score: the Coalition to the original
-    // eight, the Serpent Order to its liturgy. The session's first battle
+    // eight, the Basilisk Order to its liturgy. The session's first battle
     // opens on the faction theme (track 0); later starts re-roll. When the
     // sequencer is already running (music plays through menus), it simply
     // picks up the new playlist at its next scheduled step.

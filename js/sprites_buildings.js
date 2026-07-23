@@ -1057,7 +1057,7 @@
       P(ctx, bx + 4, ty, 1, 30 - ty + 14, pal.blackA);
     }
 
-    // the serpent's eye: a glowing vertical seam splitting the monolith,
+    // the basilisk's eye: a glowing vertical seam splitting the monolith,
     // swelling to an almond eye at its heart
     const ex = 48;
     P(ctx, ex, -6, 2, 48, '#14141a');
@@ -2223,7 +2223,7 @@
 // The multi-AI skirmish fields up to four armies. Slots 3 and 4 ('ud2'/'sr2')
 // play by their base faction's rules and art, with the TEAM COLORS remapped so
 // the four forces read apart at a glance: UDC AZURE swaps the desert gold for
-// steel blue, SERPENT AMETHYST swaps the crimson accents (and tints the greys)
+// steel blue, BASILISK AMETHYST swaps the crimson accents (and tints the greys)
 // toward royal violet — green was retired, it read as chrysalite. Generated
 // lazily on the first game that needs them — classic 1v1 pays nothing.
 (function () {
@@ -2238,9 +2238,9 @@
       '#b02818': '#7c2cc0', '#e05038': '#ae66ec',
     },
   };
-  // Serpent art leans on many auxiliary gunmetal greys beyond the 4-color
+  // Basilisk art leans on many auxiliary gunmetal greys beyond the 4-color
   // ramp — AMETHYST also tilts every near-grey pixel toward violet so the
-  // two serpent armies never read as the same force
+  // two basilisk armies never read as the same force
   const GREY_TILT = { sr2: [7, -8, 14] };
 
   function _lut(map) {

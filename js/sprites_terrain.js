@@ -1140,8 +1140,12 @@
 
   // blocky 5x6 letterforms for the crest wordmarks
   const FONT = {
+    A: ['#####', '#...#', '#####', '#...#', '#...#', '#...#'],
+    B: ['####.', '#...#', '####.', '#...#', '#...#', '####.'],
     C: ['#####', '#....', '#....', '#....', '#....', '#####'],
     D: ['####.', '#...#', '#...#', '#...#', '#...#', '####.'],
+    K: ['#...#', '#..#.', '###..', '#.#..', '#..#.', '#...#'],
+    L: ['#....', '#....', '#....', '#....', '#....', '#####'],
     E: ['#####', '#....', '####.', '#....', '#....', '#####'],
     G: ['#####', '#....', '#.###', '#...#', '#...#', '#####'],
     I: ['#####', '..#..', '..#..', '..#..', '..#..', '#####'],
@@ -1262,7 +1266,7 @@
     SPRITES.logo.udc = t.c;
   }
 
-  // --- Serpent Order crest: coiled red serpent inside a segmented ring, black field
+  // --- Basilisk Order crest: coiled red basilisk inside a segmented ring, black field
   {
     const t = mk(120, 90); const g = t.g;
     g.fillStyle = '#080808'; g.fillRect(0, 0, 120, 90);
@@ -1307,7 +1311,7 @@
       g.fillRect(Math.min(x1, x2), Math.min(y1, y2), Math.abs(x2 - x1) + 1, Math.abs(y2 - y1) + 1);
     }
 
-    // angular serpent sigil: straight mitred segments, flat two-tone — a
+    // angular basilisk sigil: straight mitred segments, flat two-tone — a
     // stencilled emblem rather than a mascot. Tail tapers in, head is a
     // sharp kite with a slit eye; no gleams, no tongue, no sparkle pixels.
     const spine = [
@@ -1349,8 +1353,8 @@
     g.fillStyle = RED_S;
     g.fillRect(52, 46, 1, 3); g.fillRect(57, 46, 1, 3); g.fillRect(62, 46, 1, 3);
 
-    // wordmark
-    drawWord(g, 'SERPENT', 18, 68, 2, RED, RED_L, '#1a0402');
+    // wordmark (8 letters x 12px = 96 wide, centered on the 120px crest)
+    drawWord(g, 'BASILISK', 12, 68, 2, RED, RED_L, '#1a0402');
     SPRITES.logo.srp = t.c;
   }
 
