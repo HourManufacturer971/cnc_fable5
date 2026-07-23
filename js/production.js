@@ -82,7 +82,6 @@ const Production = (function () {
     const out = { buildings: [], units: [] };
     for (const strip of ['buildings', 'units']) {
       for (const key of list[strip]) {
-        if (!prereqOk(player, key)) continue;
         const cat = categoryOf(key);
         const job = player.queues[cat];
         let state = 'idle', frac = 0, eta = 0, count = 0;
@@ -97,6 +96,11 @@ const Production = (function () {
           count = (job && job.key === key ? 1 : 0) +
             player.unitQueue[cat].filter(k => k === key).length;
         }
+        // a broken prereq gates new STARTS but must never hide work already
+        // in flight: an invisible job wedges the one-slot building line with
+        // no way to cancel it or place the finished structure (lose the Comm
+        // Center mid-Adv.-Guard-Tower and construction is dead forever)
+        if (state === 'idle' && !count && !prereqOk(player, key)) continue;
         out[strip].push({ key, state, frac, eta, count });
       }
     }

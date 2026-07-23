@@ -266,7 +266,13 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   cancel, refund `spent` (EVA `cancelled`).
 - Icon click with unmet prereqs/never → buzz. Icon layout order comes from
   `DATA.buildList[side].buildings` / `.units` filtered to `Production.prereqOk` "visible"
-  (prereq met → shown; else hidden).
+  (prereq met → shown; else hidden) — EXCEPT keys with work in flight (active
+  queue job, ready-to-place building, or pending unit copies), which always stay
+  visible: a broken prereq gates new STARTS only. Otherwise losing the Comm
+  Center mid-Adv.-Guard-Tower would hide the job while it wedges the one-slot
+  building line — invisible, uncancellable, construction dead for the rest of
+  the match. The finished structure may still be placed (it is bought and paid
+  for); starting another copy is refused until the prereq is rebuilt.
 
 ### Repair / Sell
 - Repair mode: click own damaged building → toggles `repairing`; heals `C.REPAIR_HP=1` hp
