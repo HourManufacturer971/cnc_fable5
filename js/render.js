@@ -2411,37 +2411,82 @@ const Render = (function () {
   // the same scanline/vignette veil as the static backdrop, with an
   // auto-director drifting the camera toward the latest combat flashpoint.
 
-  let atX = 0, atY = 0, atUntil = 0, atGame = null;
+  // The lens behaves like a camera operator on a tripod, never a cut: it
+  // tracks a SMOOTHED centre of combat (a single stray shot across the map
+  // can't yank it), commits to a mark only when that mark has really moved,
+  // and dollies there at a capped speed that eases out on arrival.
+  const AT_DOLLY = 95;    // max world px/sec — a slow, deliberate pan
+  let atX = 0, atY = 0, atFrame = 0.5, atUntil = 0, atGame = null, atLastT = 0;
+  let atFrontX = 0, atFrontY = 0, atFrontOk = false, atFade = 0;
+
+  function _atClampX(vw) { return Math.max(0, C.MAP_W * C.CELL - vw); }
+  function _atClampY(vh) { return Math.max(0, C.MAP_H * C.CELL - vh); }
 
   function _attractDirector(g, vw, vh) {
+    const now = _nowMs() / 1000;
+    let dt = now - atLastT;
+    atLastT = now;
+    if (!(dt > 0) || dt > 0.25) dt = 0.016;   // first frame / tabbed away
+
     if (g !== atGame) {
-      // a fresh front: open over no-man's-land between the two bases
+      // a fresh front on a fresh map: place the lens outright, but dissolve
+      // in — the one moment the footage CAN'T pan (the ground itself
+      // changed) is covered by a fade instead of a hard cut
       atGame = g;
+      atFrontOk = false;
+      atFade = 1;
       const a = g.startPos[g.sides[0]] || { cx: C.MAP_W >> 1, cy: C.MAP_H >> 1 };
       const b = g.startPos[g.sides[1]] || a;
       atX = (cellCenterX(a.cx) + cellCenterX(b.cx)) / 2;
       atY = (cellCenterY(a.cy) + cellCenterY(b.cy)) / 2;
-      g.camera.x = clamp(atX - vw / 2, 0, Math.max(0, C.MAP_W * C.CELL - vw));
-      g.camera.y = clamp(atY - vh / 2, 0, Math.max(0, C.MAP_H * C.CELL - vh));
-      atUntil = g.tick + 40;
+      atFrame = 0.5;
+      g.camera.x = clamp(atX - vw * atFrame, 0, _atClampX(vw));
+      g.camera.y = clamp(atY - vh / 2, 0, _atClampY(vh));
+      atUntil = g.tick + 120;
+      return;
     }
+
+    // where the fighting IS: an exponential average of recent hits, so the
+    // mark glides along a battle line instead of teleporting shot to shot
+    const hot = g._hotTick && g.tick - g._hotTick < 90;
+    if (hot) {
+      if (!atFrontOk) { atFrontX = g._hotX; atFrontY = g._hotY; atFrontOk = true; }
+      atFrontX += (g._hotX - atFrontX) * 0.04;
+      atFrontY += (g._hotY - atFrontY) * 0.04;
+    }
+
     if (g.tick >= atUntil) {
-      if (g._hotTick && g.tick - g._hotTick < 75) {
-        atX = g._hotX; atY = g._hotY;      // combat pulls the lens
+      let tx, ty;
+      if (atFrontOk && g._hotTick && g.tick - g._hotTick < 180) {
+        tx = atFrontX; ty = atFrontY;       // combat draws the lens
       } else {
-        // quiet front: linger over the bases in turn
-        const sp = g.startPos[g.sides[((g.tick / 600) | 0) % g.sides.length]];
-        if (sp) { atX = cellCenterX(sp.cx); atY = cellCenterY(sp.cy); }
+        // quiet front: tour the bases, a long dwell on each
+        const sp = g.startPos[g.sides[((g.tick / 900) | 0) % g.sides.length]];
+        if (sp) { tx = cellCenterX(sp.cx); ty = cellCenterY(sp.cy); }
       }
-      atUntil = g.tick + 70;               // reconsider roughly every 5s
+      // commit only to a mark that has genuinely moved — re-aiming every few
+      // seconds at the same spot is what makes a camera look nervous
+      if (tx !== undefined && Math.hypot(tx - atX, ty - atY) > C.CELL * 5) {
+        atX = tx; atY = ty;
+        // keep the action out of the dead centre, where the menu panel sits.
+        // The offset is chosen ONCE per mark and held for the whole move, so
+        // crossing the map's midline can never flip the framing mid-dolly.
+        atFrame = tx < C.MAP_W * C.CELL / 2 ? 0.24 : 0.76;
+      }
+      atUntil = g.tick + 90;                // reconsider roughly every 6s
     }
-    // frame the action into the VISIBLE margins — dead center is exactly
-    // where the menu panel sits, so park it in the left or right third
-    const fx = atX < C.MAP_W * C.CELL / 2 ? 0.16 : 0.84;
-    const wx = clamp(atX - vw * fx, 0, Math.max(0, C.MAP_W * C.CELL - vw));
-    const wy = clamp(atY - vh / 2, 0, Math.max(0, C.MAP_H * C.CELL - vh));
-    g.camera.x += (wx - g.camera.x) * 0.035;
-    g.camera.y += (wy - g.camera.y) * 0.035;
+
+    const wx = clamp(atX - vw * atFrame, 0, _atClampX(vw));
+    const wy = clamp(atY - vh / 2, 0, _atClampY(vh));
+    const dx = wx - g.camera.x, dy = wy - g.camera.y;
+    const d = Math.hypot(dx, dy);
+    if (d > 0.5) {
+      // capped speed with an ease-out over the last ~60px: long hauls cruise,
+      // short corrections drift in and settle without overshoot
+      const step = Math.min(d, Math.min(AT_DOLLY, d * 1.6) * dt);
+      g.camera.x += dx / d * step;
+      g.camera.y += dy / d * step;
+    }
   }
 
   function _attractFrame(g) {
@@ -2463,6 +2508,11 @@ const Render = (function () {
     _menuLayers(C.SCREEN_W, C.SCREEN_H);
     if (menuScan) { ctx.fillStyle = menuScan; ctx.fillRect(0, 0, C.SCREEN_W, C.SCREEN_H); }
     if (menuVig) ctx.drawImage(menuVig, 0, 0);
+    if (atFade > 0) {   // dissolve in from black on a brand-new front
+      ctx.fillStyle = 'rgba(0,0,0,' + atFade.toFixed(3) + ')';
+      ctx.fillRect(0, 0, C.SCREEN_W, C.SCREEN_H);
+      atFade = Math.max(0, atFade - 0.012);
+    }
   }
 
   // ---- sidebar tooltip ------------------------------------------------------------------------
