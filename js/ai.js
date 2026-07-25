@@ -307,6 +307,19 @@ const AI = (function () {
     if (_planned(g, p, inf) < 1 && Production.prereqOk(p, inf) && !blocked(inf)) return inf;
     // vehicle factory before hq/defense: tanks matter more than walls
     if (_planned(g, p, veh) < 1 && Production.prereqOk(p, veh) && !blocked(veh)) return pick(veh, 1200);
+    // AIR ALARM: something bombed the base and will come back for the rest of
+    // it. This sits ABOVE the generic defense rungs on purpose — the first
+    // thing DEF_PLAN reaches for is a machine-gun tower or a cannon turret,
+    // and neither of those can fire upward, so following the normal order
+    // while gunships circle just buys guns pointed at the ground. Losing the
+    // yard to a second pass is not recoverable.
+    if (st.airAlarmUntil > g.tick && st.airAcc >= 60 && !_aaCovers(g, p, st.airAt)) {
+      const aa = side === 'udc' ? 'atwr' : 'sam';
+      if (Production.prereqOk(p, aa) && !blocked(aa)) {
+        st.defGuardAt = st.airAt;     // plant it over what they came for
+        return pick(aa, 400);
+      }
+    }
     // ...but a base with NO guns at all is an invitation: the first two
     // defenses jump the big-ticket savings queue (which can otherwise starve
     // them out forever while combat losses churn the treasury)
@@ -317,17 +330,6 @@ const AI = (function () {
       if (defNow < 2 && _planned(g, p, veh) >= 1) {
         const want = DEF_PLAN[side][Math.min(defNow, DEF_PLAN[side].length - 1)];
         if (Production.prereqOk(p, want) && !blocked(want)) return pick(want, 400);
-      }
-    }
-    // AIR ALARM: something bombed the base and will come back for the rest of
-    // it. A missile battery over the ground that was hit outranks the regular
-    // build order — losing the yard to a second pass is unrecoverable, and
-    // ground defenses do not fire upward.
-    if (st.airAlarmUntil > g.tick && st.airAcc >= 60 && !_aaCovers(g, p, st.airAt)) {
-      const aa = side === 'udc' ? 'atwr' : 'sam';
-      if (Production.prereqOk(p, aa) && !blocked(aa)) {
-        st.defGuardAt = st.airAt;     // plant it over what they came for
-        return pick(aa, 400);
       }
     }
     // second refinery EARLY — the whole midgame stalls on a one-proc economy
@@ -1008,7 +1010,7 @@ const AI = (function () {
           // the vehicle line's next slot buys the replacement, if it still can
           st.wantMcv = Production.prereqOk(p, 'mcv');
           st.expandAt = 0;          // the expansion plan is moot with no base
-        } else if (g.tick % 60 === 43) {
+        } else {
           st.wantMcv = false;
           // redeploy on the old footprint if it is clear, else the nearest
           // ground that will take a yard — widening the search on each retry
