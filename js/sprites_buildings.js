@@ -855,54 +855,60 @@
     P(ctx, 66, 16, 20, 1, OUT);
   }
 
-  // radar dish, 8 rotation frames (N, NE, E, SE, S, SW, W, NW)
-  function drawDish(ctx, cx, cy, f) {
+  // radar dish — a shallow up-tilted bowl spun through `t` (0..1 of a full
+  // turn). The silhouette is a fat ellipse whose long axis turns with the
+  // yaw; the bowl recess, sun-lit rim and feed horn sweep around it. The
+  // minor axis never collapses, so the dish keeps its volume at every angle
+  // instead of flattening to a pancake edge-on.
+  function drawDish(ctx, cx, cy, t) {
     const L = '#c8c8c2', M = '#93938c', M2 = '#7e7e78', D = '#54544f', B = '#f2f2ec';
-    if (f === 0) {                    // N — convex back
-      ellipseFill(ctx, cx, cy, 8, 4, OUT);
-      ellipseFill(ctx, cx, cy, 7, 3, M);
-      ellipseFill(ctx, cx, cy + 1, 6, 2, M2);
-      ellipseFill(ctx, cx - 3, cy - 1, 3, 1, L);
-      P(ctx, cx - 6, cy, 13, 1, D);           // rib
-      P(ctx, cx - 1, cy - 6, 2, 3, D);        // feed horn behind
-      P(ctx, cx - 1, cy - 6, 1, 1, L);
-    } else if (f === 4) {             // S — full open bowl
-      ellipseFill(ctx, cx, cy, 8, 4, OUT);
-      ellipseFill(ctx, cx, cy, 7, 3, M);
-      P(ctx, cx - 6, cy - 2, 5, 1, L);        // lit upper rim
-      ellipseFill(ctx, cx, cy + 1, 5, 2, M2);
-      ellipseFill(ctx, cx, cy + 1, 3, 1, D);
-      P(ctx, cx - 4, cy + 1, 9, 1, D);        // radial ribs
-      P(ctx, cx, cy - 1, 1, 4, D);
-      P(ctx, cx, cy + 2, 1, 3, D);            // feed strut
-      P(ctx, cx, cy + 4, 1, 1, B);            // feed tip glint
-    } else if (f === 2 || f === 6) {  // E / W — edge on
-      const s = f === 2 ? 1 : -1;
-      ellipseFill(ctx, cx, cy, 3, 6, OUT);
-      ellipseFill(ctx, cx, cy, 2, 5, M2);
-      ellipseFill(ctx, cx + s, cy, 1, 4, M);
-      P(ctx, cx + s, cy - 3, 1, 2, L);
-      P(ctx, cx + s * 3, cy - 1, 2, 2, D);    // feed arm
-      P(ctx, cx + s * 4, cy, 1, 1, B);
-    } else {                          // diagonals
-      const s = (f === 1 || f === 3) ? 1 : -1;   // east-ish?
-      const bowl = (f === 3 || f === 5);         // south-ish -> bowl visible
-      ellipseFill(ctx, cx, cy, 6, 5, OUT);
-      ellipseFill(ctx, cx, cy, 5, 4, M);
-      if (bowl) {
-        P(ctx, cx - s * 3, cy - 3, 3, 1, L);     // lit rim
-        ellipseFill(ctx, cx + s, cy + 1, 3, 2, M2);
-        ellipseFill(ctx, cx + s, cy + 1, 1, 1, D);
-        P(ctx, cx - s, cy, s * 4, 1, D);
-        P(ctx, cx + s * 2, cy + 2, 1, 2, D);
-        P(ctx, cx + s * 2, cy + 3, 1, 1, B);
-      } else {
-        ellipseFill(ctx, cx, cy + 1, 4, 2, M2);
-        ellipseFill(ctx, cx - s * 2, cy - 2, 2, 1, L);
-        P(ctx, cx - s * 3, cy, 7, 1, D);
-        P(ctx, cx + s * 2, cy - 4, 2, 2, D);
-        P(ctx, cx + s * 2, cy - 4, 1, 1, L);
+    const th = t * Math.PI * 2;              // yaw: 0 = pointing away (north)
+    const sy = Math.sin(th), cw = Math.cos(th);
+    // the bowl opens skyward, tipped toward its facing direction. Build the
+    // rim in ground space (facing axis foreshortened by the tip), then squash
+    // the whole thing with the camera's 0.62 ground compression — the dish
+    // stays a plate at every yaw, never an edge-on coin
+    const fx = sy, fy = -cw;                 // facing dir on the ground (N up)
+    const px2 = cw, py2 = sy;                // rim long axis, perpendicular
+    const face = 0.5 - 0.5 * cw;             // 0 pointing away .. 1 at camera
+    const A = 7, Bm = 4.2 + 0.9 * face;
+    const rim = (r, sq, a) => [
+      r * Math.cos(a) * px2 + sq * Math.sin(a) * fx,
+      (r * Math.cos(a) * py2 + sq * Math.sin(a) * fy) * 0.62,
+    ];
+    // convex scanline fill of the rim ellipse (radius r, depth sq), offset
+    const disc = (r, sq, ox, oy, col) => {
+      const row = new Map();
+      for (let i = 0; i < 72; i++) {
+        const [ex, ey] = rim(r, sq, i / 72 * Math.PI * 2);
+        const yq = Math.round(cy + oy + ey), xq = Math.round(cx + ox + ex);
+        const m2 = row.get(yq);
+        if (!m2) row.set(yq, [xq, xq]);
+        else { if (xq < m2[0]) m2[0] = xq; if (xq > m2[1]) m2[1] = xq; }
       }
+      for (const [yq, m2] of row) P(ctx, m2[0], yq, m2[1] - m2[0] + 1, 1, col);
+    };
+    disc(A + 1.2, Bm + 1.1, 0, 0, OUT);       // outline
+    disc(A, Bm, 0, 0, M);                     // rim surface
+    // bowl recess sinks away from the facing edge
+    disc(A - 1.8, Bm - 1.2, -fx * 1.1, -fy * 0.68, M2);
+    disc(A - 3.5, Bm - 2.2, -fx * 1.9, -fy * 1.18, face > 0.45 ? D : M2);
+    // sun from the NW: lit arc on the up-sun stretch of the rim
+    for (let i = 0; i < 72; i++) {
+      const [ex, ey] = rim(A - 0.5, Bm - 0.4, i / 72 * Math.PI * 2);
+      if (ex + ey * 1.6 < -A * 0.5) P(ctx, Math.round(cx + ex), Math.round(cy + ey), 1, 1, L);
+    }
+    // feed horn sweeps with the yaw: a strut out over the bowl, glinting when
+    // the open face swings toward the camera, just a tip over the far rim when
+    // it points away
+    const hx = Math.round(cx + fx * (Bm + 1)), hy = Math.round(cy + fy * (Bm + 1) * 0.62);
+    if (face > 0.35) {
+      P(ctx, Math.round(cx + fx * 2), Math.round(cy + fy * 1.24), 1, 1, D);
+      P(ctx, hx - 1, hy - 1, 2, 2, D);
+      P(ctx, hx - 1, hy - 1, 1, 1, B);
+    } else {
+      P(ctx, hx - 1, hy - 1, 2, 2, D);
+      P(ctx, hx - 1, hy - 1, 2, 1, M2);
     }
   }
 
@@ -920,7 +926,7 @@
     P(ctx, 12, 15, 2, 2, pal.light);
     ellipseFill(ctx, 19, 9, 7, 2, SH);                       // dish shadow
     P(ctx, 15, 4, 2, 4, IRON); P(ctx, 15, 4, 1, 4, IRON_L); // mast
-    drawDish(ctx, 16, 0, f % 8);
+    drawDish(ctx, 16, 0, (f % 16) / 16);
     // antenna mast (east roof) + blink
     P(ctx, 39, -4, 1, 11, '#262622');
     P(ctx, 37, -1, 5, 1, '#262622');
@@ -1210,44 +1216,58 @@
     P(ctx, 60 + (f ? 3 : 0), 8, 1, 1, GLASS_HI);
   }
 
-  function drawGtwr(ctx, W, H, pal, f, side, rnd) { // 24x24 — sandbag MG nest
+  function drawGtwr(ctx, W, H, pal, f, side, rnd) { // 24x24 +14 — MG watchtower
+    // a guard tower should WATCH: raised deck on braced stilts, sandbag
+    // parapet, MG over the north rail, ladder down the east leg
     roundPad(ctx, 12, 13, 11, rnd);
     const SB = '#b3a06a', SBL = '#cfc088', SBD = '#7e6f45', SBD2 = '#5e5233';
-    // raised sandbag ring: bright top ring + 3px bag-course south face
-    ctx.fillStyle = SH; ctx.fillRect(21, 8, 2, 9);
-    for (let dx = -9; dx <= 9; dx++) {
-      const e = Math.round(7 * Math.sqrt(Math.max(0, 1 - dx * dx / 81)));
-      const x = 12 + dx;
-      P(ctx, x, 9 + e, 1, 3, dx > 4 ? SBD2 : SBD);
-      P(ctx, x, 10 + e, 1, 1, dx > 4 ? '#463d24' : SBD2); // bag course seam
-      P(ctx, x, 12 + e, 1, 1, OUT);
+    ellipseFill(ctx, 13, 15, 8, 3, SH);            // deck shadow on the pad
+    // back stilts (peek behind the deck), then front stilts + cross brace
+    P(ctx, 7, 4, 2, 8, '#4c4c44'); P(ctx, 15, 4, 2, 8, '#4c4c44');
+    P(ctx, 7, 4, 1, 8, '#66665c'); P(ctx, 15, 4, 1, 8, '#66665c');
+    P(ctx, 5, 6, 2, 11, IRON); P(ctx, 17, 6, 2, 11, IRON);
+    P(ctx, 5, 6, 1, 11, IRON_L); P(ctx, 17, 6, 1, 11, IRON_L);
+    P(ctx, 5, 17, 2, 1, OUT); P(ctx, 17, 17, 2, 1, OUT);
+    for (let i = 0; i < 10; i++) {                 // X brace between front legs
+      P(ctx, 7 + i, 7 + i, 1, 1, '#3a3a32');
+      P(ctx, 16 - i, 7 + i, 1, 1, '#3a3a32');
     }
-    ellipseFill(ctx, 12, 9, 10, 8, OUT);
-    ellipseFill(ctx, 12, 9, 9, 7, SB);
-    // bag texture on the top ring: radial seams + NW highlight arc
-    for (let i = 0; i < 12; i++) {
-      const a = i / 12 * Math.PI * 2 + 0.2;
-      P(ctx, Math.round(12 + Math.cos(a) * 7.5), Math.round(9 + Math.sin(a) * 5.5), 1, 2, SBD);
+    // ladder down the east side
+    P(ctx, 21, 7, 1, 10, '#8a8a7e');
+    for (let y = 8; y < 17; y += 2) P(ctx, 20, y, 3, 1, '#6e6e62');
+    // elevated deck: slim dark underside, then the sandbag parapet ring
+    ellipseFill(ctx, 12, 3, 9, 3, OUT);
+    ellipseFill(ctx, 12, 2, 8, 2.5, '#26261f');
+    for (let dx = -9; dx <= 9; dx++) {             // south bag-course
+      const e = Math.round(5 * Math.sqrt(Math.max(0, 1 - dx * dx / 100)));
+      P(ctx, 12 + dx, -2 + e, 1, 3, dx > 5 ? SBD2 : SBD);
+      P(ctx, 12 + dx, -1 + e, 1, 1, dx > 5 ? '#463d24' : SBD2);
+      P(ctx, 12 + dx, 0 + e, 1, 1, OUT);
     }
-    for (let a = 3.4; a < 5.2; a += 0.3)
-      P(ctx, Math.round(12 + Math.cos(a) * 8), Math.round(9 + Math.sin(a) * 6), 2, 1, SBL);
-    // nest interior (sunken)
-    ellipseFill(ctx, 12, 9, 5, 4, '#3e3e38');
-    ellipseFill(ctx, 12, 10, 4, 3, '#34342f');
-    P(ctx, 8, 6, 8, 1, '#26261f');
-    // MG on tripod, barrel north with muzzle glint
-    P(ctx, 10, 7, 5, 4, IRON);
-    P(ctx, 10, 7, 5, 1, IRON_L);
-    outlineRect(ctx, 9, 6, 7, 6);
-    P(ctx, 11, 0, 2, 7, '#22222a');
-    P(ctx, 11, 0, 1, 7, '#5a5a64');
-    P(ctx, 10, 0, 4, 1, OUT);
-    if (f) { P(ctx, 11, 0, 2, 1, '#ffffff'); P(ctx, 12, 1, 1, 1, GLASS_HI); }
-    // ammo crate on the pad SE
-    P(ctx, 16, 16, 5, 3, '#8a7444');
-    P(ctx, 16, 16, 5, 1, '#a89058');
-    outlineRect(ctx, 16, 16, 5, 4);
-    P(ctx, 17, 17, 1, 1, pal.haz);
+    ellipseFill(ctx, 12, -2, 10, 5.5, OUT);
+    ellipseFill(ctx, 12, -2, 9, 4.5, SB);
+    for (let i = 0; i < 8; i++) {                  // bag seams on the ring
+      const a = i / 8 * Math.PI * 2 + 0.4;
+      P(ctx, Math.round(12 + Math.cos(a) * 7), Math.round(-2 + Math.sin(a) * 3.4), 1, 1, SBD);
+    }
+    for (let a = 3.4; a < 5.2; a += 0.25)          // NW lit arc
+      P(ctx, Math.round(12 + Math.cos(a) * 8), Math.round(-2 + Math.sin(a) * 3.8), 2, 1, SBL);
+    // sunken nest + gunner helmet
+    ellipseFill(ctx, 12, -2, 5, 2.5, '#34342f');
+    P(ctx, 14, -3, 2, 2, '#5c6248'); P(ctx, 14, -3, 2, 1, '#767c5c');
+    // MG over the north rail with muzzle glint on alternate frames
+    P(ctx, 9, -5, 5, 3, IRON);
+    P(ctx, 9, -5, 5, 1, IRON_L);
+    P(ctx, 8, -6, 7, 1, OUT); P(ctx, 8, -6, 1, 5, OUT); P(ctx, 14, -6, 1, 5, OUT);
+    P(ctx, 10, -12, 2, 7, '#22222a');
+    P(ctx, 10, -12, 1, 7, '#5a5a64');
+    P(ctx, 9, -12, 4, 1, OUT);
+    if (f) { P(ctx, 10, -12, 2, 1, '#ffffff'); P(ctx, 11, -11, 1, 1, GLASS_HI); }
+    // ammo crate at the tower foot
+    P(ctx, 2, 15, 5, 3, '#8a7444');
+    P(ctx, 2, 15, 5, 1, '#a89058');
+    outlineRect(ctx, 2, 15, 5, 4);
+    P(ctx, 3, 16, 1, 1, pal.haz);
   }
 
   function missileBox(ctx, x, y, pal) { // 8x10 launcher: bright top + south face
@@ -1493,14 +1513,14 @@
   // idle animation frame counts (default 2)
   const FRAME_COUNT = {
     fact: 4, nuke: 3, nuk2: 3, proc: 4, weap: 4, afld: 4,
-    hq: 8, eye: 4, tmpl: 4, hpad: 4,
+    hq: 16, eye: 4, tmpl: 4, hpad: 4,
   };
 
   // extra pixels drawn ABOVE the footprint (render offsets by entry yOff):
   // tall structures rise over their anchor cells
   const YOFF = {
     fact: 10, nuke: 12, nuk2: 12, proc: 6, silo: 6, pyle: 4, hand: 12,
-    weap: 6, afld: 8, hq: 8, eye: 12, tmpl: 12, atwr: 24, obli: 24,
+    weap: 6, afld: 8, hq: 8, eye: 12, tmpl: 12, atwr: 24, obli: 24, gtwr: 14,
   };
 
   // ---- damage overlay (deterministic per key+side; fires flicker per frame) --

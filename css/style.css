@@ -486,13 +486,26 @@ button:active {
 }
 
 /* ---- theater of war: the campaign map ---- */
-#missions .panel { max-width: 740px; }
+/* the war room reads flat: no veil gradient, no glow — the map IS the light */
+#missions.overlay { background: rgba(4, 5, 4, 0.85); }
+#missions .panel {
+  max-width: 740px;
+  background-image: repeating-linear-gradient(0deg, transparent 0 3px, var(--scan) 3px 4px);
+  background-color: #16180f;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
+}
+#missions h2 { text-shadow: 0 2px 0 #000; }
 #theaterMap {
   display: block; margin: 0 auto 6px; max-width: 100%;
   border: 1px solid #6a5a28; background: #070b12;
-  box-shadow: inset 0 0 28px rgba(0,0,0,0.65), 0 0 18px -6px var(--accent);
+  box-shadow: none;
 }
 #theaterCap {
   color: #8a836e; font-size: 10px; letter-spacing: 2px;
   margin: 0 0 10px; text-align: center; min-height: 13px;
 }
+#btnContinue {
+  background: linear-gradient(180deg, #6a5c28, #4c4218);
+  border-color: #8a7428; color: #ffe488;
+}
+#btnContinue:hover { border-color: var(--accent); }

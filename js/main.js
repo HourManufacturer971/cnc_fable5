@@ -206,6 +206,12 @@ const Main = (function () {
       $('menu').classList.remove('hidden');
     });
     $('btnSkirmish').addEventListener('click', () => _showSkirmish(mySide));
+    // one obvious way onward: straight into the next op's briefing
+    $('btnContinue').addEventListener('click', () => {
+      const arc = MISSIONS.arc(mySide);
+      const done = MissionProgress.get(mySide);
+      if (done < arc.length) _showBriefing(arc[done]);
+    });
     // skirmish setup: remember the player's choices (the seed stays per-visit)
     try {
       const s = JSON.parse(localStorage.getItem('hw_sk') || 'null');
@@ -589,7 +595,10 @@ const Main = (function () {
     return mm + ':' + ss + ' · ' + rec.s;
   }
 
-  const THEATER_HINT = 'SELECT AN OPERATION ON THE MAP — SECURED GROUND WEARS YOUR COLORS';
+  // the default caption tells the commander exactly where the campaign
+  // stands; hovering a territory temporarily replaces it with op intel
+  let THEATER_HINT = 'SELECT AN OPERATION ON THE MAP — SECURED GROUND WEARS YOUR COLORS';
+  let theaterTimer = 0, theaterPhase = 0;
 
   // the map IS the mission select: territories are the only mission links
   // (a per-op button ledger would just duplicate them and bury the screen)
@@ -597,9 +606,32 @@ const Main = (function () {
     mySide = side;
     $('menu').classList.add('hidden');
     $('missionsTitle').textContent = 'THEATER OF WAR — ' + C.SIDE_NAME[side];
-    _drawTheater(side, MissionProgress.get(side));
+    const arc = MISSIONS.arc(side);
+    const done = Math.min(MissionProgress.get(side), arc.length);
+    const next = done < arc.length ? arc[done] : null;
+    THEATER_HINT = next
+      ? done + '/' + arc.length + ' TERRITORIES SECURED — NEXT: OP ' + next.n + ' "' + next.title + '"'
+      : 'ALL ' + arc.length + ' TERRITORIES SECURED — THE COUNTRY IS YOURS';
+    const bc = $('btnContinue');
+    if (bc) {
+      bc.style.display = next ? '' : 'none';
+      if (next) bc.textContent = 'Continue — Op ' + next.n + ': ' + next.title;
+    }
+    _drawTheater(side, done);
     $('theaterCap').textContent = THEATER_HINT;
     $('missions').classList.remove('hidden');
+    // slow pulse on the NEXT-op reticle + marching dashes on its supply leg;
+    // the ticker kills itself as soon as the screen goes away
+    if (theaterTimer) clearInterval(theaterTimer);
+    theaterTimer = setInterval(() => {
+      if ($('missions').classList.contains('hidden')) {
+        clearInterval(theaterTimer);
+        theaterTimer = 0;
+        return;
+      }
+      theaterPhase++;
+      _drawTheater(mySide, Math.min(MissionProgress.get(mySide), MISSIONS.arc(mySide).length), theaterPhase);
+    }, 120);
   }
 
   // ---- theater of war: the campaign map ------------------------------------------
@@ -609,7 +641,8 @@ const Main = (function () {
 
   let theaterNodes = [];
 
-  function _drawTheater(side, done) {
+  function _drawTheater(side, done, phase) {
+    phase = phase || 0;
     const cv = $('theaterMap');
     if (!cv) return;
     const q = cv.getContext('2d');
@@ -634,7 +667,9 @@ const Main = (function () {
     // of BOTH arcs pushes the coast out far enough to stand on dry land
     // (the first and last ops used to drown in the surf) -------------------
     const ccx = W * 0.5, ccy = H * 0.52;
-    const spokes = 44, rad = [];
+    // dense spokes + heavy smoothing + a curved outline: the coast meanders
+    // instead of showing its polygon (44 straight segments read as sawteeth)
+    const spokes = 96, rad = [];
     const ph1 = rng() * Math.PI * 2, ph2 = rng() * Math.PI * 2, ph3 = rng() * Math.PI * 2;
     for (let i = 0; i < spokes; i++) {
       const a = i / spokes * Math.PI * 2;
@@ -642,9 +677,9 @@ const Main = (function () {
         + 0.16 * Math.sin(a * 2 + ph1)     // two broad lobes: a waist between them
         + 0.12 * Math.sin(a * 3 + ph2)     // headlands
         + 0.07 * Math.sin(a * 5 + ph3)     // coves
-        + rng() * 0.08);
+        + rng() * 0.04);
     }
-    for (let p = 0; p < 2; p++) {
+    for (let p = 0; p < 3; p++) {
       for (let i = 0; i < spokes; i++) {
         rad[i] = (rad[i] + rad[(i + 1) % spokes] + rad[(i + spokes - 1) % spokes]) / 3;
       }
@@ -655,19 +690,25 @@ const Main = (function () {
       const need = Math.min(1.04, Math.hypot(dx, dy) + 0.12);
       const ai2 = Math.atan2(dy, dx);
       const si = Math.round((ai2 < 0 ? ai2 + Math.PI * 2 : ai2) / (Math.PI * 2) * spokes) % spokes;
-      for (let k = -2; k <= 2; k++) {
+      for (let k = -5; k <= 5; k++) {
         const j = (si + k + spokes) % spokes;
-        rad[j] = Math.max(rad[j], need * (1 - Math.abs(k) * 0.08));
+        rad[j] = Math.max(rad[j], need * (1 - Math.abs(k) * 0.035));
       }
     }
-    const blob = new Path2D();
-    for (let i = 0; i <= spokes; i++) {
-      const a = (i % spokes) / spokes * Math.PI * 2;
-      const r = Math.min(rad[i % spokes], 1.04);
-      const x = ccx + Math.cos(a) * W * 0.47 * r;
-      const y = ccy + Math.sin(a) * H * 0.46 * r;
-      if (i) blob.lineTo(x, y); else blob.moveTo(x, y);
+    const pts = [];
+    for (let i = 0; i < spokes; i++) {
+      const a = i / spokes * Math.PI * 2;
+      const r = Math.min(rad[i], 1.04);
+      pts.push([ccx + Math.cos(a) * W * 0.47 * r, ccy + Math.sin(a) * H * 0.46 * r]);
     }
+    // smooth closed curve through segment midpoints (quadratic per vertex)
+    const blob = new Path2D();
+    const mid = i => {
+      const a = pts[i % spokes], b = pts[(i + 1) % spokes];
+      return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+    };
+    blob.moveTo(...mid(spokes - 1));
+    for (let i = 0; i < spokes; i++) blob.quadraticCurveTo(pts[i][0], pts[i][1], ...mid(i));
     blob.closePath();
     q.strokeStyle = 'rgba(110,150,190,0.10)';   // coastal shelf glow
     q.lineWidth = 7;
@@ -845,14 +886,17 @@ const Main = (function () {
       q.globalAlpha = 1;
       q.restore();
     }
-    // the marching front: secured legs solid, the next leg dashed
+    // the marching front: secured legs solid, the next leg dashed (and the
+    // dashes MARCH toward the objective while the screen is up)
     for (let i = 1; i < arc.length; i++) {
       const a = P(arc[i - 1]), b = P(arc[i]);
       const litUp = arc[i].n <= done + 1;
       q.strokeStyle = litUp ? 'rgba(224,184,64,0.55)' : 'rgba(130,130,120,0.18)';
       q.lineWidth = litUp ? 2 : 1;
       q.setLineDash(arc[i].n === done + 1 ? [5, 4] : arc[i].n <= done ? [] : [2, 5]);
+      if (arc[i].n === done + 1) q.lineDashOffset = -phase * 0.7;
       q.beginPath(); q.moveTo(a.x, a.y); q.lineTo(b.x, b.y); q.stroke();
+      q.lineDashOffset = 0;
     }
     q.setLineDash([]);
     theaterNodes = [];
@@ -867,14 +911,38 @@ const Main = (function () {
         q.lineWidth = 1;
         q.strokeRect(p.x - 6.5, p.y - 6.5, 13, 13);
       } else if (state === 'next') {
+        // the current objective is unmissable: a pulsing reticle with corner
+        // ticks, a radiating ring, and an OP-number chip above it
+        const pu = 0.5 + 0.5 * Math.sin(phase * 0.5);
         q.strokeStyle = accent;
         q.lineWidth = 2;
         q.strokeRect(p.x - 7, p.y - 7, 14, 14);
         q.fillStyle = accent;
         q.fillRect(p.x - 3, p.y - 3, 6, 6);
+        q.lineWidth = 1.5;
+        for (const [tx, ty, hx, hy] of [[-11, 0, 3, 0], [8, 0, 3, 0], [0, -11, 0, 3], [0, 8, 0, 3]]) {
+          q.beginPath();
+          q.moveTo(p.x + tx, p.y + ty); q.lineTo(p.x + tx + hx, p.y + ty + hy);
+          q.stroke();
+        }
+        q.globalAlpha = 0.7 - 0.55 * pu;
+        q.beginPath();
+        q.arc(p.x, p.y, 11 + pu * 7, 0, Math.PI * 2);
+        q.stroke();
+        q.globalAlpha = 1;
+        const chip = 'OP ' + m.n + ' — NEXT';
         q.font = 'bold 9px monospace';
+        const tw = q.measureText(chip).width;
+        const above = p.y > 44;
+        const chy = above ? p.y - 31 : p.y + 22;
+        const chx = Math.max(4, Math.min(W - tw - 12, p.x - tw / 2 - 4));
+        q.fillStyle = 'rgba(5,7,5,0.78)';
+        q.fillRect(chx, chy, tw + 8, 13);
+        q.strokeStyle = accent;
+        q.lineWidth = 1;
+        q.strokeRect(chx + 0.5, chy + 0.5, tw + 7, 12);
         q.fillStyle = '#fff2b0';
-        q.fillText('NEXT OP', p.x, p.y - 13);
+        q.fillText(chip, chx + tw / 2 + 4, chy + 10);
       } else {
         q.fillStyle = '#2a2a26';
         q.fillRect(p.x - 4, p.y - 4, 8, 8);

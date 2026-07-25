@@ -213,7 +213,7 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - Default factory rally (`_defaultRally`) is 2 cells south of the factory but dodges to
   the nearest cell that isn't on/adjacent to an own refinery dock — fresh units must never
   congregate where harvesters unload. An explicitly-set `fac.rally` is respected as-is.
-- Storage: refinery 1000, silo 3000. `player.storage` = sum over owned finished buildings.
+- Storage: refinery 3000, silo 3000. `player.storage` = sum over owned finished buildings.
   Credits over storage bleed away (clamped on add).
 - Chrysalite growth: every ~75 ticks a few random chrysalite cells with value ≥ 125 spread 25 to
   a random adjacent grass/dirt cell (new cells start at 25, cap C.TIB_MAX=300); blossom
@@ -483,11 +483,14 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `MISSIONS.srp`, fetched via `MISSIONS.arc(side)`) — classic structure, original
   fiction. Mission defs are single-faction now (`brief` is a paragraph array,
   `objText` a string) and carry `terr: [x,y]` territory coords for the THEATER
-  OF WAR screen (main.js `_drawTheater`): a procedurally drawn original country
+  OF WAR screen (main.js `_drawTheater(side, done, phase)`): a procedurally
+  drawn original country
   at war — the silhouette is built from layered coastal lobes (two broad
-  sinusoidal lobes + headlands + coves) so it reads as peninsulas and bays,
-  not a blob; every mission territory of BOTH arcs then pushes its coastal
-  spokes out (`need = hypot + 0.12` margin over ±2 spokes) so all 20 ops stand
+  sinusoidal lobes + headlands + coves) over 96 dense spokes, triple-smoothed
+  and traced as a quadratic curve through segment midpoints, so the coast
+  meanders naturally instead of showing polygon sawteeth; every mission
+  territory of BOTH arcs then pushes its coastal
+  spokes out (`need = hypot + 0.12` margin over ±5 spokes) so all 20 ops stand
   on dry land — the corner ops' `terr` were also nudged inboard; 2-3 offshore
   islets sit in the sea. Sea with wave dashes and a coastal shelf around the
   Path2D coastline,
@@ -496,8 +499,16 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   dashed supply roads; the war state reads at a glance: home ground behind the
   front is tinted + hatched in the faction color and a bold toothed FRONT LINE
   (teeth toward the enemy) crosses the country at the frontier between the
-  last secured op and the next, which is tagged NEXT OP (clickable →
-  briefing); the map IS the whole mission select — there is no per-op button
+  last secured op and the next. The CURRENT op is unmissable: a pulsing
+  reticle (corner ticks + radiating ring, driven by a 120ms redraw ticker
+  that kills itself when the screen hides) with an "OP N — NEXT" chip, the
+  next supply leg's dashes march toward it (`lineDashOffset`), the default
+  caption reads "K/N TERRITORIES SECURED — NEXT: OP N …", and a gold
+  `btnContinue` ("Continue — Op N: TITLE", hidden once the arc is finished)
+  jumps straight to the next briefing beside Skirmish/Back. The missions
+  overlay is deliberately FLAT (scoped CSS: solid veil, no radial gradient,
+  no accent glow on panel/map/title). Clicking any unlocked territory opens
+  its briefing; the map IS the whole mission select — there is no per-op button
   ledger. Node hit zones scale with the on-screen canvas size (finger-sized on
   phones), the hover caption carries state + the personal best ('OP 2: … —
   COMPLETE · BEST 12:34 · 3120'), the record also rides the briefing's sector
@@ -594,8 +605,9 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   `_handshake()` — the host rolls a FRESH seed and the match relaunches over the
   same connection, sides kept, no new code exchange. `NET.onRematch('remote'|'gone')`
   drives the button labels ("opponent is ready" / hide when the peer leaves);
-  `_peerGone` outside a live game only tears down + notifies. PROTO = 21 (bumped
-  for silo storage 1500→3000 plus the capture-op guard — the capturing side's
+  `_peerGone` outside a live game only tears down + notifies. PROTO = 22 (bumped
+  for refinery storage 1000→3000; 21 covered
+  silo storage 1500→3000 plus the capture-op guard — the capturing side's
   units and towers never AUTO-target the mission's capture building; 20 covered
   the contiguous-channel bridge fix — spans must cross ONE unbroken run of
   water, never a meander; 19 covered
@@ -1054,12 +1066,18 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - Buildings: footprint w,h from DATA × 24px, plus draw a 1-cell-high concrete **bib** strip
   along the bottom (inside the canvas, part of the sprite; sprite canvas height =
   (h)*24 + 8 bib overhang is fine as long as anchored to footprint top-left). 2 anim
-  frames for idle life (blinking lights, radar dish rotation on hq (draw 4 rotation
-  frames), power plant steam) + `damaged` variant (cracks, smoke stains) used below 50% hp.
+  frames for idle life (blinking lights, radar dish rotation on hq — 16 frames, the
+  dish is drawn procedurally in drawDish(t): a fat rim ellipse whose long axis turns
+  with the yaw, built in ground space and squashed 0.62, with the bowl recess, NW-lit
+  rim arc and feed horn sweeping around — the minor axis never collapses, so the dish
+  keeps its volume at every angle instead of pancaking edge-on; power plant steam)
+  + `damaged` variant (cracks, smoke stains) used below 50% hp.
   Distinct recognizable shapes per the original: fact = big crane pad; nuke = cooling
   towers; proc = tank + dock arm; pyle/hand = barracks huts; weap = big garage door; afld =
   runway strip (4×2); silo = twin domes; hq = dish; eye = big golf-ball dome; tmpl = black
-  pyramid with red trim; gtwr = sandbag tower; atwr = tall twin-rocket tower; gun/obli:
+  pyramid with red trim; gtwr = raised MG watchtower (braced stilts + X-brace +
+  ladder, sandbag parapet deck, MG over the north rail, yOff 14); atwr = tall
+  twin-rocket tower; gun/obli:
   base drawn in building sprite, obelisk = black spike (glows when charging); sam = domed
   launcher with open/close anim (3 frames); hpad = square pad with H; fix = ring platform.
 - Cameos (`SPRITES.cameo[key]`, authored at 128×96 = 2× the 64×48 layout unit, blitted
