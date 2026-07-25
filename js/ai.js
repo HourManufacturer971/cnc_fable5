@@ -52,6 +52,12 @@ const AI = (function () {
         expandAt: 0,          // {cx,cy} the MCV is trekking toward
         expanded: false,
         defGuardAt: null,     // placement hint: guard THIS refinery next
+        airAt: null,          // {cx,cy} ground the last air raid hit
+        airAlarmUntil: 0,     // tick the air scare expires
+        airAcc: 0,            // damage taken from the air this scare
+        airHitAt: -1e9,
+        yardAt: null,         // where the construction yard stands (or stood)
+        rebuildYard: false,   // yard is gone: the next MCV replaces it
       };
     }
   }
@@ -311,6 +317,17 @@ const AI = (function () {
       if (defNow < 2 && _planned(g, p, veh) >= 1) {
         const want = DEF_PLAN[side][Math.min(defNow, DEF_PLAN[side].length - 1)];
         if (Production.prereqOk(p, want) && !blocked(want)) return pick(want, 400);
+      }
+    }
+    // AIR ALARM: something bombed the base and will come back for the rest of
+    // it. A missile battery over the ground that was hit outranks the regular
+    // build order — losing the yard to a second pass is unrecoverable, and
+    // ground defenses do not fire upward.
+    if (st.airAlarmUntil > g.tick && st.airAcc >= 60 && !_aaCovers(g, p, st.airAt)) {
+      const aa = side === 'udc' ? 'atwr' : 'sam';
+      if (Production.prereqOk(p, aa) && !blocked(aa)) {
+        st.defGuardAt = st.airAt;     // plant it over what they came for
+        return pick(aa, 400);
       }
     }
     // second refinery EARLY — the whole midgame stalls on a one-proc economy
@@ -1033,6 +1050,67 @@ const AI = (function () {
       }
     }
 
+    // AIR ALARM, part two: idle guns that can actually shoot upward move to
+    // cover the ground that was hit. Units with no anti-air weapon stay put —
+    // marching them under a gunship just feeds it kills.
+    if (st.airAlarmUntil > g.tick && st.airAt && g.tick % 90 === 31) {
+      let moved = 0;
+      for (const u of _military(g, p)) {
+        if (moved >= 4) break;
+        if (u.state !== 'idle' || !_canHitAir(u)) continue;
+        if (_cellDist(worldToCell(u.x), worldToCell(u.y), st.airAt.cx, st.airAt.cy) <= 8) {
+          moved++;              // already covering it
+          continue;
+        }
+        orderMove(u, clamp(st.airAt.cx + (moved % 3) - 1, 1, C.MAP_W - 2),
+                     clamp(st.airAt.cy + ((moved / 3) | 0) - 1, 1, C.MAP_H - 2));
+        moved++;
+      }
+    }
+
+    // YARD LOST: the construction yard IS the base. Without one the AI can
+    // still field units from standing factories, but it can never build,
+    // place or expand again — so replacing it outranks the expansion plan and
+    // everything else an MCV might be saved for.
+    {
+      const liveYards = _conyards(g, p);
+      if (liveYards.length) {
+        st.yardAt = { cx: liveYards[0].cx, cy: liveYards[0].cy };
+        st.rebuildYard = false;
+      } else if (st.yardAt) {
+        st.rebuildYard = true;
+        let mcv = null;
+        for (const id of p.unitIds) {
+          const u = g.units.get(id);
+          if (u && u.type === 'mcv') { mcv = u; break; }
+        }
+        if (!mcv) {
+          // the vehicle line's next slot buys the replacement, if it still can
+          st.wantMcv = Production.prereqOk(p, 'mcv');
+          st.expandAt = 0;          // the expansion plan is moot with no base
+        } else if (g.tick % 60 === 43) {
+          st.wantMcv = false;
+          // redeploy on the old footprint if it is clear, else the nearest
+          // ground that will take a yard — widening the search on each retry
+          st.yardTries = st.yardTries || 0;
+          const spot = _deploySpotNear(g, st.yardAt, 4 + st.yardTries * 3) ||
+                       _deploySpotNear(g, { cx: worldToCell(mcv.x), cy: worldToCell(mcv.y) },
+                                       4 + st.yardTries * 3);
+          if (spot) {
+            const d = dist(mcv.x, mcv.y, cellCenterX(spot.cx), cellCenterY(spot.cy));
+            if (d <= C.CELL * 2.5) {
+              if (orderDeploy(mcv)) { st.rebuildYard = false; st.yardTries = 0; }
+              else st.yardTries++;
+            } else if (mcv.state === 'idle') {
+              orderMove(mcv, spot.cx, spot.cy);
+            }
+          } else {
+            st.yardTries++;
+          }
+        }
+      }
+    }
+
     // expansion: a second MCV plants a forward yard by the richest far field.
     // The anchor is a DEPLOYABLE clear pad beside the field (aiming at the
     // field itself parks the MCV on crystal where deploy can never succeed),
@@ -1180,6 +1258,52 @@ const AI = (function () {
   }
 
   function b0h(b) { return b.h || DATA.buildings[b.type].h; }
+
+  // An air raid is a warning, not an incident: gunships come back, and a base
+  // with no missile cover loses its yard to the second pass. Remember where
+  // the bombs fell and run an alarm for a while afterward — the build order
+  // and the idle guns both read it. Runs inside the sim step, so the state it
+  // sets is deterministic.
+  EV.on('damaged', function (target, attacker, dmg) {
+    const g = game;
+    if (!g || !ST || !attacker || !target || target.kind !== 'building') return;
+    if (attacker.owner === target.owner) return;
+    if (attacker.kind !== 'unit' || !DATA.units[attacker.type].air) return;
+    const st = ST[target.owner];
+    if (!st) return;
+    // a fresh scare resets the tally; hits inside a live one accumulate
+    st.airAcc = (g.tick - st.airHitAt > 450) ? (dmg || 0) : st.airAcc + (dmg || 0);
+    st.airHitAt = g.tick;
+    st.airAlarmUntil = g.tick + 2700;      // 90s of "they will be back"
+    // the yard is the one loss the AI cannot recover from cheaply: a raid on
+    // it always sets the mark, otherwise the newest hit wins
+    if (target.type === 'fact' || !st.airAt || st.airAtType !== 'fact') {
+      st.airAt = { cx: target.cx + ((target.w / 2) | 0), cy: target.cy + ((b0h(target) / 2) | 0) };
+      st.airAtType = target.type;
+    }
+  });
+
+  // is any anti-air structure already covering this ground?
+  function _aaCovers(g, p, at) {
+    if (!at) return true;
+    for (const id of p.buildingIds) {
+      const b = g.buildings.get(id);
+      if (!b) continue;
+      const w = DATA.weapons[DATA.buildings[b.type].weapon];
+      if (!w || !w.antiAir) continue;
+      if (Math.abs(b.cx - at.cx) <= 7 && Math.abs(b.cy - at.cy) <= 7) return true;
+    }
+    return false;
+  }
+
+  function _canHitAir(u) {
+    const d = DATA.units[u.type];
+    for (const k of [d.weapon, d.weapon2]) {
+      const w = k && DATA.weapons[k];
+      if (w && w.antiAir) return true;
+    }
+    return false;
+  }
 
   // debug/test hook: read-only peek at a wave machine's internal state.
   // No arg = the classic single opponent (primary enemy of the human).
