@@ -139,9 +139,14 @@ const REPLAY = (function () {
 
   function stop() { playing = false; resumeAt = -1; }
 
+  // kill a live recording WITHOUT freezing it as "last" — an aborted battle
+  // isn't worth watching, and the menu's attract war must never append its
+  // bot orders to a stale log
+  function disarm() { recording = false; log = []; }
+
   return {
     arm, logCmd, finish, hasLast, exportLast, exportLive, resumeData,
-    watchLast, watchData, applyPending, stop,
+    watchLast, watchData, applyPending, stop, disarm,
     get recording() { return recording; },
     get playing() { return playing; },
   };

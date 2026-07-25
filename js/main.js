@@ -311,6 +311,7 @@ const Main = (function () {
       window.game = null;
       _refreshResumeSave();
       $('menu').classList.remove('hidden');
+      _startAttract();
     });
     $('btnAgain').addEventListener('click', () => {
       NET.close();
@@ -324,6 +325,7 @@ const Main = (function () {
       // faction menu
       if (wasMission) _showMissions(mySide);
       else $('menu').classList.remove('hidden');
+      _startAttract();
     });
 
     // ---- mid-battle save / resume ------------------------------------------
@@ -434,6 +436,11 @@ const Main = (function () {
           ? MISSIONS.arc(q.get('side') === 'srp' ? 'srp' : 'udc')[+q.get('mission') - 1]
           : undefined,
       });
+    } else if (!q.get('mpbc') && (!q.get('mute') || q.get('attract') === '1')) {
+      // the menus open over a live war (attract mode). Muted test harnesses
+      // skip it so their menu flows stay deterministic — ?attract=1 forces
+      // it back on for the attract-mode tests themselves
+      _startAttract();
     }
 
     if (!rafStarted) {
@@ -1247,19 +1254,25 @@ const Main = (function () {
 
   function startGame(side, opts) {
     opts = opts || {};
-    mySide = side;
-    myMission = opts.mp ? null : (opts.mission || null);
-    mySkirmish = opts.mp ? null : (opts.skirmish || null);
+    // attract mode: the endless UDC-vs-Brotherhood war behind the menus — a
+    // full real battle (sim, AI, map), but it touches NOTHING the player
+    // owns: no DOM changes, no music, no recording, no remembered side
+    const attract = !!opts.attract;
+    if (!attract) {
+      mySide = side;
+      myMission = opts.mp ? null : (opts.mission || null);
+      mySkirmish = opts.mp ? null : (opts.skirmish || null);
+      $('menu').classList.add('hidden');
+      $('score').classList.add('hidden');
+      $('pause').classList.add('hidden');
+      $('missions').classList.add('hidden');
+      $('briefing').classList.add('hidden');
+      $('mplobby').classList.add('hidden');
+      $('skirmish').classList.add('hidden');
+    }
     ended = false;
-    $('menu').classList.add('hidden');
-    $('score').classList.add('hidden');
-    $('pause').classList.add('hidden');
-    $('missions').classList.add('hidden');
-    $('briefing').classList.add('hidden');
-    $('mplobby').classList.add('hidden');
-    $('skirmish').classList.add('hidden');
 
-    const mission = myMission;
+    const mission = attract ? null : myMission;
     // skirmish setup options (credits/crates/superweapons/combatants/map size/
     // seed) — sim-relevant, so they ride the replay meta and reconstruct on
     // watch/resume
@@ -1270,15 +1283,17 @@ const Main = (function () {
     // map size is per-game state carried in C: LARGE only via skirmish setup,
     // every other path (missions, MP, menu battles) plays the classic 64
     C.MAP_W = C.MAP_H = (sk && sk.big) ? 100 : 84;
-    const pcfg = (sk && SK_PLAYERS[sk.players]) || SK_PLAYERS['1v1'];
+    const pcfg = attract ? { n: 2, spectate: true }
+      : (sk && SK_PLAYERS[sk.players]) || SK_PLAYERS['1v1'];
     const sides = SIDE_ORDER.slice(0, pcfg.n);
     game = makeGame({ side, seed, sides, spectate: pcfg.spectate });
+    if (attract) game._attract = true;
     // extra combat slots wear recolored faction art — built lazily, once
     if (SPRITES.ensureSideArt) for (const s of sides) SPRITES.ensureSideArt(s);
     // ai.js reads its difficulty knobs off game.mission — a skirmish
     // difficulty preset rides the same channel (it has no objective/n, so
     // the HUD chip and campaign unlock logic ignore it)
-    game.mission = mission || mySkirmish || null;
+    game.mission = attract ? null : (mission || mySkirmish || null);
     if (mission) {
       if (mission.credits !== undefined) game.human.credits = mission.credits;
     }
@@ -1289,18 +1304,21 @@ const Main = (function () {
     }
     // NOTE: !== undefined, not truthiness — garrison missions set aiCredits: 0
     // and mean it (a fixed purse that runs dry, not the 5000 default)
-    const aiCr = (mission && mission.aiCredits !== undefined) ? mission.aiCredits
+    // the menu war gets a fat purse so armies clash sooner and keep coming
+    const aiCr = attract ? 8000
+      : (mission && mission.aiCredits !== undefined) ? mission.aiCredits
       : (mySkirmish ? mySkirmish.aiCredits : undefined);
     if (aiCr !== undefined && aiCr !== null) {
       for (const s of game.sides) if (game.players[s].isAI) game.players[s].credits = aiCr;
     }
     // battle-intro title card (render-only; each client labels its own view)
-    game.introLabel = opts.mp ? 'MULTIPLAYER BATTLE'
+    game.introLabel = attract ? null
+      : opts.mp ? 'MULTIPLAYER BATTLE'
       : mission ? 'OP ' + mission.n + ': ' + mission.title
       : game._spectate ? 'BATTLE SIMULATION — ' + game.sides.length + ' ARMIES'
       : 'SKIRMISH — ' + ((mySkirmish && mySkirmish.skirmish) || 'NORMAL');
     window.game = game;
-    MUSIC.start(side);   // faction playlist: the Brotherhood of Seth has its own score
+    if (!attract) MUSIC.start(side);   // faction playlist: Seth has its own score
     MAPGEN.generate(game, game.seed,
       mission ? { holdout: mission.holdout, shore: mission.shore } : undefined);
     Fog.init(game);
@@ -1383,7 +1401,7 @@ const Main = (function () {
     for (const s of game.sides) Production.computePower(game.players[s]);
     Render.setViewZoom(1);   // every battle opens at the classic zoom
     AI.init(game);   // in MP this is a symmetric no-op consumer of game.rng
-    Input.init(canvas, game);
+    if (!attract) Input.init(canvas, game);   // nobody drives the menu war
     Fog.update(game);
     if (opts.mp) NET.initExplored(game);
 
@@ -1393,8 +1411,11 @@ const Main = (function () {
     game.camera.y = clamp(cellCenterY(myPos.cy) - C.VIEW_H / 2, 0, C.MAP_H * C.CELL - C.VIEW_H);
 
     // every single-player battle records itself (a few KB: seed + orders);
-    // watching a replay re-enters here and REPLAY then disarms the recorder
-    if (!opts.mp && typeof REPLAY !== 'undefined') {
+    // watching a replay re-enters here and REPLAY then disarms the recorder.
+    // The attract war explicitly disarms instead — a recorder left running
+    // by an aborted battle must not log the menu bots' orders
+    if (attract && typeof REPLAY !== 'undefined') REPLAY.disarm();
+    if (!opts.mp && !attract && typeof REPLAY !== 'undefined') {
       REPLAY.arm({
         seed: game.seed,
         side,
@@ -1407,16 +1428,38 @@ const Main = (function () {
     game.startTime = Date.now();
     // lockstep pace is set by the slower client, so a local slider would be
     // misleading in MP — pin both clients to the same fixed speed instead
-    game.speed = opts.mp ? 1.7 : ($('speedSlider').value || 170) / 100;
+    game.speed = attract ? 1.5
+      : opts.mp ? 1.7 : ($('speedSlider').value || 170) / 100;
     $('speedSlider').disabled = !!opts.mp;
 
-    AUDIO.eva('battleControlOnline');
+    if (attract) {
+      // open on a war already in progress: burn the build-up through the
+      // save-resume fast-forward path (30ms slices per frame, silent), far
+      // enough that the first attack waves are already rolling
+      game._ffTarget = 3200 + ((Math.random() * 900) | 0);
+    } else {
+      AUDIO.eva('battleControlOnline');
+    }
+  }
+
+  // the war behind the menus never ends: whenever the menu is showing and no
+  // real battle owns the screen, an AI-vs-AI front runs on a random seed
+  function _startAttract(force) {
+    if (!force && game && !game._attract && game.status === 'playing') return;
+    startGame('udc', { attract: true, seed: (Math.random() * 0x7fffffff) | 0 });
   }
 
   function loop(t) {
     requestAnimationFrame(loop);
     const dt = Math.min(200, t - lastT);
     lastT = t;
+    // menu war housekeeping: ~10s after one army falls (mop-up plays out),
+    // or if the front stalls for ~12 sim-minutes, a fresh seed relaunches
+    if (game && game._attract &&
+        ((game._attractOver && game.tick - game._attractOver > 150) ||
+         game.tick > 11000)) {
+      _startAttract(true);
+    }
     // resuming a save: burn through the recorded battle in ~30ms slices per
     // frame (render.js shows the progress veil off game._ffTarget). The step
     // body must match the live loop exactly — including the per-tick fog
@@ -1430,7 +1473,7 @@ const Main = (function () {
         while (game.tick < game._ffTarget && performance.now() - t0 < 30) {
           if (typeof REPLAY !== 'undefined' && REPLAY.playing) REPLAY.applyPending();
           game.tick++;
-          Input.tick(game);
+          if (!game._attract) Input.tick(game);
           NET.inSim = true;
           try {
             for (const s of game.sides) Production.tick(game, game.players[s]);
@@ -1484,7 +1527,7 @@ const Main = (function () {
         if (typeof REPLAY !== 'undefined' && REPLAY.playing) REPLAY.applyPending();
         game.tick++;
         if (NET.active) NET.applyTick(game.tick);
-        Input.tick(game);
+        if (!game._attract) Input.tick(game);
         NET.inSim = true;
         try {
           // fixed side order (not human-first): both multiplayer clients
@@ -1518,6 +1561,13 @@ const Main = (function () {
         const b = g.buildings.get(id);
         return b && !DATA.buildings[b.type].wall; // walls alone don't keep you in the game
       });
+    // the menu war never reaches a score screen: note the fall, let the
+    // winner mop up on camera, and the loop relaunches on a fresh seed
+    if (g._attract) {
+      const living = g.sides.filter(s => alive(g.players[s]));
+      if (living.length <= 1 && !g._attractOver) g._attractOver = g.tick;
+      return;
+    }
     // multi-AI skirmish: free-for-all, last force standing. Spectate ends
     // when one AI remains (or none); playing, you must outlive them all.
     if (g._spectate || g.sides.length > 2) {
@@ -1698,6 +1748,7 @@ const Main = (function () {
       $('pause').classList.remove('hidden');
       return;
     }
+    if (!game || game._attract) return;   // there is nothing to pause at the menu
     game.paused = force !== undefined ? force : !game.paused;
     $('pause').classList.toggle('hidden', !game.paused);
     if (game.paused) {

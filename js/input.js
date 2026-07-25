@@ -486,6 +486,8 @@ const Input = (function () {
     window.addEventListener('keydown', ev => {
       keys[ev.key] = true;
       if (!game) return;
+      // hotkeys stay dead while the menu war plays itself behind the overlays
+      if (window.game && window.game._attract) return;
       if (ev.key === 'Escape') {
         if (mode !== 'normal') { _setMode('normal'); }
         else if (typeof Main !== 'undefined') Main.togglePause();

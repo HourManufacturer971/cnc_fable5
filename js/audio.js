@@ -703,6 +703,10 @@ const AUDIO = (function () {
   }
 
   function play(name) {
+    // the menu war is a silent film: while an attract battle runs, only the
+    // UI's own clicks may sound — every combat effect stays muted
+    if (typeof game !== 'undefined' && game && game._attract &&
+        name !== 'click' && name !== 'buzz') return;
     if (!audioReady()) return;
     const fn = SFX[name];
     if (!fn) return; // unknown name = silent no-op
@@ -733,6 +737,8 @@ const AUDIO = (function () {
   // banner + voice path, arbitrary text
   function evaText(text) {
     if (!text) return;
+    // no announcer for the menu war (its text banners never render either)
+    if (typeof game !== 'undefined' && game && game._attract) return;
     // surface the message on the HUD regardless of audio settings — the words
     // live in the banner, the voice is just flavor
     if (typeof EV !== 'undefined' && EV) EV.emit('eva', String(text));

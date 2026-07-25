@@ -1231,6 +1231,31 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
 - Main loop: accumulator fixed-step `C.TPS * game.speed`; per tick: `Input.tick` →
   `Production.tick(each player)` → `Sim.tick` → `AI.tick` → `Fog.update`; render every RAF
   with `Render.frame`. Pause when menu open (`game.paused`).
+- **Attract mode — the war behind the menus.** Whenever the menus are up and no
+  real battle owns the screen, main.js `_startAttract()` launches a REAL
+  spectator game (`startGame(..., {attract:true})`): UDC vs the Brotherhood,
+  two NORMAL AIs with fat 8000-credit purses on a random seed, `game._attract`
+  set. It is a genuine sim (map, AI, bridges, crates) that touches NOTHING the
+  player owns: no DOM changes, no MUSIC, no REPLAY (arm skipped + `REPLAY.disarm()`
+  clears any recorder an aborted battle left running), no remembered
+  side/mission, `Input.init` skipped and `Input.tick` gated; the keydown
+  handler and `togglePause` are inert while `game._attract`. Each launch
+  pre-warms ~3.5 sim-minutes through the save-resume `_ffTarget` fast-forward
+  (30ms slices, silent) so the menu opens on armies, not empty lots. AUDIO:
+  `play()` passes only 'click'/'buzz' during attract and `evaText` is fully
+  gated (`eva` was already spectate-quiet). Render (`_attractFrame`): draws
+  ONLY the battlefield full-bleed — C.VIEW/TAB dims temporarily swapped to
+  the whole screen — under the static backdrop's scanline+vignette veil; an
+  auto-director (`_attractDirector`) lerps the camera toward `g._hot*`
+  (stamped by `applyDamage` when `_attract`), parks the action in the left or
+  right sixth of the screen (dead center sits under the menu panel), and
+  lingers over the bases when the front is quiet. `_checkEnd` never ends an
+  attract game — it stamps `g._attractOver` when one army falls, and the main
+  loop relaunches ~10s later (or after ~12 stalled sim-minutes) on a fresh
+  seed, forever. A real `startGame` simply replaces it; `btnAbort`/`btnAgain`
+  restart it on the way back to the menu. Boot gating: attract starts unless
+  `?nomenu`/`?mpbc`, and muted pages (`?mute=1` — the test harnesses) skip it
+  unless `?attract=1` forces it on.
 - Menu DOM (#menu overlays in index.html): title screen with the two faction emblems
   (canvas-drawn logos injected), faction buttons UDC / Brotherhood of Seth → Operations
   (the theater map + Continue/Back) → Briefing → game. The title screen is

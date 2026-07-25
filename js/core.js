@@ -523,6 +523,11 @@ function applyDamage(target, amount, warhead, attacker) {
   const dmg = Math.max(1, Math.round(amount * mult));
   target.hp -= dmg;
   target._hitT = game.tick;           // brief white hit-flash (render)
+  if (game._attract) {                // attract camera: combat pulls the lens
+    game._hotX = target.kind === 'unit' ? target.x : (target.cx + target.w / 2) * C.CELL;
+    game._hotY = target.kind === 'unit' ? target.y : (target.cy + target.h / 2) * C.CELL;
+    game._hotTick = game.tick;
+  }
   EV.emit('damaged', target, attacker, dmg);
   if (target.hp <= 0) {
     target.hp = 0;

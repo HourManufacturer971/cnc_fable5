@@ -2327,13 +2327,10 @@ const Render = (function () {
   let menuScan = null;
   let embers = null, menuLastT = 0;
 
-  function _menuBackdrop() {
-    const w = C.SCREEN_W, h = C.SCREEN_H;
-    const t = _nowMs() / 1000;
-    let dt = t - menuLastT; menuLastT = t;
-    if (dt < 0 || dt > 0.1) dt = 0.016;
-
-    if (!menuGrad || menuGW !== w || menuGH !== h) {
+  // cached veil layers (vignette/scanlines) shared by the static backdrop
+  // and the attract-mode war footage
+  function _menuLayers(w, h) {
+    if (menuGrad && menuGW === w && menuGH === h) return;
       const gg = ctx.createLinearGradient(0, 0, 0, h);
       gg.addColorStop(0, '#0a0f1e');       // deep indigo sky
       gg.addColorStop(0.5, '#221b22');
@@ -2357,7 +2354,14 @@ const Render = (function () {
       hb.addColorStop(0, 'rgba(190,116,44,0.20)');
       hb.addColorStop(1, 'rgba(190,116,44,0)');
       menuHoriz = hb;
-    }
+  }
+
+  function _menuBackdrop() {
+    const w = C.SCREEN_W, h = C.SCREEN_H;
+    const t = _nowMs() / 1000;
+    let dt = t - menuLastT; menuLastT = t;
+    if (dt < 0 || dt > 0.1) dt = 0.016;
+    _menuLayers(w, h);
     ctx.fillStyle = menuGrad;
     ctx.fillRect(0, 0, w, h);
 
@@ -2398,6 +2402,66 @@ const Render = (function () {
 
     // scanlines + vignette
     if (menuScan) { ctx.fillStyle = menuScan; ctx.fillRect(0, 0, w, h); }
+    if (menuVig) ctx.drawImage(menuVig, 0, 0);
+  }
+
+  // ---- attract mode: the live war behind the menus ---------------------------------------------
+  // The menu backdrop is a REAL battle (main.js runs a spectator AI-vs-AI
+  // game). It renders full-bleed — no tab bar, no sidebar, no HUD — under
+  // the same scanline/vignette veil as the static backdrop, with an
+  // auto-director drifting the camera toward the latest combat flashpoint.
+
+  let atX = 0, atY = 0, atUntil = 0, atGame = null;
+
+  function _attractDirector(g, vw, vh) {
+    if (g !== atGame) {
+      // a fresh front: open over no-man's-land between the two bases
+      atGame = g;
+      const a = g.startPos[g.sides[0]] || { cx: C.MAP_W >> 1, cy: C.MAP_H >> 1 };
+      const b = g.startPos[g.sides[1]] || a;
+      atX = (cellCenterX(a.cx) + cellCenterX(b.cx)) / 2;
+      atY = (cellCenterY(a.cy) + cellCenterY(b.cy)) / 2;
+      g.camera.x = clamp(atX - vw / 2, 0, Math.max(0, C.MAP_W * C.CELL - vw));
+      g.camera.y = clamp(atY - vh / 2, 0, Math.max(0, C.MAP_H * C.CELL - vh));
+      atUntil = g.tick + 40;
+    }
+    if (g.tick >= atUntil) {
+      if (g._hotTick && g.tick - g._hotTick < 75) {
+        atX = g._hotX; atY = g._hotY;      // combat pulls the lens
+      } else {
+        // quiet front: linger over the bases in turn
+        const sp = g.startPos[g.sides[((g.tick / 600) | 0) % g.sides.length]];
+        if (sp) { atX = cellCenterX(sp.cx); atY = cellCenterY(sp.cy); }
+      }
+      atUntil = g.tick + 70;               // reconsider roughly every 5s
+    }
+    // frame the action into the VISIBLE margins — dead center is exactly
+    // where the menu panel sits, so park it in the left or right third
+    const fx = atX < C.MAP_W * C.CELL / 2 ? 0.16 : 0.84;
+    const wx = clamp(atX - vw * fx, 0, Math.max(0, C.MAP_W * C.CELL - vw));
+    const wy = clamp(atY - vh / 2, 0, Math.max(0, C.MAP_H * C.CELL - vh));
+    g.camera.x += (wx - g.camera.x) * 0.035;
+    g.camera.y += (wy - g.camera.y) * 0.035;
+  }
+
+  function _attractFrame(g) {
+    seeAll = true;
+    revealAll = true;
+    const vw = C.SCREEN_W / Z, vh = C.SCREEN_H / Z;
+    _attractDirector(g, vw, vh);
+    // borrow the whole screen from the layout for one viewport draw
+    const sv = { pw: C.VIEW_PW, ph: C.VIEW_PH, w: C.VIEW_W, h: C.VIEW_H, tab: C.TAB_H };
+    C.VIEW_PW = C.SCREEN_W; C.VIEW_PH = C.SCREEN_H; C.TAB_H = 0;
+    C.VIEW_W = vw; C.VIEW_H = vh;
+    try {
+      _drawViewport(g);
+    } finally {
+      C.VIEW_PW = sv.pw; C.VIEW_PH = sv.ph; C.TAB_H = sv.tab;
+      C.VIEW_W = sv.w; C.VIEW_H = sv.h;
+    }
+    // the static backdrop's quiet veil keeps the menus readable over the war
+    _menuLayers(C.SCREEN_W, C.SCREEN_H);
+    if (menuScan) { ctx.fillStyle = menuScan; ctx.fillRect(0, 0, C.SCREEN_W, C.SCREEN_H); }
     if (menuVig) ctx.drawImage(menuVig, 0, 0);
   }
 
@@ -2535,6 +2599,10 @@ const Render = (function () {
     if (!ctx) return;
     if (!g) {
       _menuBackdrop();
+      return;
+    }
+    if (g._attract) {   // the menu war: full-bleed battlefield, zero HUD
+      _attractFrame(g);
       return;
     }
     if (g !== evaGame) {   // fresh battle: yesterday's chatter stays there
