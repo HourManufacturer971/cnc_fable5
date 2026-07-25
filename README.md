@@ -86,20 +86,30 @@ so bandwidth is tiny. Notes:
   - going out to your shared public address and back in needs **NAT
     hairpinning**, which most home routers do not do.
 
-  The game detects this specific pair and says so. Fixes, cheapest first:
+  The game detects this specific pair and says so. Fixes, **safest first**:
 
-  1. In Chrome on **both** machines, open `chrome://flags`, set
-     **Anonymize local IPs exposed by WebRTC** to **Disabled**, and restart
-     the browser. Real LAN addresses then go into the codes and the direct
-     path works. (Firefox: `media.peerconnection.ice.obfuscate_host_addresses`
-     to `false` in `about:config`.)
-  2. Or allow mDNS: let UDP port 5353 through the firewall on both machines
-     and turn off "client isolation" / "AP isolation" on the WiFi access
-     point.
-  3. Run `NET.diag()` in the browser console after a failed attempt — it
-     prints what each code actually contained (`host`, `mdns`, `srflx`,
-     `relay` counts and the public addresses seen), which tells you which of
-     the two paths is missing.
+  1. **Let mDNS work (recommended — weakens nothing).** Obfuscation is
+     designed to still allow LAN peer-to-peer: the `.local` name *is*
+     resolvable by machines on the same link, via multicast DNS. It only
+     fails when multicast is blocked. Allow UDP port 5353 through the
+     firewall on both machines, and turn off "client isolation" / "AP
+     isolation" on the WiFi access point. Your local IPs stay hidden from
+     websites and the direct path starts working.
+  2. **Last resort: disable WebRTC local-IP anonymisation.** In `chrome://flags`
+     set **Anonymize local IPs exposed by WebRTC** to **Disabled** on both
+     machines (Firefox: `media.peerconnection.ice.obfuscate_host_addresses`
+     to `false`). Understand the trade first: that setting exists to stop any
+     website from reading your machine's internal addresses without
+     permission — used for fingerprinting, for probing what else is on your
+     network, and for correlating you across a VPN. It is **browser-wide and
+     permanent**, not scoped to this game, so every site you visit afterwards
+     gains that visibility. Chrome's flags apply per *installation*, not per
+     profile, so limiting the damage means using a different browser for the
+     game rather than a second profile. Prefer fix 1.
+
+  Run `NET.diag()` in the browser console after a failed attempt — it prints
+  what each code actually contained (`host`, `mdns`, `srflx`, `relay` counts
+  and the public addresses seen), which tells you which path is missing.
 
 - **Playing across the internet on a strict network needs a TURN relay.**
   A relay needs credentials, so it cannot be baked into a static file — set
