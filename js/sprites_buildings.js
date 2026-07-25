@@ -34,6 +34,7 @@
   const ASPH = '#3a3a34', ASPH_L = '#51514a', ASPH_D = '#2a2a26';
   const HAZK = '#16160f';                 // hazard-stripe dark
   const SH = 'rgba(10,10,6,0.35)';        // cast shadow
+  const SH2 = 'rgba(10,10,6,0.16)';       // its soft outer step
   const WHT = '#e8e8e0', WHT_D = '#b0b0a8';
 
   function sidePal(side) {
@@ -120,12 +121,19 @@
 
   // ---- 3/4 perspective toolkit ----------------------------------------------
 
-  // cast shadow for a box at x..x+w, y..y+h: east strip + SE spill (L-shape)
+  // Cast shadow for a box at x..x+w, y..y+h: east strip + SE spill (L-shape).
+  // The throw depth is what sells height — a taller box lays a longer shadow,
+  // so this is the cheapest lever the whole toolkit has. A second, fainter
+  // outer step softens the edge so the shadow reads as cast light rather than
+  // a painted border.
   function castE(ctx, x, y, w, h, d) {
-    d = d || 3;
+    d = d || 4;
     ctx.fillStyle = SH;
     ctx.fillRect(x + w, y + d, d, h);
     ctx.fillRect(x + d, y + h, w - d, d);
+    ctx.fillStyle = SH2;
+    ctx.fillRect(x + w + d, y + d + 1, 1, h);
+    ctx.fillRect(x + d + 1, y + h + d, w - d, 1);
   }
 
   // south facade wall: rows y..y+fh; mid-shade, darker at the bottom, darkest
@@ -133,6 +141,18 @@
   // line under the parapet so big faces don't read as flat slabs.
   function facade(ctx, x, y, w, fh, m) {
     P(ctx, x, y, w, fh, m.face);
+    // vertical falloff: a real wall catches the sky along its top course and
+    // loses light toward the ground. Stepped in whole rows so it stays chunky
+    // pixel art rather than a smooth gradient, and drawn before the panel
+    // seams and fittings below so they still read on top.
+    if (fh >= 5) {
+      P(ctx, x, y, w, 1, m.faceL || m.face);
+      const steps = Math.min(3, (fh / 3) | 0);
+      for (let k = 1; k <= steps; k++) {
+        ctx.fillStyle = 'rgba(0,0,0,' + (0.05 * k).toFixed(2) + ')';
+        ctx.fillRect(x, y + fh - 1 - k * ((fh / (steps + 1)) | 0), w, 1 + ((fh / (steps + 2)) | 0));
+      }
+    }
     P(ctx, x + w - 2, y, 2, fh, m.faceD);
     P(ctx, x, y + fh - 3, w, 2, m.faceD);
     P(ctx, x, y + fh - 1, w, 1, OUT);
