@@ -1,4 +1,4 @@
-# Command and Conker — Engineering Spec
+# Harvest War — Engineering Spec
 
 An original real-time strategy game in the mid-90s mold, built from scratch with
 **original code and original procedurally-generated pixel art / synthesized audio**.

@@ -1,6 +1,4 @@
-# Command and Conker
-
-*We resemble but are legally distinct from Command and Conquer ™*
+# Harvest War
 
 An original, from-scratch, browser-based real-time strategy game in the
 mid-90s style. All code, pixel art, and sound are **original** — the art is
@@ -24,7 +22,7 @@ or publisher.
 No build step, no dependencies. Serve the folder and open it:
 
 ```sh
-cd command-and-conker
+cd harvestwar
 python3 -m http.server 8000
 # then open http://localhost:8000
 ```
@@ -303,7 +301,7 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   across a Theater of War map drawn like a real country under invasion:
   a coastline, rivers, mountain ranges, named towns on supply roads, your
   liberated ground shaded in faction colors, and a toothed front line
-  marching op by op — all of it original fiction
+  marching op by op — all of it original Harvest War fiction
 - **First missions the classic way** — the UDC opens with a staged shore
   landing on a real coastline: open sea spans the southern edge, your
   rifle team starts on the sand, and the second boat and the MCV come in

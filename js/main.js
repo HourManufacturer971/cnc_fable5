@@ -388,7 +388,7 @@ const Main = (function () {
       if (!data) return;
       const a = document.createElement('a');
       a.href = URL.createObjectURL(new Blob([data], { type: 'application/json' }));
-      a.download = 'command-and-conker-replay.json';
+      a.download = 'harvest-war-replay.json';
       a.click();
       URL.revokeObjectURL(a.href);
     });

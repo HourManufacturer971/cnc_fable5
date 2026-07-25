@@ -1,7 +1,7 @@
 {
-  "name": "Command and Conker",
-  "short_name": "Command and Conker",
-  "description": "We resemble but are legally distinct from Command and Conquer ™",
+  "name": "Harvest War",
+  "short_name": "Harvest War",
+  "description": "An original retro real-time strategy game — all code, art and audio built from scratch",
   "start_url": ".",
   "scope": ".",
   "display": "fullscreen",
