@@ -1228,20 +1228,34 @@ const Main = (function () {
 
   function _spawnEscort(g, side, pos, withMcv) {
     const passableNear = (n) => {
-      const out = [];
+      const cands = [];
       // start at r=2: r=1 cells sit inside the future conyard footprint
-      for (let r = 2; r <= 6 && out.length < n; r++) {
-        for (let dy = -r; dy <= r && out.length < n; dy++) {
-          for (let dx = -r; dx <= r && out.length < n; dx++) {
+      for (let r = 2; r <= 6; r++) {
+        for (let dy = -r; dy <= r; dy++) {
+          for (let dx = -r; dx <= r; dx++) {
             if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
             const cx = pos.cx + dx, cy = pos.cy + dy;
-            if (inMap(cx, cy) && terrainPassable(g.terrain[cellIdx(cx, cy)]) && !g.occ[cellIdx(cx, cy)]) {
-              out.push({ cx, cy });
+            if (!inMap(cx, cy)) continue;
+            const i = cellIdx(cx, cy);
+            if (!terrainPassable(g.terrain[i]) || g.occ[i]) continue;
+            // a home field often laps right up to the start pad — rank spots
+            // by how much chrysalite surrounds them so the opening escort
+            // forms up on open ground instead of standing in the crystal
+            let near = 0;
+            for (let ny = cy - 2; ny <= cy + 2; ny++) {
+              for (let nx = cx - 2; nx <= cx + 2; nx++) {
+                if (inMap(nx, ny) && g.tib[cellIdx(nx, ny)] > 0) near++;
+              }
             }
+            cands.push({ cx, cy, r, onTib: g.tib[i] > 0 ? 1 : 0,
+                         band: near === 0 ? 0 : near <= 4 ? 1 : near <= 10 ? 2 : 3 });
           }
         }
       }
-      return out;
+      // positional tiebreaks only: this runs inside the deterministic setup
+      cands.sort((a, b) =>
+        a.onTib - b.onTib || a.band - b.band || a.r - b.r || a.cy - b.cy || a.cx - b.cx);
+      return cands.slice(0, n).map(c => ({ cx: c.cx, cy: c.cy }));
     };
     if (withMcv) addUnit(makeUnit('mcv', side, pos.cx, pos.cy));
     const scout = side === 'udc' ? 'jeep' : 'bggy';

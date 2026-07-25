@@ -924,26 +924,71 @@ MISSIONS.arc = function (side) {
 
   function _side(v, side) { return (v && !Array.isArray(v) && typeof v === 'object') ? v[side] : v; }
 
+  // crystal cells within two rings of (x, y) — how hemmed in a spot is
+  function _tibAround(g, x, y) {
+    let n = 0;
+    for (let ny = y - 2; ny <= y + 2; ny++) {
+      for (let nx = x - 2; nx <= x + 2; nx++) {
+        if (inMap(nx, ny) && g.tib[cellIdx(nx, ny)] > 0) n++;
+      }
+    }
+    return n;
+  }
+
   // open, passable, unoccupied cells spiralling out from (cx, cy). Crystal
   // cells are a last resort — reinforcements materialising inside a chrysalite
-  // field wade out through it (infantry take damage, and it looks absurd)
-  function _openNear(g, cx, cy, n, rMax) {
-    const out = [], dusty = [];
-    for (let r = 1; r <= (rMax || 14) && out.length < n; r++) {
-      for (let dy = -r; dy <= r && out.length < n; dy++) {
-        for (let dx = -r; dx <= r && out.length < n; dx++) {
+  // field wade out through it (infantry take damage, and it looks absurd).
+  //
+  // opts.clearance also weighs the GROUND AROUND each cell: a clean cell in
+  // the middle of a field still lands a squad in the field. Troop spawns ask
+  // for it; crate drops and creature spawns keep the plain radius order.
+  function _openNear(g, cx, cy, n, rMax, opts) {
+    const R = rMax || 14;
+    if (!(opts && opts.clearance)) {
+      const out = [], dusty = [];
+      for (let r = 1; r <= R && out.length < n; r++) {
+        for (let dy = -r; dy <= r && out.length < n; dy++) {
+          for (let dx = -r; dx <= r && out.length < n; dx++) {
+            if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+            const x = cx + dx, y = cy + dy;
+            if (!inMap(x, y)) continue;
+            const i = cellIdx(x, y);
+            if (!terrainPassable(g.terrain[i]) || g.occ[i]) continue;
+            if (g.tib[i] > 0) { dusty.push({ cx: x, cy: y }); continue; }
+            out.push({ cx: x, cy: y });
+          }
+        }
+      }
+      while (out.length < n && dusty.length) out.push(dusty.shift());
+      return out;
+    }
+    // clearance pass: gather the whole neighbourhood, then rank by how clear
+    // the surroundings are BEFORE distance. The crystal count is bucketed so a
+    // cell or two of difference never drags a squad across the map — only
+    // genuinely field-bound ground loses to a walk.
+    const cands = [];
+    for (let r = 1; r <= R; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
           const x = cx + dx, y = cy + dy;
           if (!inMap(x, y)) continue;
           const i = cellIdx(x, y);
           if (!terrainPassable(g.terrain[i]) || g.occ[i]) continue;
-          if (g.tib[i] > 0) { dusty.push({ cx: x, cy: y }); continue; }
-          out.push({ cx: x, cy: y });
+          const near = _tibAround(g, x, y);
+          cands.push({
+            cx: x, cy: y, r,
+            onTib: g.tib[i] > 0 ? 1 : 0,
+            band: near === 0 ? 0 : near <= 4 ? 1 : near <= 10 ? 2 : 3,
+          });
         }
       }
     }
-    while (out.length < n && dusty.length) out.push(dusty.shift());
-    return out;
+    // every tiebreak is positional, so the ordering is identical on both
+    // clients — this runs inside the deterministic step
+    cands.sort((a, b) =>
+      a.onTib - b.onTib || a.band - b.band || a.r - b.r || a.cy - b.cy || a.cx - b.cx);
+    return cands.slice(0, n).map(c => ({ cx: c.cx, cy: c.cy }));
   }
 
   // a staging point toward the given compass edge (or nearest edge) from anchor
@@ -960,7 +1005,12 @@ MISSIONS.arc = function (side) {
   }
 
   function _spawnSquad(g, side, types, at) {
-    const spots = _openNear(g, at.cx, at.cy, types.length);
+    // Troops land on ground they can walk off, not in the middle of a field.
+    // Two steps, or the squad scatters: first find the best clear footing near
+    // the requested point, then fill the rest around THAT — so the column
+    // arrives together instead of each unit hunting its own clean cell.
+    const head = _openNear(g, at.cx, at.cy, 1, 14, { clearance: true })[0] || at;
+    const spots = _openNear(g, head.cx, head.cy, types.length, 8, { clearance: true });
     const units = [];
     for (let i = 0; i < types.length; i++) {
       const sp = spots[i] || spots[spots.length - 1];

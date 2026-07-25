@@ -439,18 +439,24 @@ const Production = (function () {
   // ---- unit spawning -------------------------------------------------------------
 
   function _freeCellNear(g, cx0, cy0, w, h, maxR) {
+    // a factory hard against a field would otherwise pop every unit out
+    // standing in the crystal: take the first clear ring cell, and only fall
+    // back to a crystal one if the building is fully hemmed in
+    let dusty = null;
     for (let r = 1; r <= maxR; r++) {
       for (let dy = -r; dy <= h + r - 1; dy++) {
         for (let dx = -r; dx <= w + r - 1; dx++) {
           if (dx > -r && dx < w + r - 1 && dy > -r && dy < h + r - 1) continue;
           const cx = cx0 + dx, cy = cy0 + dy;
-          if (inMap(cx, cy) && terrainPassable(g.terrain[cellIdx(cx, cy)]) && !g.occ[cellIdx(cx, cy)]) {
-            return { cx, cy };
-          }
+          if (!inMap(cx, cy)) continue;
+          const i = cellIdx(cx, cy);
+          if (!terrainPassable(g.terrain[i]) || g.occ[i]) continue;
+          if (g.tib[i] > 0) { if (!dusty) dusty = { cx, cy }; continue; }
+          return { cx, cy };
         }
       }
     }
-    return null;
+    return dusty;
   }
 
   function _primaryFactory(g, player, kind) {
@@ -540,14 +546,19 @@ const Production = (function () {
 
   function _defaultRally(g, player, fac) {
     const base = { cx: fac.cx + ((fac.w / 2) | 0), cy: fac.cy + fac.h + 2 };
-    if (!_nearOwnDock(g, player, base.cx, base.cy)) return base;
+    // a factory built beside a field would otherwise muster the whole army
+    // standing in the crystal — infantry take damage there and it looks daft.
+    // A rally the player set deliberately is still respected.
+    const bad = (cx, cy) => _nearOwnDock(g, player, cx, cy) ||
+      (inMap(cx, cy) && g.tib[cellIdx(cx, cy)] > 0);
+    if (!bad(base.cx, base.cy)) return base;
     for (let r = 1; r <= 6; r++) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
           const cx = base.cx + dx, cy = base.cy + dy;
           if (!inMap(cx, cy)) continue;
-          if (_nearOwnDock(g, player, cx, cy)) continue;
+          if (bad(cx, cy)) continue;
           if (!terrainPassable(g.terrain[cellIdx(cx, cy)])) continue;
           // a cell inside a building would make findPath retarget — quite
           // possibly right back onto the dock this dodge exists to avoid
