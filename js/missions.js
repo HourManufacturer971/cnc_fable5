@@ -530,77 +530,8 @@ srp: [
     ],
   },
   {
-    n: 2, title: 'TITHES OF THE EARTH',
-    sector: 'THE GREENBELT — CONTESTED FIELDS', terr: [0.76, 0.44], seed: 1475,
-    credits: 3000, aiCredits: 5000, aiCalm: 1.4,
-    objective: { type: 'harvest', amount: 6000 },
-    objText: 'Hold a treasury of 6000 credits at once. Build silos — the Brotherhood audits the vault, not the ledger.',
-    brief: [
-      'Faith does not fuel the war machine, disciple. Chrysalite does. The Brotherhood requires a war chest of six thousand credits from this sector, and the Coalition squats upon the richest fields.',
-      'Take what is ours beneath their noses. The quota is counted in the vault, not the ledger — six thousand credits held at once. Raise silos, guard your harvesters as you would your own blood, and spend only what the harvest can replace.',
-    ],
-    events: [
-      { at: 50,
-        eva: 'The faithful whisper of a BLUE chrysalite lode in the midfield. Double value at the refinery.',
-        fn: g => {
-          for (let i = 0; i < g.tib.length; i++) {
-            if (g.tibType[i] === 1 && g.tib[i] > 0) {
-              const cx = i % C.MAP_W, cy = (i / C.MAP_W) | 0;
-              Fog.revealCircle(g, cx, cy, 5);
-              _ping(g, cellCenterX(cx), cellCenterY(cy), 'crate');
-              break;
-            }
-          }
-        } },
-      { at: 260,
-        eva: 'Raiders inbound — they are hunting your harvesters!',
-        attack: { types: { udc: ['jeep', 'jeep', 'e1'], srp: ['bike', 'bggy', 'e1'] }, target: 'harv' } },
-      { every: 210, from: 470, until: 1400,
-        eva: 'Another raiding party is closing on the harvest line.',
-        attack: { types: { udc: ['jeep', 'jeep', 'e3'], srp: ['bike', 'bike', 'e3'] }, target: 'harv' } },
-      { at: 430,
-        eva: 'The Brotherhood has diverted a spare harvester to your tithe.',
-        reinforce: { types: ['harv'] } },
-      { when: g => g.human.credits >= 4800,
-        eva: 'The tithe is nearly gathered. Guard the vault.' },
-    ],
-  },
-  {
-    n: 3, title: 'THE SANCTUM HOLDS',
-    sector: 'KARST PLATEAU — THE OLD HILL FORT', terr: [0.68, 0.28], seed: 1612, holdout: true,
-    credits: 8000, aiCredits: 11000, aiCalm: 0.9,
-    objective: { type: 'survive', minutes: 15 },
-    objText: 'Hold the sanctum for 15 minutes. Seal the three passes with stone and flame.',
-    brief: [
-      'The Coalition storm is coming, disciple, and the Brotherhood has chosen its ground: the old hill sanctum at the heart of the sector, ringed in stone with three gates.',
-      'The crystal within the walls is thin — the true harvest lies beyond the passes, under their guns. Weigh every convoy against the risk. Seal the gates with turret and flame, endure for fifteen minutes, and their offensive breaks on our walls like water.',
-    ],
-    events: [
-      { at: 10, eva: 'The faithful ride to relieve you — fifteen minutes. Seal the passes.' },
-      { at: 175,
-        eva: 'Armor column approaching from the NORTH!',
-        attack: { from: 'north', types: { udc: ['mtnk', 'mtnk', 'jeep'], srp: ['ltnk', 'ltnk', 'bike'] } } },
-      { at: 350,
-        eva: 'Assault teams moving in from the SOUTH-WEST!',
-        attack: { from: 'southwest', types: { udc: ['mtnk', 'e2', 'e2', 'jeep'], srp: ['ftnk', 'e4', 'e4', 'bike'] } } },
-      { at: 460, crates: 2, eva: 'Supply drop inbound — salvage crates at the perimeter.' },
-      { at: 545,
-        eva: 'Artillery sighted EAST — do not let them shell the walls!',
-        attack: { from: 'east', types: { udc: ['msam', 'msam', 'mtnk'], srp: ['arty', 'arty', 'ltnk'] } } },
-      { at: 700,
-        eva: 'The vanguard of the faithful has broken through to your gates!',
-        reinforce: { types: ['ltnk', 'ltnk', 'e4', 'e4'] } },
-      { at: 790,
-        eva: 'FINAL ASSAULT — everything they have left is coming. The sanctum holds!',
-        attack: [
-          { from: 'north', types: { udc: ['mtnk', 'mtnk', 'e3', 'e1', 'e1'], srp: ['ltnk', 'ltnk', 'e4', 'e1', 'e1'] } },
-          { from: 'south', types: { udc: ['mtnk', 'jeep', 'e3', 'e3'], srp: ['ftnk', 'bike', 'e3', 'e3'] } },
-        ] },
-    ],
-  },
-  {
-    n: 4, title: 'FANGS IN THE DARK',
-    sector: 'LANTERN HILLS — COALITION SIGNAL POST', terr: [0.80, 0.60], seed: 3113,
+    n: 2, title: 'FANGS IN THE DARK',
+    sector: 'LANTERN HILLS — COALITION SIGNAL POST', terr: [0.76, 0.44], seed: 3113,
     credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0, aiNoSell: true,
     noHumanSpawn: true,
     objective: { type: 'demolish', btype: 'hq' },
@@ -649,9 +580,45 @@ srp: [
     ],
   },
   {
-    n: 5, title: 'STARVE THE MACHINE',
-    sector: 'ASHFIELD BASIN — THE ENEMY BREADBASKET', terr: [0.60, 0.50], seed: 1886,
-    credits: 6000, aiCredits: 7000, aiCalm: 1.1,
+    n: 3, title: 'TITHES OF THE EARTH',
+    sector: 'THE GREENBELT — CONTESTED FIELDS', terr: [0.68, 0.28], seed: 1475,
+    credits: 3500, aiCredits: 5000, aiCalm: 1.5,
+    objective: { type: 'harvest', amount: 6000 },
+    objText: 'Hold a treasury of 6000 credits at once. Build silos — the Brotherhood audits the vault, not the ledger.',
+    brief: [
+      'Twice now you have won with nothing but the faithful and the dark, disciple. That season is over. Faith does not fuel a war machine — chrysalite does, and the Brotherhood requires a war chest of six thousand credits from this sector. The Coalition squats upon the richest fields.',
+      'You are given ground to build upon at last. Raise the foundry, raise the silos, and guard your harvesters as you would your own blood. The quota is counted in the vault, not the ledger — six thousand credits held at once — so take what is ours from beneath their noses, and spend only what the harvest can replace.',
+    ],
+    events: [
+      { at: 50,
+        eva: 'The faithful whisper of a BLUE chrysalite lode in the midfield. Double value at the refinery.',
+        fn: g => {
+          for (let i = 0; i < g.tib.length; i++) {
+            if (g.tibType[i] === 1 && g.tib[i] > 0) {
+              const cx = i % C.MAP_W, cy = (i / C.MAP_W) | 0;
+              Fog.revealCircle(g, cx, cy, 5);
+              _ping(g, cellCenterX(cx), cellCenterY(cy), 'crate');
+              break;
+            }
+          }
+        } },
+      { at: 260,
+        eva: 'Raiders inbound — they are hunting your harvesters!',
+        attack: { types: { udc: ['jeep', 'jeep', 'e1'], srp: ['bike', 'bggy', 'e1'] }, target: 'harv' } },
+      { every: 210, from: 470, until: 1400,
+        eva: 'Another raiding party is closing on the harvest line.',
+        attack: { types: { udc: ['jeep', 'jeep', 'e3'], srp: ['bike', 'bike', 'e3'] }, target: 'harv' } },
+      { at: 430,
+        eva: 'The Brotherhood has diverted a spare harvester to your tithe.',
+        reinforce: { types: ['harv'] } },
+      { when: g => g.human.credits >= 4800,
+        eva: 'The tithe is nearly gathered. Guard the vault.' },
+    ],
+  },
+  {
+    n: 4, title: 'STARVE THE MACHINE',
+    sector: 'ASHFIELD BASIN — THE ENEMY BREADBASKET', terr: [0.80, 0.60], seed: 1886,
+    credits: 6000, aiCredits: 7000, aiCalm: 1.2,
     objective: { type: 'killEconomy' },
     objText: 'Destroy every UDC refinery and harvester in the sector.',
     brief: [
@@ -676,8 +643,87 @@ srp: [
     ],
   },
   {
-    n: 6, title: 'THE RELIC ROAD',
-    sector: 'PILGRIM ROAD — CONVOY COUNTRY', terr: [0.48, 0.64], seed: 2023,
+    n: 5, title: 'THE SANCTUM HOLDS',
+    sector: 'KARST PLATEAU — THE OLD HILL FORT', terr: [0.60, 0.50], seed: 1612, holdout: true,
+    credits: 8000, aiCredits: 11000, aiCalm: 0.95,
+    objective: { type: 'survive', minutes: 15 },
+    objText: 'Hold the sanctum for 15 minutes. Seal the three passes with stone and flame.',
+    brief: [
+      'The Coalition storm is coming, disciple, and the Brotherhood has chosen its ground: the old hill sanctum at the heart of the sector, ringed in stone with three gates.',
+      'The crystal within the walls is thin — the true harvest lies beyond the passes, under their guns. Weigh every convoy against the risk. Seal the gates with turret and flame, endure for fifteen minutes, and their offensive breaks on our walls like water.',
+    ],
+    events: [
+      { at: 10, eva: 'The faithful ride to relieve you — fifteen minutes. Seal the passes.' },
+      { at: 175,
+        eva: 'Armor column approaching from the NORTH!',
+        attack: { from: 'north', types: { udc: ['mtnk', 'mtnk', 'jeep'], srp: ['ltnk', 'ltnk', 'bike'] } } },
+      { at: 350,
+        eva: 'Assault teams moving in from the SOUTH-WEST!',
+        attack: { from: 'southwest', types: { udc: ['mtnk', 'e2', 'e2', 'jeep'], srp: ['ftnk', 'e4', 'e4', 'bike'] } } },
+      { at: 460, crates: 2, eva: 'Supply drop inbound — salvage crates at the perimeter.' },
+      { at: 545,
+        eva: 'Artillery sighted EAST — do not let them shell the walls!',
+        attack: { from: 'east', types: { udc: ['msam', 'msam', 'mtnk'], srp: ['arty', 'arty', 'ltnk'] } } },
+      { at: 700,
+        eva: 'The vanguard of the faithful has broken through to your gates!',
+        reinforce: { types: ['ltnk', 'ltnk', 'e4', 'e4'] } },
+      { at: 790,
+        eva: 'FINAL ASSAULT — everything they have left is coming. The sanctum holds!',
+        attack: [
+          { from: 'north', types: { udc: ['mtnk', 'mtnk', 'e3', 'e1', 'e1'], srp: ['ltnk', 'ltnk', 'e4', 'e1', 'e1'] } },
+          { from: 'south', types: { udc: ['mtnk', 'jeep', 'e3', 'e3'], srp: ['ftnk', 'bike', 'e3', 'e3'] } },
+        ] },
+    ],
+  },
+  {
+    n: 6, title: 'CHANGED VOICES',
+    sector: 'BLACKWATER CROSSING — DEEP BEHIND THE LINES', terr: [0.48, 0.64], seed: 2297,
+    credits: 7000, aiCredits: 9000, aiCalm: 0.9,
+    objective: { type: 'capture', btype: 'eye' },
+    objText: 'Capture the Advanced Comm. Center INTACT with an engineer. If it falls, the mission fails.',
+    brief: [
+      'The Coalition uplink station at Blackwater speaks to their weapon in the sky, disciple. Every gathering of the faithful, every convoy, every temple — the lance finds them all through this one antenna farm.',
+      'The Brotherhood does not want it silenced. The Brotherhood wants it to change WHOSE voice it obeys. Their orbital lance will hunt you the whole while, so move with purpose. Break the garrison, spare the prize — one stray shell and the uplink is ash and the mission with it. Deliver an engineer to its door and the sky itself changes sides.',
+    ],
+    setup(g, o) {
+      const bt = o.side === 'udc' ? 'tmpl' : 'eye';
+      const b = MISSIONS.placeB(g, o.aiSide, bt, o.as.cx + 3, o.as.cy + 2);
+      const twr = o.aiSide === 'udc' ? 'gtwr' : 'gun';
+      if (b) {
+        MISSIONS.placeB(g, o.aiSide, twr, b.cx - 2, b.cy + 2);
+        MISSIONS.placeB(g, o.aiSide, twr, b.cx + b.w + 1, b.cy + 2);
+      }
+    },
+    events: [
+      { at: 30,
+        eva: 'The prize must be taken INTACT. An engineer must reach it — keep your guns off it.',
+        fn: g => {
+          const ob = g.mission.objective;
+          const bt = typeof ob.btype === 'object' ? ob.btype[g.humanSide] : ob.btype;
+          for (const b of g.buildings.values()) {
+            if (b.type !== bt) continue;
+            Fog.revealCircle(g, b.cx + 1, b.cy + 1, 5);
+            _ping(g, cellCenterX(b.cx + 1), cellCenterY(b.cy + 1), 'crate');
+            break;
+          }
+        } },
+      { when: g => {
+          const ob = g.mission.objective;
+          const bt = typeof ob.btype === 'object' ? ob.btype[g.humanSide] : ob.btype;
+          for (const b of g.buildings.values()) {
+            if (b.type === bt && b.owner !== g.humanSide) return b.hp < b.maxHp * 0.6;
+          }
+          return false;
+        },
+        eva: 'WARNING — the prize is burning! Cease fire around it!' },
+      { at: 420,
+        eva: 'An engineering cell has arrived at the landing zone.',
+        reinforce: { types: ['e6', 'e6', 'apc'] } },
+    ],
+  },
+  {
+    n: 7, title: 'THE RELIC ROAD',
+    sector: 'PILGRIM ROAD — CONVOY COUNTRY', terr: [0.55, 0.34], seed: 2023,
     credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0, aiNoSell: true,
     objective: { type: 'escort', unit: 'apc', dest: 'ai', radius: 2.5 },
     noHumanSpawn: true,
@@ -729,14 +775,14 @@ srp: [
     ],
   },
   {
-    n: 7, title: 'BLIND THE LANCE',
-    sector: 'MIRROR MESA — THE UPLINK FIELDS', terr: [0.55, 0.34], seed: 5225,
-    credits: 6000, aiCredits: 10000, aiCalm: 0.85,
+    n: 8, title: 'BLIND THE LANCE',
+    sector: 'MIRROR MESA — THE UPLINK FIELDS', terr: [0.36, 0.52], seed: 5225,
+    credits: 6500, aiCredits: 10000, aiCalm: 0.8,
     objective: { type: 'demolish', btype: 'eye' },
     objText: 'Destroy the uplink station that feeds their orbital lance. Everything else is optional.',
     brief: [
-      'The Coalition’s weapon in the sky sees everything, disciple — because a station on this mesa tells it where to look. Every gathering of the faithful, every convoy, every temple: the lance finds them all through this one uplink.',
-      'Their garrison will bleed you for every field between here and the mesa. Do not oblige them. Build fast, strike where it matters, and tear the uplink out by the roots. When it falls, the sky goes dark — and the Brotherhood moves unseen once more.',
+      'They learned from Blackwater, disciple. When you turned their uplink, the Coalition did not build another they could lose — they built this one on Mirror Mesa, ringed in guns and wired to burn itself before it ever answers to Seth.',
+      'So this one does not change hands. It comes down. Their garrison will bleed you for every field between here and the mesa; do not oblige them. Build fast, strike where it matters, and tear the uplink out by the roots. When it falls, the sky goes dark for good.',
     ],
     setup(g, o) {
       const b = MISSIONS.placeB(g, o.aiSide, 'eye', o.as.cx + 3, o.as.cy + 2);
@@ -768,52 +814,6 @@ srp: [
           return false;
         },
         eva: 'The uplink is cracking! Put it down before their engineers answer!' },
-    ],
-  },
-  {
-    n: 8, title: 'CHANGED VOICES',
-    sector: 'BLACKWATER CROSSING — DEEP BEHIND THE LINES', terr: [0.36, 0.52], seed: 2297,
-    credits: 7000, aiCredits: 9000, aiCalm: 0.8,
-    objective: { type: 'capture', btype: 'eye' },
-    objText: 'Capture the Advanced Comm. Center INTACT with an engineer. If it falls, the mission fails.',
-    brief: [
-      'The Coalition uplink station in this sector speaks to their weapon in the sky, disciple. After Mirror Mesa they built its twin — and this time the Brotherhood does not want it silenced. The Brotherhood wants it to change WHOSE voice it obeys.',
-      'Their orbital lance will hunt you the whole while, so move with purpose. Break the garrison, spare the prize — one stray shell and the uplink is ash and the mission with it. Deliver an engineer to its door and the sky itself changes sides.',
-    ],
-    setup(g, o) {
-      const bt = o.side === 'udc' ? 'tmpl' : 'eye';
-      const b = MISSIONS.placeB(g, o.aiSide, bt, o.as.cx + 3, o.as.cy + 2);
-      const twr = o.aiSide === 'udc' ? 'gtwr' : 'gun';
-      if (b) {
-        MISSIONS.placeB(g, o.aiSide, twr, b.cx - 2, b.cy + 2);
-        MISSIONS.placeB(g, o.aiSide, twr, b.cx + b.w + 1, b.cy + 2);
-      }
-    },
-    events: [
-      { at: 30,
-        eva: 'The prize must be taken INTACT. An engineer must reach it — keep your guns off it.',
-        fn: g => {
-          const ob = g.mission.objective;
-          const bt = typeof ob.btype === 'object' ? ob.btype[g.humanSide] : ob.btype;
-          for (const b of g.buildings.values()) {
-            if (b.type !== bt) continue;
-            Fog.revealCircle(g, b.cx + 1, b.cy + 1, 5);
-            _ping(g, cellCenterX(b.cx + 1), cellCenterY(b.cy + 1), 'crate');
-            break;
-          }
-        } },
-      { when: g => {
-          const ob = g.mission.objective;
-          const bt = typeof ob.btype === 'object' ? ob.btype[g.humanSide] : ob.btype;
-          for (const b of g.buildings.values()) {
-            if (b.type === bt && b.owner !== g.humanSide) return b.hp < b.maxHp * 0.6;
-          }
-          return false;
-        },
-        eva: 'WARNING — the prize is burning! Cease fire around it!' },
-      { at: 420,
-        eva: 'An engineering cell has arrived at the landing zone.',
-        reinforce: { types: ['e6', 'e6', 'apc'] } },
     ],
   },
   {
@@ -1117,7 +1117,10 @@ MISSIONS.arc = function (side) {
 
 const MissionProgress = {
   _mem: { udc: 0, srp: 0 },
-  _key(side) { return 'hw_progress_' + (side === 'srp' ? 'srp' : 'udc'); },
+  // the Seth arc was re-ordered, so a stored index from the old sequence
+  // would unlock a different operation than the player actually earned —
+  // it gets a fresh key rather than a misread of the old one
+  _key(side) { return side === 'srp' ? 'hw_progress_srp2' : 'hw_progress_udc'; },
   _norm(side) { return side === 'srp' ? 'srp' : 'udc'; },
   get(side) {
     const s = this._norm(side);
