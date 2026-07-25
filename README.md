@@ -69,9 +69,26 @@ so bandwidth is tiny. Notes:
 - Both players should run the **same browser** (e.g. both Chrome) — the sims
   are checksummed against each other and a divergence ends the match with a
   desync notice.
-- Connection uses a public STUN server for NAT traversal; on a strict
-  symmetric-NAT network the direct connection may fail (there is no relay).
-  Same LAN always works.
+- **If it always fails with "no route found", this is why.** The connection
+  uses public STUN servers to discover each player's public address. STUN can
+  only *find* an address — it cannot force a path through a router that
+  refuses inbound connections. On a strict symmetric NAT, carrier-grade NAT,
+  or most mobile networks, two such players can never reach each other
+  directly, and no amount of retrying will change that. Same LAN always works.
+  The game now tells you which case you are in: if your invite or reply code
+  contains local addresses only, it says so *before* you send it, and a failed
+  connection reports whether one side or both had no routable address.
+- **Playing across the internet on a strict network needs a TURN relay.**
+  A relay needs credentials, so it cannot be baked into a static file — set
+  your own from the browser console on both machines:
+
+  ```js
+  localStorage.setItem('hw_turn', JSON.stringify(
+    { urls: 'turn:your.host:3478', username: 'user', credential: 'pass' }))
+  ```
+
+  Any TURN server works (`coturn` self-hosted, or a hosted provider). Without
+  it the game behaves exactly as before: direct connections only.
 - For fun/testing on one machine: open two tabs of
   `?mpbc=room1&mphost=1&side=udc` and `?mpbc=room1` — they connect through a
   local channel, no network at all.

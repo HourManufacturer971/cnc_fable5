@@ -143,21 +143,85 @@ const NET = (function () {
 
   // ---- transport: WebRTC with manual (copy-paste) signaling ------------------
 
+  // STUN alone only discovers your public address; it cannot help when BOTH
+  // routers refuse an inbound path (symmetric NAT, carrier-grade NAT, a lot of
+  // mobile and corporate networks). That case needs a TURN relay, which means
+  // credentials, which means it cannot ship in a static file. So it is opt-in:
+  //
+  //   localStorage.setItem('hw_turn', JSON.stringify(
+  //     { urls: 'turn:host:3478', username: 'u', credential: 'p' }))
+  //
+  // Accepts one object or an array. Absent, the game behaves exactly as before.
+  function _turnServers() {
+    let raw = null;
+    try { raw = localStorage.getItem('hw_turn'); } catch (e) { /* storage denied */ }
+    if (!raw) return [];
+    try {
+      const v = JSON.parse(raw);
+      return (Array.isArray(v) ? v : [v]).filter(s => s && s.urls);
+    } catch (e) { return []; }
+  }
+
   function _mkPeer() {
     return new RTCPeerConnection({
-      iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
+      iceServers: [
+        { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+      ].concat(_turnServers()),
     });
   }
 
+  // Does this description carry a candidate that is any use to a peer on
+  // ANOTHER machine? Host candidates are not: Chrome hides them behind mDNS
+  // ".local" names that only resolve on the same LAN, and a bare LAN IP is
+  // unroutable from outside anyway. Only a server-reflexive (STUN) or relay
+  // (TURN) candidate can cross the internet.
+  function _routableCands(sdp) {
+    let srflx = 0, relay = 0, host = 0;
+    for (const line of String(sdp || '').split(/\r?\n/)) {
+      const m = line.match(/^a=candidate:.* typ (\w+)/);
+      if (!m) continue;
+      if (m[1] === 'srflx' || m[1] === 'prflx') srflx++;
+      else if (m[1] === 'relay') relay++;
+      else host++;
+    }
+    return { srflx, relay, host, routable: srflx + relay };
+  }
+
   function _gathered(p) {
-    // resolve once ICE gathering finishes so the SDP carries every candidate
+    // Resolve once ICE gathering finishes so the SDP carries every candidate.
+    //
+    // The cap used to be a flat 4s, which quietly truncated gathering on any
+    // link where STUN answers slowly: the code went out carrying only mDNS
+    // host candidates, and every cross-network game then failed with no
+    // explanation. Now the wait ends EARLY once something routable has been
+    // gathered, and otherwise holds on much longer before giving up.
     if (p.iceGatheringState === 'complete') return Promise.resolve();
     return new Promise(res => {
-      const t = setTimeout(res, 4000); // some stacks never report 'complete'
+      let done = false;
+      const finish = () => { if (!done) { done = true; clearTimeout(hard); clearInterval(poll); res(); } };
+      // some stacks never report 'complete' — this is the backstop
+      const hard = setTimeout(finish, 12000);
+      // ...but do not make everyone wait 12s: the moment a reflexive or relay
+      // candidate lands, the code is good enough to send
+      const poll = setInterval(() => {
+        const d = p.localDescription;
+        if (d && _routableCands(d.sdp).routable > 0) finish();
+      }, 250);
       p.addEventListener('icegatheringstatechange', () => {
-        if (p.iceGatheringState === 'complete') { clearTimeout(t); res(); }
+        if (p.iceGatheringState === 'complete') finish();
       });
     });
+  }
+
+  // Warn BEFORE the code is sent, rather than after both players have pasted
+  // and waited. A code with no routable candidate can only ever connect
+  // between two machines on the same network.
+  function _codeReach(p, what) {
+    const c = _routableCands(p.localDescription && p.localDescription.sdp);
+    if (c.routable > 0) return what + ' ready — send it to your opponent.';
+    return what + ' ready, but it contains LOCAL addresses only — this will ' +
+      'connect on the same network, not over the internet. (No STUN reply: ' +
+      'a firewall or the network is blocking it.)';
   }
 
   function _wireChannel(dc) {
@@ -173,6 +237,25 @@ const NET = (function () {
              close: () => { try { dc.close(); } catch (e) {} } };
   }
 
+  // 'failed' means ICE tried every candidate pair and none worked. That is
+  // almost always NAT: with no TURN relay configured, two peers whose routers
+  // both hide them can never meet. Say so, instead of a bare "connection lost"
+  // that reads like a bug in the game.
+  function _failReason(p) {
+    const mine = _routableCands(p.localDescription && p.localDescription.sdp);
+    const theirs = _routableCands(p.remoteDescription && p.remoteDescription.sdp);
+    if (!mine.routable && !theirs.routable) {
+      return 'No route found — both codes carried local addresses only. ' +
+        'This pair can only connect on the same network.';
+    }
+    if (!mine.routable || !theirs.routable) {
+      return 'No route found — one side\'s code carried local addresses only ' +
+        '(its network blocked STUN). Same network only, or add a TURN relay.';
+    }
+    return 'No route found — both networks refused a direct connection. ' +
+      'This usually needs a TURN relay (see README).';
+  }
+
   // host: build the invite code
   async function host(pickedSide, statusCb) {
     _teardown();               // drop any earlier attempt (re-host, host-after-join)
@@ -183,7 +266,7 @@ const NET = (function () {
       // 'disconnected' is transient (wifi blip, NAT rebind) and often
       // recovers — the lockstep barrier just stalls meanwhile. Only a hard
       // failure (or the channel actually closing) forfeits the match.
-      if (pc && pc.connectionState === 'failed') _peerGone();
+      if (pc && pc.connectionState === 'failed') _peerGone(_failReason(pc));
     };
     _wireChannel(pc.createDataChannel('hw', { ordered: true }));
     const p = pc;                      // this attempt's peer; Back/re-host may swap pc
@@ -192,7 +275,7 @@ const NET = (function () {
     await p.setLocalDescription(offer);
     await _gathered(p);
     if (pc !== p) throw new Error('Cancelled');
-    _status('Invite code ready — send it to your opponent.');
+    _status(_codeReach(p, 'Invite code'));
     return _enc({ v: PROTO, k: 'o', d: _packSdp(p.localDescription.sdp) });
   }
 
@@ -219,7 +302,7 @@ const NET = (function () {
       // 'disconnected' is transient (wifi blip, NAT rebind) and often
       // recovers — the lockstep barrier just stalls meanwhile. Only a hard
       // failure (or the channel actually closing) forfeits the match.
-      if (pc && pc.connectionState === 'failed') _peerGone();
+      if (pc && pc.connectionState === 'failed') _peerGone(_failReason(pc));
     };
     pc.ondatachannel = ev => _wireChannel(ev.channel);
     const p = pc;                      // this attempt's peer; Back/re-join may swap pc
@@ -229,7 +312,7 @@ const NET = (function () {
     await p.setLocalDescription(answer);
     await _gathered(p);
     if (pc !== p) throw new Error('Cancelled');
-    _status('Reply code ready — send it back, then wait…');
+    _status(_codeReach(p, 'Reply code') + ' Send it back, then wait…');
     return _enc({ v: PROTO, k: 'a', d: _packSdp(p.localDescription.sdp) });
   }
 
@@ -309,7 +392,7 @@ const NET = (function () {
     sentUpTo = DELAY;
   }
 
-  function _peerGone() {
+  function _peerGone(why) {
     if (!chan && !pc) return;
     const wasActive = active;
     _teardown();
@@ -317,7 +400,7 @@ const NET = (function () {
       EV.emit('eva', 'Opponent disconnected — you hold the field');
       Main.endGame(true);
     } else {
-      _status('Connection lost.');
+      _status(why || 'Connection lost.');
       if (onRematch) onRematch('gone');   // score screen: stop offering rematch
     }
   }
