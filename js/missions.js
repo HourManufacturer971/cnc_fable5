@@ -472,7 +472,7 @@ udc: [
 srp: [
   {
     n: 1, title: 'FIRST SERMON',
-    sector: 'THE VERDANT REACH — SOUTHERN FRONTIER', terr: [0.86, 0.32], seed: 8121,
+    sector: 'THE VERDANT REACH — SOUTHERN FRONTIER', terr: [0.86, 0.32], seed: 1338,
     credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0, aiNoSell: true,
     noHumanSpawn: true,
     // the classic squad mission: no base, no production for ANYONE — the
@@ -531,7 +531,7 @@ srp: [
   },
   {
     n: 2, title: 'TITHES OF THE EARTH',
-    sector: 'THE GREENBELT — CONTESTED FIELDS', terr: [0.76, 0.44], seed: 4257,
+    sector: 'THE GREENBELT — CONTESTED FIELDS', terr: [0.76, 0.44], seed: 1475,
     credits: 3000, aiCredits: 5000, aiCalm: 1.4,
     objective: { type: 'harvest', amount: 6000 },
     objText: 'Hold a treasury of 6000 credits at once. Build silos — the Brotherhood audits the vault, not the ledger.',
@@ -567,7 +567,7 @@ srp: [
   },
   {
     n: 3, title: 'THE SANCTUM HOLDS',
-    sector: 'KARST PLATEAU — THE OLD HILL FORT', terr: [0.68, 0.28], seed: 9773, holdout: true,
+    sector: 'KARST PLATEAU — THE OLD HILL FORT', terr: [0.68, 0.28], seed: 1612, holdout: true,
     credits: 8000, aiCredits: 11000, aiCalm: 0.9,
     objective: { type: 'survive', minutes: 15 },
     objText: 'Hold the sanctum for 15 minutes. Seal the three passes with stone and flame.',
@@ -650,7 +650,7 @@ srp: [
   },
   {
     n: 5, title: 'STARVE THE MACHINE',
-    sector: 'ASHFIELD BASIN — THE ENEMY BREADBASKET', terr: [0.60, 0.50], seed: 3141,
+    sector: 'ASHFIELD BASIN — THE ENEMY BREADBASKET', terr: [0.60, 0.50], seed: 1886,
     credits: 6000, aiCredits: 7000, aiCalm: 1.1,
     objective: { type: 'killEconomy' },
     objText: 'Destroy every UDC refinery and harvester in the sector.',
@@ -677,7 +677,7 @@ srp: [
   },
   {
     n: 6, title: 'THE RELIC ROAD',
-    sector: 'PILGRIM ROAD — CONVOY COUNTRY', terr: [0.48, 0.64], seed: 5150,
+    sector: 'PILGRIM ROAD — CONVOY COUNTRY', terr: [0.48, 0.64], seed: 2023,
     credits: 0, aiCredits: 0, aiCalm: 9, aiWaveCap: 0, aiNoSell: true,
     objective: { type: 'escort', unit: 'apc', dest: 'ai', radius: 2.5 },
     noHumanSpawn: true,
@@ -772,7 +772,7 @@ srp: [
   },
   {
     n: 8, title: 'CHANGED VOICES',
-    sector: 'BLACKWATER CROSSING — DEEP BEHIND THE LINES', terr: [0.36, 0.52], seed: 7414,
+    sector: 'BLACKWATER CROSSING — DEEP BEHIND THE LINES', terr: [0.36, 0.52], seed: 2297,
     credits: 7000, aiCredits: 9000, aiCalm: 0.8,
     objective: { type: 'capture', btype: 'eye' },
     objText: 'Capture the Advanced Comm. Center INTACT with an engineer. If it falls, the mission fails.',
@@ -818,7 +818,7 @@ srp: [
   },
   {
     n: 9, title: 'BREAK THE BASTION',
-    sector: 'BASTION GORGE — THE COALITION REDOUBT', terr: [0.28, 0.68], seed: 6008,
+    sector: 'BASTION GORGE — THE COALITION REDOUBT', terr: [0.28, 0.68], seed: 2434,
     credits: 8000, aiCredits: 12000, aiCalm: 0.65, aiWaveCap: 12,
     objective: { type: 'annihilate' },
     objText: 'Annihilate the UDC fortress. Total victory.',
@@ -848,7 +848,7 @@ srp: [
   },
   {
     n: 10, title: 'AGE OF SETH',
-    sector: 'AVALANCHE FOOTHILLS — THE LAST FORTRESS', terr: [0.15, 0.74], seed: 9091,
+    sector: 'AVALANCHE FOOTHILLS — THE LAST FORTRESS', terr: [0.15, 0.74], seed: 2571,
     credits: 10000, aiCredits: 16000, aiCalm: 0.45, aiWaveCap: 14,
     objective: { type: 'annihilate' },
     objText: 'Annihilate the fortress. Their whole war machine is awake — bury it.',
