@@ -15,7 +15,9 @@ const AI = (function () {
   // masses higher so late-game strikes feel like offensives, not patrols.
   function _calm(g) { return (g.mission && g.mission.aiCalm) || 1; }
   function _waveCap(g) {
-    if (g.mission && g.mission.aiWaveCap) return g.mission.aiWaveCap;
+    // 0 is a REAL setting — raid and escort ops switch strike waves off
+    // entirely — so test for undefined, not truthiness
+    if (g.mission && g.mission.aiWaveCap !== undefined) return g.mission.aiWaveCap;
     if (g.mission && g.mission.n) return 9;
     return 11;
   }
@@ -654,6 +656,11 @@ const AI = (function () {
       return;
     }
 
+    // a cap of 0 means this op fields no strike waves at all (the commando
+    // raid and the convoy escort): the garrison holds what it has and never
+    // masses. Bail before staging, or readiness passes on a zero threshold
+    // and the wave machinery stages an empty force every tick.
+    if (_waveCap(g) === 0) return;
     if (g.tick < st.nextWaveAt) return;
     // gather the strike force: everything idle beyond a small home garrison
     const idle = _military(g, p).filter(u => u.state === 'idle' && !DATA.units[u.type].air);
@@ -678,7 +685,7 @@ const AI = (function () {
     idle.sort((a, b) =>
       dist(b.x, b.y, baseX, baseY) - dist(a.x, a.y, baseX, baseY));
     let launch = idle.length - garrison;
-    if (g.mission && g.mission.aiWaveCap) launch = Math.min(launch, g.mission.aiWaveCap);
+    if (g.mission && g.mission.aiWaveCap !== undefined) launch = Math.min(launch, g.mission.aiWaveCap);
     const force = idle.slice(0, launch);
     // pick this wave's approach: the first strikes come in near-frontal, the
     // repertoire widens to full flanking sweeps as the war grinds on

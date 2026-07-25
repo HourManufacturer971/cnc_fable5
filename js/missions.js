@@ -140,7 +140,7 @@ udc: [
   {
     n: 3, title: 'STATIC LINE',
     sector: 'KARST PLATEAU — THE OLD HILL FORT', terr: [0.31, 0.56], seed: 9773, holdout: true,
-    credits: 8000, aiCredits: 11000, aiCalm: 0.5,
+    credits: 8000, aiCredits: 11000, aiCalm: 0.9,
     objective: { type: 'survive', minutes: 15 },
     objText: 'Hold the plateau for 15 minutes. Fortify the three passes.',
     brief: [
@@ -226,7 +226,7 @@ udc: [
   {
     n: 5, title: 'SCORCHED HARVEST',
     sector: 'ASHFIELD BASIN — THE ENEMY BREADBASKET', terr: [0.42, 0.62], seed: 3141,
-    credits: 6000, aiCredits: 7000,
+    credits: 6000, aiCredits: 7000, aiCalm: 1.1,
     objective: { type: 'killEconomy' },
     objText: 'Destroy every Brotherhood of Seth refinery and harvester in the sector.',
     brief: [
@@ -306,7 +306,7 @@ udc: [
   {
     n: 7, title: 'SILENCE THE TEMPLE',
     sector: 'EMBER VALE — THE TEMPLE GROUNDS', terr: [0.47, 0.30], seed: 4004,
-    credits: 6000, aiCredits: 10000, aiCalm: 0.8,
+    credits: 6000, aiCredits: 10000, aiCalm: 0.85,
     objective: { type: 'demolish', btype: 'tmpl' },
     objText: 'Destroy the Temple of Seth before its fire falls. Everything else is optional.',
     brief: [
@@ -348,7 +348,7 @@ udc: [
   {
     n: 8, title: 'INSIDE JOB',
     sector: 'BLACKWATER CROSSING — DEEP BEHIND THE LINES', terr: [0.63, 0.55], seed: 7414,
-    credits: 7000, aiCredits: 9000, aiCalm: 0.9,
+    credits: 7000, aiCredits: 9000, aiCalm: 0.8,
     objective: { type: 'capture', btype: 'tmpl' },
     objText: 'Capture the Temple of Seth INTACT with an engineer. If it falls, the mission fails.',
     brief: [
@@ -394,7 +394,7 @@ udc: [
   {
     n: 9, title: 'SEVERED HEAD',
     sector: "SETH'S THROAT — FORTIFIED GORGE", terr: [0.72, 0.36], seed: 6008,
-    credits: 8000, aiCredits: 12000, aiCalm: 0.7, aiWaveCap: 12,
+    credits: 8000, aiCredits: 12000, aiCalm: 0.65, aiWaveCap: 12,
     objective: { type: 'annihilate' },
     objText: 'Annihilate the Brotherhood of Seth stronghold. Total victory.',
     brief: [
@@ -424,7 +424,7 @@ udc: [
   {
     n: 10, title: 'AVALANCHE',
     sector: 'AVALANCHE FOOTHILLS — THE LAST FORTRESS', terr: [0.83, 0.25], seed: 9091,
-    credits: 10000, aiCredits: 16000, aiCalm: 0.5, aiWaveCap: 14,
+    credits: 10000, aiCredits: 16000, aiCalm: 0.45, aiWaveCap: 14,
     objective: { type: 'annihilate' },
     objText: 'Annihilate the fortress. Everything they have is already built — and pointed at you.',
     brief: [
@@ -568,7 +568,7 @@ srp: [
   {
     n: 3, title: 'THE SANCTUM HOLDS',
     sector: 'KARST PLATEAU — THE OLD HILL FORT', terr: [0.68, 0.28], seed: 9773, holdout: true,
-    credits: 8000, aiCredits: 11000, aiCalm: 0.5,
+    credits: 8000, aiCredits: 11000, aiCalm: 0.9,
     objective: { type: 'survive', minutes: 15 },
     objText: 'Hold the sanctum for 15 minutes. Seal the three passes with stone and flame.',
     brief: [
@@ -651,7 +651,7 @@ srp: [
   {
     n: 5, title: 'STARVE THE MACHINE',
     sector: 'ASHFIELD BASIN — THE ENEMY BREADBASKET', terr: [0.60, 0.50], seed: 3141,
-    credits: 6000, aiCredits: 7000,
+    credits: 6000, aiCredits: 7000, aiCalm: 1.1,
     objective: { type: 'killEconomy' },
     objText: 'Destroy every UDC refinery and harvester in the sector.',
     brief: [
@@ -731,7 +731,7 @@ srp: [
   {
     n: 7, title: 'BLIND THE LANCE',
     sector: 'MIRROR MESA — THE UPLINK FIELDS', terr: [0.55, 0.34], seed: 5225,
-    credits: 6000, aiCredits: 10000, aiCalm: 0.8,
+    credits: 6000, aiCredits: 10000, aiCalm: 0.85,
     objective: { type: 'demolish', btype: 'eye' },
     objText: 'Destroy the uplink station that feeds their orbital lance. Everything else is optional.',
     brief: [
@@ -773,7 +773,7 @@ srp: [
   {
     n: 8, title: 'CHANGED VOICES',
     sector: 'BLACKWATER CROSSING — DEEP BEHIND THE LINES', terr: [0.36, 0.52], seed: 7414,
-    credits: 7000, aiCredits: 9000, aiCalm: 0.9,
+    credits: 7000, aiCredits: 9000, aiCalm: 0.8,
     objective: { type: 'capture', btype: 'eye' },
     objText: 'Capture the Advanced Comm. Center INTACT with an engineer. If it falls, the mission fails.',
     brief: [
@@ -819,7 +819,7 @@ srp: [
   {
     n: 9, title: 'BREAK THE BASTION',
     sector: 'BASTION GORGE — THE COALITION REDOUBT', terr: [0.28, 0.68], seed: 6008,
-    credits: 8000, aiCredits: 12000, aiCalm: 0.7, aiWaveCap: 12,
+    credits: 8000, aiCredits: 12000, aiCalm: 0.65, aiWaveCap: 12,
     objective: { type: 'annihilate' },
     objText: 'Annihilate the UDC fortress. Total victory.',
     brief: [
@@ -849,7 +849,7 @@ srp: [
   {
     n: 10, title: 'AGE OF SETH',
     sector: 'AVALANCHE FOOTHILLS — THE LAST FORTRESS', terr: [0.15, 0.74], seed: 9091,
-    credits: 10000, aiCredits: 16000, aiCalm: 0.5, aiWaveCap: 14,
+    credits: 10000, aiCredits: 16000, aiCalm: 0.45, aiWaveCap: 14,
     objective: { type: 'annihilate' },
     objText: 'Annihilate the fortress. Their whole war machine is awake — bury it.',
     brief: [
