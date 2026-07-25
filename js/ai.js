@@ -970,6 +970,68 @@ const AI = (function () {
       }
     }
 
+    // AIR ALARM, part two: idle guns that can actually shoot upward move to
+    // cover the ground that was hit. Units with no anti-air weapon stay put —
+    // marching them under a gunship just feeds it kills.
+    if (st.airAlarmUntil > g.tick && st.airAt && g.tick % 90 === 31) {
+      let moved = 0;
+      for (const u of _military(g, p)) {
+        if (moved >= 4) break;
+        if (u.state !== 'idle' || !_canHitAir(u)) continue;
+        if (_cellDist(worldToCell(u.x), worldToCell(u.y), st.airAt.cx, st.airAt.cy) <= 8) {
+          moved++;              // already covering it
+          continue;
+        }
+        orderMove(u, clamp(st.airAt.cx + (moved % 3) - 1, 1, C.MAP_W - 2),
+                     clamp(st.airAt.cy + ((moved / 3) | 0) - 1, 1, C.MAP_H - 2));
+        moved++;
+      }
+    }
+
+    // YARD LOST: the construction yard IS the base. Without one the AI can
+    // still field units from standing factories, but it can never build,
+    // place or expand again — so replacing it outranks the expansion plan and
+    // everything else an MCV might be saved for.
+    {
+      const liveYards = _conyards(g, p);
+      if (liveYards.length) {
+        st.yardAt = { cx: liveYards[0].cx, cy: liveYards[0].cy };
+        st.rebuildYard = false;
+      } else if (st.yardAt) {
+        st.rebuildYard = true;
+        let mcv = null;
+        for (const id of p.unitIds) {
+          const u = g.units.get(id);
+          if (u && u.type === 'mcv') { mcv = u; break; }
+        }
+        if (!mcv) {
+          // the vehicle line's next slot buys the replacement, if it still can
+          st.wantMcv = Production.prereqOk(p, 'mcv');
+          st.expandAt = 0;          // the expansion plan is moot with no base
+        } else if (g.tick % 60 === 43) {
+          st.wantMcv = false;
+          // redeploy on the old footprint if it is clear, else the nearest
+          // ground that will take a yard — widening the search on each retry
+          st.yardTries = st.yardTries || 0;
+          const spot = _deploySpotNear(g, st.yardAt, 4 + st.yardTries * 3) ||
+                       _deploySpotNear(g, { cx: worldToCell(mcv.x), cy: worldToCell(mcv.y) },
+                                       4 + st.yardTries * 3);
+          if (spot) {
+            const d = dist(mcv.x, mcv.y, cellCenterX(spot.cx), cellCenterY(spot.cy));
+            if (d <= C.CELL * 2.5) {
+              if (orderDeploy(mcv)) { st.rebuildYard = false; st.yardTries = 0; }
+              else st.yardTries++;
+            } else if (mcv.state === 'idle') {
+              orderMove(mcv, spot.cx, spot.cy);
+            }
+          } else {
+            st.yardTries++;
+          }
+        }
+      }
+    }
+
+
     // crate runs at every difficulty: loose salvage near an idle raider is
     // free money/tech — the elite AI ranges much further for it
     if (g.tick % 150 === 7) _crateRuns(g, p, _elite(g) ? 26 : 14);
@@ -1046,67 +1108,6 @@ const AI = (function () {
             if (orderEnter(u, b)) sent++;
           }
           if (sent) break;   // one house per sweep
-        }
-      }
-    }
-
-    // AIR ALARM, part two: idle guns that can actually shoot upward move to
-    // cover the ground that was hit. Units with no anti-air weapon stay put —
-    // marching them under a gunship just feeds it kills.
-    if (st.airAlarmUntil > g.tick && st.airAt && g.tick % 90 === 31) {
-      let moved = 0;
-      for (const u of _military(g, p)) {
-        if (moved >= 4) break;
-        if (u.state !== 'idle' || !_canHitAir(u)) continue;
-        if (_cellDist(worldToCell(u.x), worldToCell(u.y), st.airAt.cx, st.airAt.cy) <= 8) {
-          moved++;              // already covering it
-          continue;
-        }
-        orderMove(u, clamp(st.airAt.cx + (moved % 3) - 1, 1, C.MAP_W - 2),
-                     clamp(st.airAt.cy + ((moved / 3) | 0) - 1, 1, C.MAP_H - 2));
-        moved++;
-      }
-    }
-
-    // YARD LOST: the construction yard IS the base. Without one the AI can
-    // still field units from standing factories, but it can never build,
-    // place or expand again — so replacing it outranks the expansion plan and
-    // everything else an MCV might be saved for.
-    {
-      const liveYards = _conyards(g, p);
-      if (liveYards.length) {
-        st.yardAt = { cx: liveYards[0].cx, cy: liveYards[0].cy };
-        st.rebuildYard = false;
-      } else if (st.yardAt) {
-        st.rebuildYard = true;
-        let mcv = null;
-        for (const id of p.unitIds) {
-          const u = g.units.get(id);
-          if (u && u.type === 'mcv') { mcv = u; break; }
-        }
-        if (!mcv) {
-          // the vehicle line's next slot buys the replacement, if it still can
-          st.wantMcv = Production.prereqOk(p, 'mcv');
-          st.expandAt = 0;          // the expansion plan is moot with no base
-        } else if (g.tick % 60 === 43) {
-          st.wantMcv = false;
-          // redeploy on the old footprint if it is clear, else the nearest
-          // ground that will take a yard — widening the search on each retry
-          st.yardTries = st.yardTries || 0;
-          const spot = _deploySpotNear(g, st.yardAt, 4 + st.yardTries * 3) ||
-                       _deploySpotNear(g, { cx: worldToCell(mcv.x), cy: worldToCell(mcv.y) },
-                                       4 + st.yardTries * 3);
-          if (spot) {
-            const d = dist(mcv.x, mcv.y, cellCenterX(spot.cx), cellCenterY(spot.cy));
-            if (d <= C.CELL * 2.5) {
-              if (orderDeploy(mcv)) { st.rebuildYard = false; st.yardTries = 0; }
-              else st.yardTries++;
-            } else if (mcv.state === 'idle') {
-              orderMove(mcv, spot.cx, spot.cy);
-            }
-          } else {
-            st.yardTries++;
-          }
         }
       }
     }
