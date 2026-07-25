@@ -1602,14 +1602,17 @@ const Main = (function () {
       else if (g._ecoArmed) return endGame(true);
     }
     if (ob.type === 'capture') {
-      // win the moment the target type flies your colors; if every standing
-      // copy of it dies first, the mission is failed — the prize was the point
+      // win the moment the target type flies your colors — but only one you
+      // TOOK: a copy you built yourself is not the prize. (Today the targets
+      // are faction-locked so you cannot build one, but the objective should
+      // not depend on that staying true.) If every standing copy dies first,
+      // the mission is failed — the prize was the point.
       const bt = typeof ob.btype === 'object' ? ob.btype[g.humanSide] : ob.btype;
       let standing = false;
       for (const b of g.buildings.values()) {
         if (b.type !== bt) continue;
-        if (b.owner === g.humanSide) return endGame(true);
-        standing = true;
+        if (b.owner === g.humanSide && b._captured) return endGame(true);
+        if (b.owner !== g.humanSide) standing = true;
       }
       if (standing) g._capArmed = true;
       else if (g._capArmed) return endGame(false);
@@ -1626,12 +1629,15 @@ const Main = (function () {
           (ob.radius || 2) * C.CELL) return endGame(true);
     }
     if (ob.type === 'demolish') {
-      // arms while the target stands; wins when the LAST standing copy of
-      // the type is rubble (capturing it doesn't count — destroy means destroy)
+      // arms while the target stands; wins when the LAST standing ENEMY copy
+      // of the type is rubble (capturing it doesn't count — destroy means
+      // destroy). Only enemy-owned copies count: 'hq' is buildable by both
+      // sides, so counting your own would make the mission unwinnable the
+      // moment you raised one.
       const bt = typeof ob.btype === 'object' ? ob.btype[g.humanSide] : ob.btype;
       let standing = 0;
       for (const b of g.buildings.values()) {
-        if (b.type === bt) standing++;
+        if (b.type === bt && b.owner !== g.humanSide) standing++;
       }
       if (standing > 0) g._demArmed = true;
       else if (g._demArmed) return endGame(true);

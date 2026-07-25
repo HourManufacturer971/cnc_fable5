@@ -1200,6 +1200,9 @@ function _transferBuilding(g, t, newOwner) {
   if (i >= 0) ids.splice(i, 1);
   t.owner = newOwner;
   t.repairing = false;
+  // this building changed hands at least once — capture objectives use the
+  // flag to tell a prize you TOOK from one you built yourself
+  t._captured = true;
   g.players[newOwner].buildingIds.push(t.id);
   if (typeof Production !== 'undefined') {
     Production.computePower(g.players[oldOwner]);
