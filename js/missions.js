@@ -10,7 +10,7 @@
 // told from different sides, built from the classic mission archetypes —
 // beachhead, economy, holdout, commando raid, economy hunt, convoy escort,
 // sabotage, capture-intact, stronghold assault, fortress finale. All text,
-// names and story are original Harvest War fiction.
+// names and story are original fiction.
 //
 // Each mission:
 //   n          1-based order within its arc (also the unlock index)

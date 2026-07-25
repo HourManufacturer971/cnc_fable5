@@ -76,7 +76,7 @@ const REPLAY = (function () {
     const d = JSON.parse(json);
     if (!d || !d.meta || d.meta.v !== VER || !Array.isArray(d.log) ||
         typeof d.at !== 'number') {
-      throw new Error('Not a Harvest War save.');
+      throw new Error('Not a Command and Conker save.');
     }
     if (d.meta.p !== undefined && d.meta.p !== NET.PROTO) {
       throw new Error('Save is from an older game version.');
@@ -100,7 +100,7 @@ const REPLAY = (function () {
   function watchData(json) {
     const d = JSON.parse(json);
     if (!d || !d.meta || d.meta.v !== VER || !Array.isArray(d.log)) {
-      throw new Error('Not a Harvest War replay file.');
+      throw new Error('Not a Command and Conker replay file.');
     }
     if (d.meta.p !== NET.PROTO) {
       throw new Error('Replay is from an older game version.');
