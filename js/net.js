@@ -176,15 +176,32 @@ const NET = (function () {
   // unroutable from outside anyway. Only a server-reflexive (STUN) or relay
   // (TURN) candidate can cross the internet.
   function _routableCands(sdp) {
-    let srflx = 0, relay = 0, host = 0;
+    let srflx = 0, relay = 0, host = 0, mdns = 0;
+    const pub = [];
     for (const line of String(sdp || '').split(/\r?\n/)) {
-      const m = line.match(/^a=candidate:.* typ (\w+)/);
+      // candidate:<foundation> <component> <transport> <priority> <ip> <port> typ <type>
+      const m = line.match(/^a=candidate:\S+ \d+ \S+ \d+ (\S+) \d+ typ (\w+)/);
       if (!m) continue;
-      if (m[1] === 'srflx' || m[1] === 'prflx') srflx++;
-      else if (m[1] === 'relay') relay++;
-      else host++;
+      const ip = m[1], typ = m[2];
+      if (typ === 'srflx' || typ === 'prflx') { srflx++; if (pub.indexOf(ip) < 0) pub.push(ip); }
+      else if (typ === 'relay') { relay++; if (pub.indexOf(ip) < 0) pub.push(ip); }
+      else { host++; if (/\.local$/i.test(ip)) mdns++; }
     }
-    return { srflx, relay, host, routable: srflx + relay };
+    return { srflx, relay, host, mdns, pub, routable: srflx + relay };
+  }
+
+  // Read-only peek at what the two codes actually contained. Handy from the
+  // console when a connection will not come up: NET.diag()
+  function diag() {
+    if (!pc) return { error: 'no peer connection — host or join first' };
+    return {
+      local: _routableCands(pc.localDescription && pc.localDescription.sdp),
+      remote: _routableCands(pc.remoteDescription && pc.remoteDescription.sdp),
+      connectionState: pc.connectionState,
+      iceConnectionState: pc.iceConnectionState,
+      iceGatheringState: pc.iceGatheringState,
+      turnConfigured: _turnServers().length > 0,
+    };
   }
 
   function _gathered(p) {
@@ -251,6 +268,21 @@ const NET = (function () {
     if (!mine.routable || !theirs.routable) {
       return 'No route found — one side\'s code carried local addresses only ' +
         '(its network blocked STUN). Same network only, or add a TURN relay.';
+    }
+    // Both sides found a public address, but they are THE SAME address: the
+    // two machines sit behind one router. Nothing here needs to leave the
+    // building, yet neither usable path is open — the LAN addresses are
+    // hidden behind mDNS ".local" names (blocked by a firewall or by WiFi
+    // client isolation), and going out via the shared public address and back
+    // in needs NAT hairpinning, which most home routers do not do.
+    const shared = mine.pub.length && theirs.pub.length &&
+      mine.pub.some(a => theirs.pub.indexOf(a) >= 0);
+    if (shared) {
+      return 'No route found — both machines are behind the SAME router, and ' +
+        'it will not loop a connection back inside (no NAT hairpinning). ' +
+        'The direct LAN path is hidden behind mDNS names your network is ' +
+        'blocking. See the README\'s same-network note — this is fixable ' +
+        'without a relay.';
     }
     return 'No route found — both networks refused a direct connection. ' +
       'This usually needs a TURN relay (see README).';
@@ -783,6 +815,7 @@ const NET = (function () {
     get rematchOffered() { return remoteRq; },
     set onRematch(f) { onRematch = f; },
     DELAY,
+    diag,
     requestRematch,
     host, acceptAnswer, join, testLocal, close,
     pump, ready, applyTick, postTick, stalledMs, notifyPause, initExplored, checksum,

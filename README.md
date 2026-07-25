@@ -78,6 +78,29 @@ so bandwidth is tiny. Notes:
   The game now tells you which case you are in: if your invite or reply code
   contains local addresses only, it says so *before* you send it, and a failed
   connection reports whether one side or both had no routable address.
+- **Two machines on your own network failing?** This is the most common case
+  and it does *not* need a relay. Both browsers find your router's public
+  address, but neither usable path is open:
+  - the direct LAN path is hidden behind mDNS `.local` names, which a
+    firewall or WiFi client isolation is blocking;
+  - going out to your shared public address and back in needs **NAT
+    hairpinning**, which most home routers do not do.
+
+  The game detects this specific pair and says so. Fixes, cheapest first:
+
+  1. In Chrome on **both** machines, open `chrome://flags`, set
+     **Anonymize local IPs exposed by WebRTC** to **Disabled**, and restart
+     the browser. Real LAN addresses then go into the codes and the direct
+     path works. (Firefox: `media.peerconnection.ice.obfuscate_host_addresses`
+     to `false` in `about:config`.)
+  2. Or allow mDNS: let UDP port 5353 through the firewall on both machines
+     and turn off "client isolation" / "AP isolation" on the WiFi access
+     point.
+  3. Run `NET.diag()` in the browser console after a failed attempt — it
+     prints what each code actually contained (`host`, `mdns`, `srflx`,
+     `relay` counts and the public addresses seen), which tells you which of
+     the two paths is missing.
+
 - **Playing across the internet on a strict network needs a TURN relay.**
   A relay needs credentials, so it cannot be baked into a static file — set
   your own from the browser console on both machines:
