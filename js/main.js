@@ -248,7 +248,8 @@ const Main = (function () {
     $('skSideSrp').addEventListener('click', () => { skSide = 'srp'; skSideSync(); });
     $('btnSkBack').addEventListener('click', () => {
       $('skirmish').classList.add('hidden');
-      _showMissions(skFrom);
+      _refreshResumeSave();
+      $('menu').classList.remove('hidden');
     });
     $('btnSkLaunch').addEventListener('click', () => {
       const d = $('skDiff').value;
@@ -571,13 +572,13 @@ const Main = (function () {
     w2: { n: 2, spectate: true }, w3: { n: 3, spectate: true }, w4: { n: 4, spectate: true },
   };
 
-  // the skirmish window remembers which theater opened it (Back returns
-  // there) and which side is toggled for the next battle
-  let skSide = 'udc', skFrom = 'udc';
+  // the skirmish window opens from the MAIN menu (Back returns there); it
+  // remembers which side is toggled for the next battle — the last faction
+  // the player visited pre-selects
+  let skSide = 'udc';
 
   function _showSkirmish(side) {
-    skFrom = baseSide(side || mySide || 'udc');
-    skSide = skFrom;
+    skSide = baseSide(side || mySide || 'udc');
     $('skSideUdc').classList.toggle('sel', skSide === 'udc');
     $('skSideSrp').classList.toggle('sel', skSide === 'srp');
     $('menu').classList.add('hidden');

@@ -505,7 +505,8 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   next supply leg's dashes march toward it (`lineDashOffset`), the default
   caption reads "K/N TERRITORIES SECURED — NEXT: OP N …", and a gold
   `btnContinue` ("Continue — Op N: TITLE", hidden once the arc is finished)
-  jumps straight to the next briefing beside Skirmish/Back. The missions
+  jumps straight to the next briefing beside Back (Skirmish moved to the
+  main menu). The missions
   overlay is deliberately FLAT (scoped CSS: solid veil, no radial gradient,
   no accent glow on panel/map/title). Clicking any unlocked territory opens
   its briefing; the map IS the whole mission select — there is no per-op button
@@ -1232,12 +1233,18 @@ lockstep-safe; `orderEnter`/`unl` were already net commands.
   with `Render.frame`. Pause when menu open (`game.paused`).
 - Menu DOM (#menu overlays in index.html): title screen with the two faction emblems
   (canvas-drawn logos injected), faction buttons UDC / Brotherhood of Seth → Operations
-  (the theater map, ONE accent-highlighted SKIRMISH link row, then the campaign
-  ops) → Briefing → game. The skirmish link opens the dedicated `#skirmish`
-  window (`_showSkirmish`): a settings sheet with a UDC/Brotherhood side toggle,
-  a DIFFICULTY select (Easy/Normal/Hard — the old three ledger rows), the
+  (the theater map + Continue/Back) → Briefing → game. The title screen is
+  deliberately FLAT and lean: no glow (crisp h1 shadow, no accent bleed on the
+  panel, no hover glows — borders light up instead), a uniform overlay veil
+  (no radial halo), and no control-hint or "inspired by" footer lines. Its
+  action row is Resume Battle (when a save fits) / SKIRMISH / Multiplayer /
+  Watch Replay — Skirmish lives HERE, not in the faction theaters. `#btnSkirmish`
+  opens the dedicated `#skirmish`
+  window (`_showSkirmish`): a settings sheet with a UDC/Brotherhood side toggle
+  (pre-selected from the last faction visited), a DIFFICULTY select
+  (Easy/Normal/Hard — the old three ledger rows), the
   full `#skOpts` option set, `#btnSkLaunch` (Commence Battle) and Back (which
-  returns to the theater that opened it, tracked in `skFrom`). The briefing is a full sitrep screen (main.js
+  returns to the MAIN menu). The briefing is a full sitrep screen (main.js
   `_showBriefing`): OP title + a per-mission `sector` stamp, a faction-styled
   classification bar, the brief paragraphs TELETYPED (the untyped tail lives in
   `visibility:hidden` spans so `textContent` is always complete — click the body

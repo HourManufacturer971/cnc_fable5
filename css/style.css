@@ -120,9 +120,9 @@ html, body {
 .overlay {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  /* radial veil: darkest at the panel, lifting at the edges so the living
-     backdrop drifts through around the frame */
-  background: radial-gradient(ellipse 62% 62% at center, rgba(0, 0, 0, 0.32), rgba(0, 0, 0, 0.66));
+  /* flat veil: the living backdrop dims evenly — a radial gradient here
+     reads as a muddy halo around the panel */
+  background: rgba(0, 0, 0, 0.5);
   z-index: 10;
   /* panels may scroll on short (landscape phone) screens; the ancestor
      #wrap sets touch-action:none, so re-allow vertical pans here */
@@ -142,8 +142,7 @@ html, body {
     0 0 46px rgba(0, 0, 0, 0.85),
     inset 0 1px 0 var(--hw-edge-hi),
     inset 0 -2px 5px var(--hw-edge-lo),
-    inset 0 0 34px rgba(0, 0, 0, 0.4),
-    0 0 30px -6px var(--accent);          /* faction glow bleed */
+    inset 0 0 34px rgba(0, 0, 0, 0.4);
   padding: 30px 46px;
   text-align: center;
   color: #d8d0a8;
@@ -168,7 +167,7 @@ h1 {
   font-size: 34px;
   letter-spacing: 6px;
   color: #e0b840;
-  text-shadow: 0 2px 0 #000, 0 0 14px rgba(224, 184, 64, 0.55), 0 0 34px rgba(224, 184, 64, 0.22);
+  text-shadow: 0 2px 0 #000;
 }
 /* scanning shimmer rule — a divider in clear space between the header and
    the faction cards (it used to hang off the h1 and struck through the
@@ -190,11 +189,6 @@ h2 { margin: 0 0 14px; letter-spacing: 4px; color: #e0b840; text-shadow: 0 2px 0
 #menu .panel { max-width: 500px; padding: 26px 40px 20px; }
 #menu h1 { margin-bottom: 8px; }
 #menu .hint { margin: 11px 0 0; }
-#menu .finePrint {
-  margin: 15px 0 0; padding-top: 9px;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-  font-size: 9px; color: #7d7666;
-}
 #menuActions { display: flex; gap: 10px; margin: 10px 0 0; }
 #menuActions button { flex: 1 1 0; margin: 0; padding: 8px 8px 7px; font-size: 12px; }
 .bsub {
@@ -204,8 +198,6 @@ h2 { margin: 0 0 14px; letter-spacing: 4px; color: #e0b840; text-shadow: 0 2px 0
 #menuActions button:hover .bsub { color: #c8c0a0; }
 #menu #btnInstall { width: auto; margin: 10px auto 0; padding: 8px 22px; font-size: 12px; }
 
-.fineOnly { display: block; }
-@media (pointer: coarse) { .fineOnly { display: none; } }
 
 /* short screens (landscape phones): compact the menu so it never scrolls —
    a scrolling panel drags the corner brackets along with the content */
@@ -216,7 +208,7 @@ h2 { margin: 0 0 14px; letter-spacing: 4px; color: #e0b840; text-shadow: 0 2px 0
   .sub { margin-bottom: 9px; }
   .logoSlot, .logoSlot canvas { width: 96px; height: 72px; }
   .faction { padding: 9px 10px 7px; gap: 7px; }
-  #menu .hint, #menu .finePrint { display: none; }
+  #menu .hint { display: none; }
 }
 
 #factionRow { display: flex; gap: 22px; justify-content: center; margin: 0 0 2px; }
@@ -233,7 +225,7 @@ h2 { margin: 0 0 14px; letter-spacing: 4px; color: #e0b840; text-shadow: 0 2px 0
 .faction:hover {
   transform: translateY(-3px);
   border-color: var(--accent);
-  box-shadow: 0 6px 20px -6px var(--accent), inset 0 0 22px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.55), inset 0 0 22px rgba(0, 0, 0, 0.4);
 }
 .logoSlot {
   width: 120px; height: 90px; image-rendering: pixelated;
@@ -268,7 +260,7 @@ button {
 button:hover {
   background: linear-gradient(180deg, #64645a, #46463c);
   border-color: var(--accent);
-  box-shadow: 0 0 13px -2px var(--accent), inset 0 1px 0 var(--hw-edge-hi);
+  box-shadow: inset 0 1px 0 var(--hw-edge-hi);
   color: #fff;
 }
 button:active {
@@ -276,8 +268,8 @@ button:active {
   box-shadow: inset 0 2px 5px var(--hw-edge-lo);
 }
 
-#pickUdc button:hover { color: #e0b840; box-shadow: 0 0 14px -2px var(--hw-gold), inset 0 1px 0 var(--hw-edge-hi); border-color: var(--hw-gold); }
-#pickSrp button:hover { color: #e05038; box-shadow: 0 0 14px -2px var(--hw-red), inset 0 1px 0 var(--hw-edge-hi); border-color: var(--hw-red); }
+#pickUdc button:hover { color: #e0b840; box-shadow: inset 0 1px 0 var(--hw-edge-hi); border-color: var(--hw-gold); }
+#pickSrp button:hover { color: #e05038; box-shadow: inset 0 1px 0 var(--hw-edge-hi); border-color: var(--hw-red); }
 
 #speedRow {
   display: block; font-size: 11px; margin: 8px 0; color: #b8b09a;
@@ -399,7 +391,6 @@ button:active {
 #missions #theaterMap { flex: 0 0 auto; width: 100%; height: auto; }
 #missionsBtns { display: flex; gap: 10px; justify-content: center; margin-top: 10px; }
 #missionsBtns button { width: auto; margin: 0; padding: 7px 22px; }
-#btnSkirmish { border-left: 3px solid var(--accent); }
 @media (max-width: 760px), (max-height: 520px) {
   #missions .panel { padding: 8px 12px 10px; max-width: 96vw; }
   #missions h2 { font-size: 13px; margin: 2px 0 6px; }
