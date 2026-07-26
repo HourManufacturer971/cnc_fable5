@@ -710,12 +710,8 @@ const TERRAINPAINT = (function () {
           const spill = below === T_GRASS || below === T_DIRT;
           for (let dx = 0; dx < CS; dx++) {
             const x = bx + dx;
-            // The wall runs lip..foot. Starting the lip higher and dropping the
-            // foot past the cell edge gives ~17px of face instead of ~13 — a
-            // third more rock standing up, which is what makes a mesa read as
-            // something you look UP at rather than a texture change.
-            const lip = by + 5 + ((vnoise(x, cy * 37, 10, seed ^ 0x3aa) * 4.99) | 0);
-            const foot = by + 22 + ((vnoise(x, cy * 53, 14, seed ^ 0x3bb) * 3.99) | 0);
+            const lip = by + 7 + ((vnoise(x, cy * 37, 10, seed ^ 0x3aa) * 4.99) | 0);
+            const foot = by + 20 + ((vnoise(x, cy * 53, 14, seed ^ 0x3bb) * 3.99) | 0);
             const gully = vnoise(x, cy * 71, 7, seed ^ 0x3dd) > 0.72;
             P(q, x, lip, 1, 1, gully ? '#877a62' : '#a4967a');
             P(q, x, lip + 1, 1, 1, gully ? '#6c614e' : '#83765f');

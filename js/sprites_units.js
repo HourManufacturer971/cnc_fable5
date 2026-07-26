@@ -582,17 +582,11 @@
                 'stnk', 'arty', 'msam', 'harv', 'mcv', 'orca', 'heli'];
 
   const AIR = { orca: true, heli: true };
-  // extrusion height: the visible depth of a hull's side wall. Light vehicles
-  // sit low, tanks and heavies stand tall — a Mammoth should read as a slab of
-  // steel, a buggy as a go-kart.
-  const HULL_H = { jeep: 3, bggy: 3, bike: 2, stnk: 3, arty: 3,
-                   apc: 4, ltnk: 4, mtnk: 5, htnk: 6, ftnk: 4,
-                   msam: 4, harv: 5, mcv: 5 };
-  // Top-face squash of the 3/4 camera. 0.86 is asin 59.3 degrees — nearly
-  // overhead, which flattens the hulls. 0.78 drops the eye to ~51 degrees:
-  // enough that the extruded sides actually show, still comfortably the
-  // C&C1 look rather than a true isometric one.
-  const SQ = 0.78;
+  // extrusion height: 2 for small/light vehicles, 3 for tanks/heavies
+  const HULL_H = { jeep: 2, bggy: 2, bike: 2, stnk: 2, arty: 2,
+                   apc: 3, ltnk: 3, mtnk: 3, htnk: 3, ftnk: 3,
+                   msam: 3, harv: 3, mcv: 3 };
+  const SQ = 0.86; // top-face squash of the 3/4 camera
   // the Mammoth Tank draws visibly bigger than every other tank, overflowing
   // its single-cell footprint like a tall building overflows upward
   const SCALE_BOOST = { htnk: 1.22 };
