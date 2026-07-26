@@ -187,8 +187,11 @@ const AI = (function () {
       const b = g.buildings.get(id);
       if (!b) continue;
       if (b.type !== 'proc' && key !== 'proc') continue;
+      // one row deeper to the SOUTH than the rest of the ring: that is where
+      // the unloading bay and the apron harvesters reverse off sit, and
+      // canPlace refuses those outright, so siting there just burns a try
       if (cx <= b.cx + b.w && cx + w - 1 >= b.cx - 1 &&
-          cy <= b.cy + b.h && cy + h - 1 >= b.cy - 1) return true;
+          cy <= b.cy + b.h + 1 && cy + h - 1 >= b.cy - 1) return true;
     }
     return false;
   }

@@ -416,7 +416,12 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   the field instead of queueing on one cell,
   shoulder idle friendlies off the dock, reroute to a sister refinery if
   theirs is walled off, and cry for help when attacked or stranded —
-  and you can't accidentally wall off your own dock: placement refuses it
+  and you can't accidentally wall off your own dock: placement refuses it.
+  They **reverse into the refinery's unloading bay**, lining up on the apron
+  and backing the last cell in so the tipper ends up under the intake hopper,
+  where a suction hose couples to it for the transfer. A bay that is blocked
+  or unreachable falls back to a kerbside transfer, so the manoeuvre can
+  never be the thing that stalls an economy
 - **Power** — low power halves production speed, kills the radar, and disables
   the Beam Spire, Advanced Guard Tower, and SAM sites
 - **Construction** — the classic sidebar with clock-wipe cameos, adjacency

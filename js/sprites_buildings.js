@@ -865,32 +865,79 @@
     P(ctx, 31, 7, 14, 1, OUT);
     P(ctx, 34, 8, 1, 6, IRON_D); P(ctx, 41, 8, 1, 6, IRON_D);
     ctx.fillStyle = SH; ctx.fillRect(33, 14, 10, 2);
-    // --- dock pit (south-center cell, ground level) ---
-    P(ctx, 26, 32, 20, 13, '#38382f');
-    P(ctx, 26, 32, 20, 1, '#26261f');
-    P(ctx, 26, 32, 1, 13, '#26261f');
-    P(ctx, 45, 33, 1, 12, '#4c4c40');
-    outlineRect(ctx, 25, 31, 22, 15);
-    P(ctx, 29, 33, 1, 11, '#57574f'); P(ctx, 42, 33, 1, 11, '#57574f');
-    P(ctx, 34, 41, 4, 1, pal.haz); P(ctx, 33, 42, 2, 1, pal.haz); P(ctx, 37, 42, 2, 1, pal.haz);
-    ctx.fillStyle = 'rgba(72,216,88,' + [0.10, 0.18, 0.26, 0.18][f % 4] + ')';
-    ctx.fillRect(27, 33, 18, 11);
-    // --- intake canopy arm (cycles down over the pit): tiny roof + face ---
-    const ay = 20 + [0, 2, 4, 2][f % 4];
-    ctx.fillStyle = SH; ctx.fillRect(30, ay + 10, 14, 2);
-    outlineRect(ctx, 26, ay - 1, 20, 10);
-    P(ctx, 27, ay, 18, 4, pal.base);
-    P(ctx, 27, ay, 18, 1, pal.light);
-    P(ctx, 27, ay + 3, 18, 1, pal.light);          // parapet
-    P(ctx, 27, ay + 4, 18, 4, pal.dark);           // canopy south face
-    P(ctx, 27, ay + 7, 18, 1, pal.shadow);
-    hazardH(ctx, 28, ay + 1, 16, pal.haz);
-    for (let i = 0; i < 3; i++) {
-      const ph = (i + f) % 3;
-      P(ctx, 29 + i * 6, ay + 5, 2, 2, ph === 0 ? PAL.tib3 : ph === 1 ? PAL.tib1 : '#1e4a22');
+    // --- UNLOADING BAY (south-centre cell). The harvester parks on the cell
+    //     BELOW the footprint, so its sprite sits at y 46 and down: anything
+    //     meant to look coupled to it has to reach that line, and anything
+    //     drawn lower is simply hidden behind the vehicle. Hence a gantry —
+    //     legs either side of the bay, hopper slung across the top — that a
+    //     reversing tipper backs in under.
+    const BX = 23, BW = 26;                        // gantry span, x 23..48
+    // bay deck between the legs, receding into shadow under the hopper. Kept
+    // light: a dark shaft with a dark boom down it turned the middle of the
+    // refinery into a hole.
+    P(ctx, BX + 4, 28, BW - 8, 20, '#4c4c43');
+    P(ctx, BX + 4, 28, BW - 8, 3, '#2e2e26');
+    for (let dy = 34; dy < 48; dy += 4) P(ctx, BX + 6, dy, BW - 12, 1, '#5c5c52');
+    P(ctx, BX + 6, 30, 1, 18, '#6a6a60');          // wheel guide rails
+    P(ctx, BX + BW - 7, 30, 1, 18, '#6a6a60');
+    // --- gantry legs, hazard-banded at tipper height ---
+    for (const lx of [BX, BX + BW - 5]) {
+      ctx.fillStyle = SH; ctx.fillRect(lx + 5, 27, 2, 21);
+      P(ctx, lx, 26, 5, 22, pal.dark);
+      P(ctx, lx, 26, 1, 22, pal.base);
+      P(ctx, lx + 4, 26, 1, 22, pal.shadow);
+      outlineRect(ctx, lx - 1, 25, 7, 23);
+      hazardV(ctx, lx + 1, 36, 10, pal.haz);
+      P(ctx, lx, 46, 5, 2, '#1c1c18');             // rubber buffer at the foot
+      P(ctx, lx, 46, 5, 1, '#33332c');
     }
-    // chrysalite spill crystals around the dock
-    const spill = [[27, 46], [30, 49], [34, 46], [38, 50], [42, 47], [45, 49], [32, 52], [25, 51]];
+    // --- hopper slung across the legs: the thing the load is tipped into ---
+    ctx.fillStyle = SH; ctx.fillRect(BX + 3, 24, BW - 4, 3);
+    box3(ctx, BX - 2, 12, BW + 4, 6, 10, m);
+    hazardH(ctx, BX, 19, BW, pal.haz);
+    P(ctx, BX + 2, 22, BW - 4, 3, pal.shadow);     // its shaded underside
+    // throat: crushed crystal in the dark, not a lit panel — a flat green
+    // rectangle here read as an LED strip bolted to the front
+    const glow = [0.14, 0.26, 0.40, 0.26][f % 4];
+    P(ctx, BX + 5, 25, BW - 10, 5, '#182a18');
+    P(ctx, BX + 5, 25, BW - 10, 1, '#0e1a0e');
+    for (let i = 0; i < 6; i++) {
+      const gx = BX + 7 + i * 3, on = (i * 2 + f) % 4;
+      P(ctx, gx, 26 + (i % 2), 2, 2, on === 0 ? PAL.tib3 : on === 1 ? PAL.tib1 : PAL.tibDark);
+    }
+    ctx.fillStyle = 'rgba(72,216,88,' + glow + ')';
+    ctx.fillRect(BX + 4, 24, BW - 8, 7);
+    // --- suction boom on a slide, dropping a coupling head to tipper level.
+    //     It stops at y 45: a nozzle drawn any lower is behind the harvester.
+    const bz = [0, 1, 2, 1][f % 4];
+    P(ctx, 33, 30, 1, 7 + bz, '#22222a');          // concertina hose, not a
+    P(ctx, 37, 30, 1, 7 + bz, '#22222a');          // ladder: tight ribbing
+    P(ctx, 34, 30, 3, 7 + bz, STEEL);
+    P(ctx, 34, 30, 1, 7 + bz, STEEL_L);
+    for (let ry = 31; ry < 36 + bz; ry += 2) P(ctx, 34, ry, 3, 1, '#3a3a44');
+    P(ctx, 32, 36 + bz, 7, 4, IRON);               // coupling head, parked
+    P(ctx, 32, 36 + bz, 7, 1, IRON_L);             // high: the live hose down
+    P(ctx, 32, 39 + bz, 7, 1, '#15151a');          // to a docked tipper is
+    P(ctx, 34, 37 + bz, 3, 2, glow > 0.3 ? PAL.tib3 : PAL.tibDark);  // drawn
+    // --- floodlight and bay status lamp on the west leg ---
+    P(ctx, BX - 4, 29, 4, 3, STEEL); P(ctx, BX - 4, 29, 4, 1, STEEL_L);
+    P(ctx, BX - 4, 32, 4, 1, glow > 0.3 ? '#f8f0c0' : '#4a4636');
+    P(ctx, BX - 5, 35, 4, 5, '#2a2a24');
+    outlineRect(ctx, BX - 6, 34, 6, 7);
+    P(ctx, BX - 4, 36, 2, 2, glow > 0.3 ? PAL.uiGreen : '#1e4a22');
+    // --- apron chevrons on the bib, pointing back into the bay ---
+    P(ctx, BX + 5, 48, BW - 10, 7, '#66665c');
+    P(ctx, BX + 5, 48, BW - 10, 1, '#7c7c70');
+    for (const cyy of [48, 51]) {                  // two, spaced: three
+      for (let k = 0; k < 4; k++) {                // overlapped into a lattice
+        P(ctx, 35 - k, cyy + k, 1, 1, pal.haz);
+        P(ctx, 36 + k, cyy + k, 1, 1, pal.haz);
+        P(ctx, 35 - k, cyy + k + 1, 1, 1, HAZK);
+        P(ctx, 36 + k, cyy + k + 1, 1, 1, HAZK);
+      }
+    }
+    // chrysalite spilled around the mouth by a hundred sloppy tips
+    const spill = [[22, 47], [21, 51], [30, 53], [38, 54], [47, 47], [49, 50], [44, 53], [26, 55]];
     const tibCols = [PAL.tib1, PAL.tib2, PAL.tib3];
     for (let i = 0; i < spill.length; i++) {
       P(ctx, spill[i][0], spill[i][1], 2, 2, tibCols[i % 3]);

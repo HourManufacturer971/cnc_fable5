@@ -318,6 +318,7 @@ function orderMove(u, cx, cy) {
   u.targetId = 0;
   u.guardAnchor = null;
   u._amove = null;
+  u._reverse = 0;      // a new order cancels any docking manoeuvre in progress
   if (d.air) {
     u.state = 'air-move';
     u.moveTarget = { cx, cy };
@@ -569,15 +570,18 @@ function _stepAlongPath(u, d) {
     }
   }
 
-  // turn before moving (vehicles); infantry snap
-  const want = dirTo16(nx - u.x, ny - u.y);
+  // turn before moving (vehicles); infantry snap. A unit with _reverse set is
+  // backing up: it points its nose the OPPOSITE way down the same path, and
+  // crawls, the way anything reverses.
+  let want = dirTo16(nx - u.x, ny - u.y);
+  if (u._reverse) want = (want + 8) & 15;
   if (d.infantry) u.facing = want;
   else if (u.facing !== want) {
     u.facing = turnFacing(u.facing, want, d.turn || 2);
     if (u.facing !== want) return 'moving';
   }
 
-  const spd = d.speed;
+  const spd = u._reverse ? d.speed * 0.7 : d.speed;
   const dd = dist(u.x, u.y, nx, ny);
   if (dd <= spd) {
     u.x = nx; u.y = ny;
@@ -801,13 +805,31 @@ function _nearestProc(u) {
   return best;
 }
 
+// the unloading bay itself: the cell the harvester ends up parked in, rear
+// against the refinery's intake hood
 function _procDock(b) { return { cx: b.cx + 1, cy: b.cy + b.h }; }
+// the apron one cell further south. Harvesters drive to HERE, then reverse
+// the last cell into the bay.
+function _procApron(b) { return { cx: b.cx + 1, cy: b.cy + b.h + 1 }; }
 
+// terrain-and-buildings passability, ignoring units: whether the apron is a
+// cell a harvester could ever line up on, not whether it is free right now
+function _apronOpen(g, cx, cy) {
+  if (!inMap(cx, cy)) return false;
+  if (!terrainPassable(g.terrain[cellIdx(cx, cy)])) return false;
+  const o = g.occ[cellIdx(cx, cy)];
+  if (!o) return true;
+  const e = getEnt(o);
+  return !(e && e.kind === 'building');
+}
+
+// both the bay and its apron count: a unit parked on either one stalls a
+// delivery, so both are cells other units get moved off
 function _isDockCell(g, side, cx, cy) {
   for (const id of g.players[side].buildingIds) {
     const b = g.buildings.get(id);
     if (!b || b.type !== 'proc') continue;
-    if (cx === b.cx + 1 && cy === b.cy + b.h) return true;
+    if (cx === b.cx + 1 && (cy === b.cy + b.h || cy === b.cy + b.h + 1)) return true;
   }
   return false;
 }
@@ -901,23 +923,33 @@ function _harvester(u, d) {
       return;
     }
     const dock = _procDock(proc);
+    const apron = _procApron(proc);
+    // Harvesters BACK IN, so the drive target is the apron and the last cell
+    // is reversed. Where the apron is unusable — walled in, cliff, water, a
+    // building dropped on it before the guard rail existed — fall straight
+    // back to driving nose-first into the bay: the manoeuvre is flavour, a
+    // refinery you cannot deliver to is not.
+    const backs = _apronOpen(g, apron.cx, apron.cy);
+    const aim = backs ? apron : dock;
     // 1.5 cells covers diagonal-adjacent waiting spots, so a queued harvester
     // can always unload instead of wedging beside an occupied dock
     if (dist(u.x, u.y, cellCenterX(dock.cx), cellCenterY(dock.cy)) <= C.CELL * 1.5) {
-      u.state = 'unload';
-      u._unload = 35;              // quicker turnaround keeps the economy moving
-      // pay out the load's VALUE (blue chrysalite carries a premium)
-      u.tib = Math.max(u.tib, u.tibVal || 0);
-      u.tibVal = 0;
-      u._chunk = u.tib / 35;
-      u._paid = 0;
-      u._procId = 0;
-      u.facing = 0; // face the refinery
-      u.path = [];
+      const bay = occAt(dock.cx, dock.cy);
+      if (backs && (!bay || bay === u.id) && terrainPassable(g.terrain[cellIdx(dock.cx, dock.cy)])) {
+        u.state = 'backin';
+        u._procId = proc.id;
+        u._backAt = g.tick;
+        u._reverse = 1;
+        u.moveTarget = { cx: dock.cx, cy: dock.cy };
+        u.path = [{ cx: dock.cx, cy: dock.cy }];
+        u.pathi = 0;
+        return;
+      }
+      _beginUnload(u, 0);          // bay busy or unusable: transfer kerbside
       return;
     }
     if (!u.path.length || u.pathi >= u.path.length || (g.tick + u.id) % 25 === 0) {
-      u.path = findPath(u, dock.cx, dock.cy);
+      u.path = findPath(u, aim.cx, aim.cy);
       u.pathi = 0;
       // a sealed dock produces either an EMPTY path or a best-effort path
       // that ends too far away to ever unload (findPath retargets a blocked
@@ -958,6 +990,7 @@ function _harvester(u, d) {
     if ((g.tick + u.id) % 20 === 0 &&
         dist(u.x, u.y, cellCenterX(dock.cx), cellCenterY(dock.cy)) <= C.CELL * 4) {
       _shoveIdle(g, u, dock.cx, dock.cy);
+      if (backs) _shoveIdle(g, u, apron.cx, apron.cy);
       if (u.pathi < u.path.length) {
         const nxt = u.path[u.pathi];
         _shoveIdle(g, u, nxt.cx, nxt.cy);
@@ -965,6 +998,29 @@ function _harvester(u, d) {
     }
     _stepAlongPath(u, d);
     _harvWatchdog(u);
+    return;
+  }
+  if (u.state === 'backin') {
+    let proc = u._procId ? g.buildings.get(u._procId) : null;
+    if (!proc || proc._dead || proc.type !== 'proc' || proc.owner !== u.owner) {
+      u._reverse = 0; u._procId = 0;
+      u.state = u.tib > 0 ? 'return' : 'idle';
+      return;
+    }
+    const dock = _procDock(proc);
+    // Bail-outs, in order of how bad they are. A parking manoeuvre must never
+    // be the thing that stalls an economy, so anything that goes wrong here
+    // ends in an immediate kerbside transfer rather than a retry loop:
+    // a repath (path longer than the single reversed cell) means the bay got
+    // taken while we were lining up, and the timeout catches a wedge.
+    if (u.path.length > 1 || g.tick - (u._backAt || 0) > 120) {
+      u._reverse = 0;
+      _beginUnload(u, 0);
+      return;
+    }
+    const r = _stepAlongPath(u, d);
+    if (r === 'arrived') _beginUnload(u, 8);        // parked, rear to the hood
+    else if (r === 'blocked') _beginUnload(u, 0);   // _beginUnload clears _reverse
     return;
   }
   if (u.state === 'unload') {
@@ -1046,6 +1102,28 @@ function _harvWatchdog(u) {
   }
 }
 
+// hand a full harvester over to the unload state. `facing` is where the nose
+// ends up: 8 (south, rear to the intake hood) when it backed into the bay,
+// 0 when it gave up and is transferring from the kerb.
+function _beginUnload(u, facing) {
+  u.state = 'unload';
+  u._unload = 35;                // quicker turnaround keeps the economy moving
+  // pay out the load's VALUE (blue chrysalite carries a premium)
+  u.tib = Math.max(u.tib, u.tibVal || 0);
+  u.tibVal = 0;
+  u._chunk = u.tib / 35;
+  u._paid = 0;
+  u._procId = 0;
+  u._reverse = 0;
+  u.facing = facing;
+  u.path = [];
+  u.pathi = 0;
+  // A harvester that backed in parks hard against the buffers, not a full
+  // cell clear of them: same cell either way, but the tipper ends up under
+  // the gantry instead of alongside it, which is the whole point of the bay.
+  if (facing === 8) u.y -= 7;
+}
+
 // an idle harvester must never squat on a refinery dock cell
 function _clearDock(u) {
   const g = game;
@@ -1053,13 +1131,14 @@ function _clearDock(u) {
   for (const b of g.buildings.values()) {
     if (b.type !== 'proc') continue;
     const dock = _procDock(b);
-    if (Math.abs(cx - dock.cx) <= 0 && Math.abs(cy - dock.cy) <= 0) {
+    if (cx === dock.cx && (cy === dock.cy || cy === dock.cy + 1)) {
       // step aside to any nearby free cell
       for (let r = 1; r <= 3; r++) {
         for (let dy = -r; dy <= r; dy++) {
           for (let dx = -r; dx <= r; dx++) {
             if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
             const nx = dock.cx + dx, ny = dock.cy + dy;
+            if (nx === dock.cx && (ny === dock.cy || ny === dock.cy + 1)) continue;
             if (isPassable(nx, ny, u)) {
               orderMove(u, nx, ny);
               return;

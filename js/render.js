@@ -801,6 +801,47 @@ const Render = (function () {
     }
   }
 
+  // The refinery a harvester is docked in, or null. The cell due north of a
+  // parked harvester is the refinery's own footprint, so the occupancy grid
+  // answers this without walking the building list every frame.
+  function _dockedProc(g, u) {
+    const cx = worldToCell(u.x), cy = worldToCell(u.y);
+    const o = occAt(cx, cy - 1);
+    if (!o) return null;
+    const e = getEnt(o);
+    if (!e || e.kind !== 'building' || e.type !== 'proc' || e.owner !== u.owner) return null;
+    if (cx !== e.cx + 1 || cy !== e.cy + e.h) return null;   // the bay cell itself
+    return e;
+  }
+
+  // the coupling between the refinery's boom and a docked harvester. Drawn
+  // AFTER the vehicle, because the whole point is that it lands on its back.
+  function _drawDockHose(g, u, X, Y) {
+    if (!_dockedProc(g, u)) return;
+    // Deliberately short and thin. A hose long enough to reach the middle of
+    // the vehicle covers the tipper bin, which is the one part of a docked
+    // harvester worth looking at — the boom in the building sprite already
+    // carries the run down, this only bridges the last few pixels onto the rim.
+    const cx = X(u.x), top = Y(u.y - 16), bot = Y(u.y - 9);
+    const px = Math.max(1, Math.round(Z));
+    const w = Math.max(2, Math.round(3 * Z)), hw = w / 2;
+    ctx.fillStyle = '#15151a';
+    ctx.fillRect(cx - hw - px, top, w + px * 2, bot - top);
+    ctx.fillStyle = '#4b4b56';
+    ctx.fillRect(cx - hw, top, w, bot - top);
+    ctx.fillStyle = '#6c6c78';
+    ctx.fillRect(cx - hw, top, px, bot - top);
+    // nozzle clamped on the bin rim
+    ctx.fillStyle = '#15151a';
+    ctx.fillRect(cx - w - px, bot - px, w * 2 + px * 2, px * 4);
+    ctx.fillStyle = '#5b5b64';
+    ctx.fillRect(cx - w, bot, w * 2, px * 2);
+    // crystal running UP the line: the load visibly going somewhere
+    const ph = (g.tick % 20) / 20;
+    ctx.fillStyle = PAL.tib3;
+    ctx.fillRect(cx - hw + px, bot - px - (bot - top) * ph, w - px * 2, Math.max(1, px * 2));
+  }
+
   function _drawUnit(g, u, X, Y) {
     const d = DATA.units[u.type];
     // the replay spectator sees cloaked units as the owner would (shimmer)
@@ -876,6 +917,7 @@ const Render = (function () {
         if (set.turret) drawSpr(set.turret[u.turretFacing & 15], x, y);
       });
     }
+    if (d.harvester && u.state === 'unload') _drawDockHose(g, u, X, Y);
     _drawRank(u, X, Y);
     _drawWrench(g, u, X, Y);
   }

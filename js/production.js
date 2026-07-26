@@ -253,7 +253,10 @@ const Production = (function () {
       const b = g.buildings.get(id);
       if (!b || b.type !== 'proc') continue;
       const dcx = b.cx + 1, dcy = b.cy + b.h;
-      if (dcx >= cx && dcx < cx + d.w && dcy >= cy && dcy < cy + d.h) return false;
+      // the bay AND the apron behind it: harvesters reverse in, so sealing
+      // the approach cell costs them the manoeuvre even though the bay is free
+      for (const yy of [dcy, dcy + 1])
+        if (dcx >= cx && dcx < cx + d.w && yy >= cy && yy < cy + d.h) return false;
     }
     if (key === 'proc') {
       const dcx = cx + 1, dcy = cy + d.h;
