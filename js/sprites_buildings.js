@@ -166,14 +166,17 @@
   // roof plane instead of standing up like a badge.
   function trefoil(ctx, cx, cy, r, sq) {
     sq = sq || 0.62;
-    const r0 = r * 0.26, gap = 0.62;               // blade half-width, radians
+    // A small hub, a clear ring of yellow around it, then three blades. If the
+    // hub touches the blades the whole mark closes into a bowtie, which is
+    // exactly how the first version read.
+    const hub = r * 0.22, inner = r * 0.48, gap = 0.46;
     for (let dy = -Math.ceil(r * sq); dy <= Math.ceil(r * sq); dy++) {
       for (let dx = -r; dx <= r; dx++) {
         const uy = dy / sq;
         const d = Math.sqrt(dx * dx + uy * uy);
         if (d > r) continue;
-        let on = d <= r0 * 1.15;                   // hub
-        if (!on && d >= r0 * 1.95) {
+        let on = d <= hub;                         // hub
+        if (!on && d >= inner) {
           const a = Math.atan2(uy, dx);
           for (let k = 0; k < 3; k++) {
             const ba = -Math.PI / 2 + k * (Math.PI * 2 / 3);
@@ -634,67 +637,110 @@
       // shell then sweeps out continuously to a base roughly twice its radius.
       // Putting the narrow part low (as a pinched cylinder does) is what makes
       // a tower read as a chimney or a flask instead.
-      const TOP_R = 6.5, WAIST_R = 5, BASE_R = 11.5, WAIST_T = 0.20;
-      for (const cx of [12, 36]) {
-        ctx.fillStyle = SH; ctx.fillRect(cx + BASE_R - 4, 4, 4, 9);
-        for (let y = -14; y <= 10; y++) {
-          const t = (y + 14) / 24;                    // 0 at the rim, 1 at the ground
+      const WAIST_T = 0.20;
+      // Two shells, the eastern one standing NEARER the camera and drawn
+      // second so it laps over its neighbour — the overlap is what gives the
+      // pair depth instead of reading as two flat cut-outs side by side.
+      const SHELLS = [
+        { cx: 15, top: -24, TOP_R: 8, WAIST_R: 6, BASE_R: 14, bot: 8 },
+        { cx: 33, top: -20, TOP_R: 8, WAIST_R: 6, BASE_R: 14, bot: 11 },
+      ];
+      for (const sh of SHELLS) {
+        const cx = sh.cx, span = sh.bot - sh.top;
+        ctx.fillStyle = SH; ctx.fillRect(cx + sh.BASE_R - 4, sh.bot - 7, 5, 10);
+        for (let y = sh.top; y <= sh.bot; y++) {
+          const t = (y - sh.top) / span;              // 0 at the rim, 1 at the ground
           const r = Math.round(t <= WAIST_T
-            ? TOP_R - (TOP_R - WAIST_R) * (t / WAIST_T)
-            : WAIST_R + (BASE_R - WAIST_R) * Math.pow((t - WAIST_T) / (1 - WAIST_T), 1.45));
+            ? sh.TOP_R - (sh.TOP_R - sh.WAIST_R) * (t / WAIST_T)
+            : sh.WAIST_R + (sh.BASE_R - sh.WAIST_R) * Math.pow((t - WAIST_T) / (1 - WAIST_T), 1.5));
           P(ctx, cx - r, y, r * 2, 1, wc[1]);
-          P(ctx, cx - r, y, 2, 1, wc[0]);             // west edge lit
-          P(ctx, cx + r - 3, y, 3, 1, wc[2]);         // east edge shaded
-          P(ctx, cx + r - 1, y, 1, 1, wc[3]);
+          P(ctx, cx - r, y, 3, 1, wc[0]);             // west edge lit
+          P(ctx, cx + r - 4, y, 4, 1, wc[2]);         // east edge shaded
+          P(ctx, cx + r - 2, y, 2, 1, wc[3]);
           P(ctx, cx - r - 1, y, 1, 1, OUT);           // silhouette both sides
           P(ctx, cx + r, y, 1, 1, OUT);
-          if ((y + 14) % 6 === 0) P(ctx, cx - r + 2, y, r * 2 - 4, 1, wc[2]); // lift bands
+          if ((y - sh.top) % 7 === 0) P(ctx, cx - r + 3, y, r * 2 - 6, 1, wc[2]);
         }
-        // splayed foot ring where the shell meets its plinth
-        P(ctx, cx - BASE_R - 1, 11, BASE_R * 2 + 2, 3, wc[2]);
-        P(ctx, cx - BASE_R - 1, 11, BASE_R * 2 + 2, 1, wc[1]);
-        outlineRect(ctx, cx - BASE_R - 1, 11, BASE_R * 2 + 2, 3);
+        // splayed foot ring on its plinth
+        P(ctx, cx - sh.BASE_R - 1, sh.bot + 1, sh.BASE_R * 2 + 2, 3, wc[2]);
+        P(ctx, cx - sh.BASE_R - 1, sh.bot + 1, sh.BASE_R * 2 + 2, 1, wc[1]);
+        outlineRect(ctx, cx - sh.BASE_R - 1, sh.bot + 1, sh.BASE_R * 2 + 2, 3);
         // rim: bright lip over the dark throat
-        ellipseFill(ctx, cx, -14, TOP_R + 1, 2.5, OUT);
-        ellipseFill(ctx, cx, -14, TOP_R, 2, '#3a3a34');
-        ellipseFill(ctx, cx, -13, TOP_R - 2, 1.4, '#22221e');
-        P(ctx, cx - TOP_R, -15, TOP_R * 2, 1, wc[0]);
+        ellipseFill(ctx, cx, sh.top, sh.TOP_R + 1, 3, OUT);
+        ellipseFill(ctx, cx, sh.top, sh.TOP_R, 2.4, '#3a3a34');
+        ellipseFill(ctx, cx, sh.top + 1, sh.TOP_R - 3, 1.6, '#22221e');
+        P(ctx, cx - sh.TOP_R, sh.top - 1, sh.TOP_R * 2, 1, wc[0]);
       }
-      // the plume: heavier and higher than the basic plant's wisps
-      steamUp(ctx, 12, -18, f % 3);
-      steamUp(ctx, 36, -18, (f + 1) % 3);
-      steamUp(ctx, 12, -22, (f + 2) % 3);
-      steamUp(ctx, 36, -22, f % 3);
+      // A far bigger plume than the basic plant's two wisps — this station
+      // makes several times the power and the exhaust should say so.
+      for (const sh of SHELLS) {
+        for (let k = 0; k < 4; k++) {
+          steamUp(ctx, sh.cx - 2 + k, sh.top - 3 - k * 4, (f + k) % 3);
+        }
+      }
     }
-    // turbine hall (south): roof + facade
+    if (!adv) {
+      // BASIC: an ordinary turbine hall — windows, vents, a personnel door.
+      box3(ctx, 3, 16, 42, 14, 13, m);
+      for (let y = 19; y < 28; y += 4) P(ctx, 5, y, 38, 1, pal.dark);
+      P(ctx, 22, 17, 1, 12, pal.shadow);
+      roofBox(ctx, 36, 19, 6, 3, 2, m);
+      for (const cx of [11, 32]) {
+        P(ctx, cx, 12, 3, 5, STEEL); P(ctx, cx, 12, 1, 5, STEEL_L);
+        P(ctx, cx + 3, 12, 1, 5, STEEL_D2);
+      }
+      hazardH(ctx, 18, 31, 12, pal.haz);
+      pDoor(ctx, 20, 34, 8, 8);
+      for (const vx of [8, 34]) {
+        P(ctx, vx - 1, 33, 8, 6, OUT);
+        P(ctx, vx, 34, 6, 4, pal.shadow);
+        P(ctx, vx, 34, 6, 1, '#2a2a24'); P(ctx, vx, 36, 6, 1, '#2a2a24');
+      }
+      P(ctx, 30, 33, 2, 2, (f % 3 === 0) ? PAL.uiGreen : '#1e4a22');
+      P(ctx, 39, 34, 1, 2, pal.trim2);
+      P(ctx, 41, 34, 1, 2, pal.trim2);
+      return;
+    }
+    // ADVANCED: a sealed REACTOR BUILDING, not a workshop. Heavy monolithic
+    // mass, buttressed rather than windowed, with one blast door instead of a
+    // row of openings — the opposite of the war factory's glass and shutters.
     box3(ctx, 3, 16, 42, 14, 13, m);
-    for (let y = 19; y < 28; y += 4) P(ctx, 5, y, 38, 1, pal.dark);
-    if (adv) {
-      // hazard roundel on the hall roof, painted OVER the panel seams — the
-      // label that says what this plant runs on, sized to read at 1x rather
-      // than being a decorative speck.
-      ellipseFill(ctx, 21, 23, 11, 6.5, '#0e0e0a');
-      ellipseFill(ctx, 21, 23, 10, 5.8, '#f0e060');
-      trefoil(ctx, 21, 23, 9, 0.60);
+    // reinforced roof slab: fewer, heavier bands than a panelled roof
+    P(ctx, 5, 18, 38, 1, pal.shadow);
+    P(ctx, 5, 28, 38, 1, pal.shadow);
+    // concrete buttresses standing proud of the south wall
+    for (const bx of [6, 15, 33, 41]) {
+      P(ctx, bx, 29, 4, 13, CONC_D);
+      P(ctx, bx, 29, 1, 13, CONC);
+      P(ctx, bx + 3, 29, 1, 13, CONC_D2);
+      outlineRect(ctx, bx, 29, 4, 13);
     }
-    P(ctx, 22, 17, 1, 12, pal.shadow);
-    roofBox(ctx, 36, 19, 6, 3, 2, m);            // roof machinery
-    // feed pipes stacks -> hall roof
-    for (const cx of [11, 32]) {
-      P(ctx, cx, 12, 3, 5, STEEL); P(ctx, cx, 12, 1, 5, STEEL_L);
-      P(ctx, cx + 3, 12, 1, 5, STEEL_D2);
+    // heavy blast door, recessed, with its hazard lintel
+    P(ctx, 20, 32, 12, 10, '#2a2a26');
+    outlineRect(ctx, 20, 32, 12, 10);
+    P(ctx, 21, 33, 10, 8, pal.shadow);
+    P(ctx, 26, 33, 1, 8, '#1a1a16');              // door split
+    for (let hy = 35; hy < 41; hy += 2) P(ctx, 21, hy, 10, 1, '#22221e');
+    hazardH(ctx, 20, 30, 12, pal.haz);
+    // two small sealed inspection hatches, no glass anywhere
+    for (const hx of [11, 35]) {
+      P(ctx, hx, 34, 5, 4, pal.dark);
+      P(ctx, hx, 34, 5, 1, pal.base);
+      outlineRect(ctx, hx, 34, 5, 4);
+      P(ctx, hx + 2, 35, 1, 2, '#2a2a24');
     }
-    // facade details: door + hazard, vent grilles, transformer, status light
-    hazardH(ctx, 18, 31, 12, pal.haz);
-    pDoor(ctx, 20, 34, 8, 8);
-    for (const vx of [8, 34]) {
-      P(ctx, vx - 1, 33, 8, 6, OUT);
-      P(ctx, vx, 34, 6, 4, pal.shadow);
-      P(ctx, vx, 34, 6, 1, '#2a2a24'); P(ctx, vx, 36, 6, 1, '#2a2a24');
+    // coolant trunks dropping from the shells onto the building
+    for (const cx of [15, 33]) {
+      P(ctx, cx - 1, 12, 4, 6, STEEL); P(ctx, cx - 1, 12, 1, 6, STEEL_L);
+      P(ctx, cx + 2, 12, 1, 6, STEEL_D2);
+      outlineRect(ctx, cx - 1, 12, 4, 6);
     }
-    P(ctx, 30, 33, 2, 2, (f % 3 === 0) ? PAL.uiGreen : '#1e4a22');
-    P(ctx, 39, 34, 1, 2, adv ? '#f0e060' : pal.trim2);
-    P(ctx, 41, 34, 1, 2, adv ? '#f0e060' : pal.trim2);
+    P(ctx, 39, 24, 2, 2, (f % 3 === 0) ? PAL.uiGreen : '#1e4a22');
+    // Hazard roundel LAST, dead centre of the roof, so nothing is drawn
+    // across it — the seam line used to cut it clean in half.
+    ellipseFill(ctx, 24, 23, 13, 7.6, '#0e0e0a');
+    ellipseFill(ctx, 24, 23, 12, 6.8, '#f0e060');
+    trefoil(ctx, 24, 23, 9.5, 0.62);
   }
 
   function drawProc(ctx, W, H, pal, f, side, rnd) { // 72x48 +6 — tank + dock
@@ -1715,7 +1761,7 @@
   // extra pixels drawn ABOVE the footprint (render offsets by entry yOff):
   // tall structures rise over their anchor cells
   const YOFF = {
-    fact: 16, nuke: 12, nuk2: 19, proc: 6, silo: 6, pyle: 4, hand: 12,
+    fact: 16, nuke: 12, nuk2: 30, proc: 6, silo: 6, pyle: 4, hand: 12,
     weap: 6, afld: 8, hq: 8, eye: 12, tmpl: 12, atwr: 24, obli: 24, gtwr: 14,
   };
 
