@@ -611,13 +611,23 @@
       // Two shells, the eastern one standing NEARER the camera and drawn
       // second so it laps over its neighbour — the overlap is what gives the
       // pair depth instead of reading as two flat cut-outs side by side.
+      // The height budget is spent DOWNWARD: the feet reach well into the
+      // footprint (the containment hides them) rather than the rims climbing
+      // two cells above it, which had the plant overhanging its neighbours.
+      // They are also SLIMMER than the first pass, and stand one to each side
+      // of the containment. Slimmer is what buys the compactness: a shell 18
+      // wide and 27 tall is half again as tall as it is broad, which is the
+      // proportion that reads as a cooling tower, where the old squat 28-wide
+      // pair only did so by climbing two cells above the footprint. It also
+      // leaves eight pixels of each flared base clear of the dome — tucked in
+      // any further and both towers read as plain chimneys.
       const SHELLS = [
-        { cx: 15, top: -24, TOP_R: 8, WAIST_R: 6, BASE_R: 14, bot: 8 },
-        { cx: 33, top: -20, TOP_R: 8, WAIST_R: 6, BASE_R: 14, bot: 11 },
+        { cx: 12, top: -14, TOP_R: 5, WAIST_R: 4, BASE_R: 9, bot: 13 },
+        { cx: 36, top: -11, TOP_R: 5, WAIST_R: 4, BASE_R: 9, bot: 16 },
       ];
       for (const sh of SHELLS) {
         const cx = sh.cx, span = sh.bot - sh.top;
-        ctx.fillStyle = SH; ctx.fillRect(cx + sh.BASE_R - 4, sh.bot - 7, 5, 10);
+        ctx.fillStyle = SH; ctx.fillRect(cx + sh.BASE_R - 4, sh.bot - 5, 5, 8);
         for (let y = sh.top; y <= sh.bot; y++) {
           const t = (y - sh.top) / span;              // 0 at the rim, 1 at the ground
           const r = Math.round(t <= WAIST_T
@@ -646,11 +656,15 @@
         P(ctx, cx - sh.TOP_R, sh.top - 1, sh.TOP_R * 2, 1, wc[0]);
       }
       // A far bigger plume than the basic plant's two wisps — this station
-      // makes several times the power and the exhaust should say so.
+      // makes several times the power and the exhaust should say so. The
+      // volume comes from puffs set SIDE BY SIDE rather than a tall stack:
+      // every extra row of steam is another row the sprite hangs over its
+      // neighbours, and steamUp already reaches six pixels above its anchor.
       for (const sh of SHELLS) {
-        for (let k = 0; k < 5; k++) {
-          steamUp(ctx, sh.cx - 2 + k, sh.top - 2 - k * 3, (f + k) % 3);
-          if (k < 3) steamUp(ctx, sh.cx + 2 - k, sh.top - 4 - k * 3, (f + k + 2) % 3);
+        for (let k = 0; k < 2; k++) {
+          steamUp(ctx, sh.cx - 3 + k * 3, sh.top - 3 - k * 3, (f + k) % 3);
+          steamUp(ctx, sh.cx + 3 - k * 3, sh.top - 2 - k * 3, (f + k + 2) % 3);
+          steamUp(ctx, sh.cx, sh.top - 4 - k * 3, (f + k + 1) % 3);
         }
       }
     }
@@ -736,19 +750,18 @@
     ellipseFill(ctx, CX, DB - DH - 7, 2.4, 1.1, '#2a2a26');
     // --- steam ducts out to each tower base: the pipework is what welds the
     //     three masses into one power station instead of three ornaments ---
+    // Thin, and quiet: a black rail along the top and bottom plus bolt flanges
+    // turned these into a pair of staples clamped to the sides of the shell.
     const duct = (x0, x1, y0, ry, rx) => {
-      P(ctx, x0, y0 + 3, x1 - x0, 1, OUT);                     // underside only:
-      P(ctx, x0, y0, x1 - x0, 3, STEEL);                       // a rail top AND
-      P(ctx, x0, y0, x1 - x0, 1, STEEL_L);                     // bottom turned the
-      P(ctx, x0, y0 + 2, x1 - x0, 1, STEEL_D2);                // pipe into a shelf
-      for (let fx = x0 + 2; fx < x1 - 1; fx += 4) P(ctx, fx, y0 - 1, 1, 5, IRON);
-      P(ctx, rx + 3, ry, 1, y0 - ry + 3, OUT);
-      P(ctx, rx, ry, 3, y0 - ry, STEEL);
+      P(ctx, x0, y0, x1 - x0, 2, STEEL);
+      P(ctx, x0, y0, x1 - x0, 1, STEEL_L);
+      P(ctx, x0, y0 + 2, x1 - x0, 1, IRON_D);
+      P(ctx, rx, ry, 2, y0 - ry, STEEL);
       P(ctx, rx, ry, 1, y0 - ry, STEEL_L);
-      P(ctx, rx + 2, ry, 1, y0 - ry, STEEL_D2);
+      P(ctx, rx + 2, ry, 1, y0 - ry + 2, IRON_D);
     };
-    duct(5, CX - RX, 22, 15, 5);
-    duct(CX + RX + 2, 44, 26, 17, 41);
+    duct(4, CX - RX, 22, 16, 4);
+    duct(CX + RX + 2, 45, 26, 19, 43);
     // --- the big circular equipment hatch: a bolted steel closure plate, the
     //     one wall feature no other building in the game has. An arched
     //     opening here made the whole thing read as a kiln.
@@ -787,13 +800,13 @@
     for (let hy = DY + 6; hy < BOT; hy += 3)
       P(ctx, CX - DWX + 1, hy, (DWX - 1) * 2, 1, '#232320');
     // --- external stair up the east flank to a mid-height platform ---
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < 6; i++) {
       P(ctx, CX + 6 + i, BOT - 3 - i * 3, 4, 2, '#75756c');
       P(ctx, CX + 6 + i, BOT - 3 - i * 3, 4, 1, '#93938a');
       P(ctx, CX + 6 + i, BOT - 4 - i * 3, 1, 1, '#4c4c46');   // handrail stanchion
     }
-    P(ctx, CX + 11, TOP + 6, 4, 3, '#75756c');
-    P(ctx, CX + 11, TOP + 6, 4, 1, '#93938a');
+    P(ctx, CX + 11, TOP + 7, 4, 3, '#75756c');
+    P(ctx, CX + 11, TOP + 7, 4, 1, '#93938a');
     // --- west auxiliary block: pumphouse, vent bank, status lamp ---
     box3(ctx, 0, BOT - 12, 10, 4, 8, m);
     P(ctx, 1, BOT - 6, 8, 3, pal.shadow);
@@ -1834,7 +1847,7 @@
   // extra pixels drawn ABOVE the footprint (render offsets by entry yOff):
   // tall structures rise over their anchor cells
   const YOFF = {
-    fact: 16, nuke: 12, nuk2: 46, proc: 6, silo: 6, pyle: 4, hand: 12,
+    fact: 16, nuke: 12, nuk2: 28, proc: 6, silo: 6, pyle: 4, hand: 12,
     weap: 6, afld: 8, hq: 8, eye: 12, tmpl: 12, atwr: 24, obli: 24, gtwr: 14,
   };
 
