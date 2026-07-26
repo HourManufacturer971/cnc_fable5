@@ -364,7 +364,9 @@ const Render = (function () {
   //   entity blips  — drawn straight to the frame EVERY frame from live
   //                   world coordinates, so movement is real-time and smooth
 
-  const OWNER_COLOR = { udc: '#ffd23c', srp: '#ff2418', ud2: '#4c8ce0', sr2: '#b46ae8', mut: '#4ce03c', civ: '#e8e6da' };
+  // health bars, selection rings, minimap blips. The 3rd/4th armies sit in the
+  // same muted register as the first two rather than shouting over them.
+  const OWNER_COLOR = { udc: '#ffd23c', srp: '#ff2418', ud2: '#67b0aa', sr2: '#c07ca6', mut: '#4ce03c', civ: '#e8e6da' };
   // minimap px per cell — computed at each use: C.MAP_W changes per game
   // (64 classic, 88 large), and a load-time constant would draw every blip
   // and fog cell at the classic scale on top of a large-map terrain base

@@ -498,14 +498,27 @@
     P(ctx, 8, 34, 13, 4, '#6a5a20'); P(ctx, 8, 34, 13, 1, '#8f7c30');
     outlineRect(ctx, 7, 33, 15, 6);
     // --- main hall (east): roof + south facade ---
+    // Deliberately UNLIKE the war factory: that has a sawtooth glazed roof,
+    // this is a low flat-decked workshop with the roof given over to stacked
+    // materials and a helipad-style landing cross. A yard stores and lifts;
+    // a factory encloses a line.
     box3(ctx, 28, -4, 41, 32, 14, m);
     for (let y = 2; y < 26; y += 6) P(ctx, 30, y, 37, 1, pal.dark);
-    P(ctx, 32, 4, 10, 5, GLASS); P(ctx, 32, 4, 10, 1, GLASS_L);
-    P(ctx, 36, 5, 1, 4, '#101c26');
-    outlineRect(ctx, 31, 3, 12, 7);
-    roofBox(ctx, 56, 8, 8, 3, 3, m);              // roof vent housing
-    P(ctx, 57, 9, 6, 1, pal.shadow);
-    P(ctx, 47, 14, 4, 4, pal.dark); outlineRect(ctx, 46, 13, 6, 6); // hatch
+    // material stacks on the roof deck: bundled pipe and pallets of block
+    for (let i = 0; i < 3; i++) {
+      const sy = 1 + i * 3;
+      P(ctx, 31, sy, 13, 2, '#8a8a80'); P(ctx, 31, sy, 13, 1, '#b0b0a4');
+      for (let px2 = 32; px2 < 44; px2 += 3) P(ctx, px2, sy, 1, 2, '#63635a');
+    }
+    outlineRect(ctx, 30, 0, 15, 10);
+    P(ctx, 48, 2, 12, 8, '#6a5a20'); P(ctx, 48, 2, 12, 1, '#8f7c30');
+    for (let px2 = 50; px2 < 60; px2 += 3) P(ctx, px2, 2, 1, 8, '#4e4218');
+    outlineRect(ctx, 48, 2, 12, 8);
+    // landing cross painted on the clear part of the deck
+    P(ctx, 50, 16, 11, 2, CONC_D); P(ctx, 54, 12, 2, 10, CONC_D);
+    P(ctx, 50, 16, 11, 1, CONC); P(ctx, 54, 12, 1, 10, CONC);
+    roofBox(ctx, 62, 8, 6, 3, 3, m);              // roof vent housing
+    P(ctx, 63, 9, 4, 1, pal.shadow);
     // facade: big roll-up door + hazard lintel + windows + lamp
     hazardH(ctx, 39, 29, 22, pal.haz);
     rollDoor(ctx, 41, 32, 18, 9);
@@ -540,27 +553,67 @@
   function drawNukePlant(ctx, W, H, pal, f, side, rnd, adv) { // 48x48 +10 — stacks
     baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
     const m = mats(pal);
-    // cooling stacks (north, rising above the footprint) — cylinders
     const wc = ['#d0d0c4', '#a8a89e', '#83837b', '#66665f'];
     const cc = ['#b6b6ab', '#d4d4c8', '#7d7d74'];
-    cyl3(ctx, 13, -3, 8, 3, 16, wc, cc);
-    cyl3(ctx, 34, -3, 8, 3, 16, wc, cc);
-    // stack mouths
-    for (const cx of [13, 34]) {
-      ellipseFill(ctx, cx, -3, 5, 2, '#33332e');
-      ellipseFill(ctx, cx, -3, 3, 1, adv ? '#f0e060' : '#22221e');
-      if (adv) P(ctx, cx - 1, -3, 2, 1, '#fff8c0');
-      // trim ring on the wall
-      P(ctx, cx - 8, 4, 17, 1, adv ? pal.trim : '#8a8a80');
+    if (!adv) {
+      // BASIC PLANT: two plain straight-sided exhaust stacks. Quiet, cold,
+      // industrial — nothing glows.
+      cyl3(ctx, 13, -3, 8, 3, 16, wc, cc);
+      cyl3(ctx, 34, -3, 8, 3, 16, wc, cc);
+      for (const cx of [13, 34]) {
+        ellipseFill(ctx, cx, -3, 5, 2, '#33332e');
+        ellipseFill(ctx, cx, -3, 3, 1, '#22221e');
+        P(ctx, cx - 8, 4, 17, 1, '#8a8a80');
+      }
+      steamUp(ctx, 13, -6, f % 3);
+      steamUp(ctx, 34, -6, (f + 1) % 3);
+    } else {
+      // ADVANCED PLANT: a different silhouette, not the same plant with
+      // yellow paint. Two waisted concrete cooling towers — wide skirt,
+      // pinched middle, flared rim — flanking a glowing reactor drum. The
+      // hourglass profile is the giveaway from across the map.
+      for (const cx of [12, 35]) {
+        ctx.fillStyle = SH; ctx.fillRect(cx + 8, -10, 3, 24);
+        for (let y = -16; y <= 13; y++) {
+          const t = (y + 16) / 29;                    // 0 at rim, 1 at skirt
+          // waist: narrow at ~0.42 down, flaring to both ends
+          const r = Math.round(5 + Math.abs(t - 0.42) * 7);
+          P(ctx, cx - r, y, r * 2, 1, wc[1]);
+          P(ctx, cx - r, y, 2, 1, wc[0]);             // west edge lit
+          P(ctx, cx + r - 3, y, 3, 1, wc[2]);         // east edge shaded
+          P(ctx, cx + r - 1, y, 1, 1, wc[3]);
+          if ((y + 16) % 5 === 0) P(ctx, cx - r + 2, y, r * 2 - 4, 1, wc[2]);
+        }
+
+        // flared rim + the dark throat inside it
+        ellipseFill(ctx, cx, -16, 8, 3, '#3a3a34');
+        ellipseFill(ctx, cx, -16, 6, 2, '#22221e');
+        ellipseFill(ctx, cx, -15, 4, 1, '#584c22');
+        P(ctx, cx - 8, -16, 16, 1, wc[0]);
+        // hot trim band around the waist
+        P(ctx, cx - 6, -3, 12, 1, pal.trim);
+        P(ctx, cx - 6, -2, 12, 1, '#8a6e18');
+      }
+      // reactor drum between the towers, core glowing on the pulse frame
+      const hot = (f % 2) === 0;
+      ctx.fillStyle = SH; ctx.fillRect(29, 2, 2, 11);
+      cyl3(ctx, 24, 1, 5, 2, 11, ['#c2c2b6', '#9a9a90', '#76766e', '#5a5a54'], cc);
+      ellipseFill(ctx, 24, 1, 4, 2, '#2a2a26');
+      ellipseFill(ctx, 24, 1, 3, 1, hot ? '#ffe870' : '#8a7a30');
+      if (hot) {
+        P(ctx, 23, 1, 2, 1, '#fffbe0');
+        ctx.fillStyle = 'rgba(255,232,112,0.20)'; ctx.fillRect(18, -3, 12, 9);
+      }
+      // coolant trunks running from each tower into the drum
+      for (const [x0, x1] of [[19, 22], [27, 30]]) {
+        P(ctx, x0, 6, x1 - x0, 3, STEEL);
+        P(ctx, x0, 6, x1 - x0, 1, STEEL_L);
+        P(ctx, x0, 8, x1 - x0, 1, STEEL_D2);
+      }
+      steamUp(ctx, 12, -19, f % 3);
+      steamUp(ctx, 35, -19, (f + 1) % 3);
+      steamUp(ctx, 24, -2, (f + 2) % 3);
     }
-    if (adv) { // third small stack between
-      cyl3(ctx, 24, 5, 4, 2, 8, wc, cc);
-      ellipseFill(ctx, 24, 5, 2, 1, '#f0e060');
-    }
-    // steam wisps
-    steamUp(ctx, 13, -6, f % 3);
-    steamUp(ctx, 34, -6, (f + 1) % 3);
-    if (adv) steamUp(ctx, 24, 2, (f + 2) % 3);
     // turbine hall (south): roof + facade
     box3(ctx, 3, 16, 42, 14, 13, m);
     for (let y = 19; y < 28; y += 4) P(ctx, 5, y, 38, 1, pal.dark);
@@ -768,18 +821,24 @@
     baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
     const m = mats(pal);
     box3(ctx, 3, -6, 66, 30, 18, m);
-    // roof: three big panels + skylight + vents + beacon
-    P(ctx, 25, -5, 1, 28, pal.shadow); P(ctx, 47, -5, 1, 28, pal.shadow);
-    for (let y = -2, i = 0; y < 20; y += 5, i++) P(ctx, 5, y, 62, 1, pal.dark);
-    P(ctx, 8, 0, 12, 4, GLASS); P(ctx, 8, 0, 12, 1, GLASS_L);
-    P(ctx, 12, 1, 1, 3, '#101c26'); P(ctx, 16, 1, 1, 3, '#101c26');
-    outlineRect(ctx, 7, -1, 14, 6);
-    roofBox(ctx, 52, 0, 10, 4, 3, m);
-    P(ctx, 53, 1, 8, 1, pal.shadow); P(ctx, 53, 3, 8, 1, pal.shadow);
-    P(ctx, 30, 0, 10, 4, GLASS); P(ctx, 30, 0, 10, 1, GLASS_L);
-    P(ctx, 34, 1, 1, 3, '#101c26');
-    outlineRect(ctx, 29, -1, 12, 6);
-    roofBox(ctx, 31, 10, 7, 3, 3, m);
+    // SAWTOOTH ROOF — the giveaway that this is a factory and not the
+    // construction yard next door. Four north-light bays: a broad sloped
+    // panel catching the sky, then a narrow glazed riser standing above it,
+    // repeated down the roof. Reads as corrugated ridges from above.
+    for (let i = 0; i < 4; i++) {
+      const y0 = -5 + i * 7;
+      P(ctx, 5, y0, 62, 5, pal.base);              // sloped panel
+      P(ctx, 5, y0, 62, 1, pal.light);             // ridge line catching light
+      P(ctx, 5, y0 + 4, 62, 1, pal.dark);          // valley
+      P(ctx, 5, y0 + 5, 62, 2, GLASS);             // glazed riser
+      P(ctx, 5, y0 + 5, 62, 1, GLASS_L);
+      for (let mx = 9; mx < 66; mx += 7) P(ctx, mx, y0 + 5, 1, 2, '#101c26'); // mullions
+      P(ctx, 5, y0 + 7, 62, 1, OUT);               // shadow under the riser
+    }
+    P(ctx, 25, -5, 1, 28, pal.shadow); P(ctx, 47, -5, 1, 28, pal.shadow); // bay walls
+    roofBox(ctx, 52, 1, 10, 4, 3, m);              // plant room on the ridge
+    P(ctx, 53, 2, 8, 1, pal.shadow);
+    roofBox(ctx, 31, 15, 7, 3, 3, m);              // extractor housing
     P(ctx, 64, -4, 3, 3, (f % 2) ? PAL.fire1 : '#5c2014');
     outlineRect(ctx, 63, -5, 5, 5);
     // facade: giant roller door with raised gap + welding flashes
@@ -1214,60 +1273,144 @@
     P(ctx, 58, 7, 9, 3, GLASS);
     P(ctx, 58, 7, 9, 1, GLASS_L);
     P(ctx, 60 + (f ? 3 : 0), 8, 1, 1, GLASS_HI);
+
+    // ---- the yard around the pad: this is a WORKSHOP, so dress it like one --
+
+    // NW: jib crane with an engine block swinging on its chain
+    ctx.fillStyle = SH; ctx.fillRect(9, 4, 2, 10);
+    P(ctx, 5, 2, 3, 12, IRON); P(ctx, 5, 2, 1, 12, IRON_L);   // mast
+    outlineRect(ctx, 5, 2, 3, 12);
+    P(ctx, 5, 13, 7, 2, CONC_D); outlineRect(ctx, 4, 13, 9, 4); // base plate
+    const jib = [0, 2, 4, 2][f % 4];                            // boom swings
+    P(ctx, 8, 3, 14 + jib, 2, IRON);                            // boom
+    P(ctx, 8, 3, 14 + jib, 1, IRON_L);
+    outlineRect(ctx, 8, 3, 14 + jib, 2);
+    P(ctx, 21 + jib, 5, 1, 5 + jib, '#151512');                 // chain
+    P(ctx, 19 + jib, 10 + jib, 5, 4, '#4a4a44');                // engine block
+    P(ctx, 19 + jib, 10 + jib, 5, 1, '#6e6e66');
+    P(ctx, 20 + jib, 11 + jib, 1, 2, '#2a2a26');
+    P(ctx, 22 + jib, 11 + jib, 1, 2, '#2a2a26');
+    outlineRect(ctx, 19 + jib, 10 + jib, 5, 4);
+
+    // SW: stacked road wheels and a row of fluid drums
+    for (let i = 0; i < 3; i++) {
+      const ty = 66 - i * 3;
+      ellipseFill(ctx, 9, ty, 6, 3, OUT);
+      ellipseFill(ctx, 9, ty, 5, 2, '#25251f');
+      ellipseFill(ctx, 9, ty - 1, 3, 1, '#3d3d34');
+    }
+    for (let i = 0; i < 3; i++) {
+      const dx2 = 19 + i * 7;
+      P(ctx, dx2, 58, 6, 9, i === 1 ? '#7a5a28' : '#3f5a3a');   // drum body
+      P(ctx, dx2, 58, 6, 1, i === 1 ? '#a07a38' : '#557a4c');   // lit lid
+      P(ctx, dx2 + 4, 59, 2, 8, '#232a20');                     // shaded east
+      P(ctx, dx2, 61, 6, 1, '#1c1c18');                         // hoop
+      P(ctx, dx2, 64, 6, 1, '#1c1c18');
+      outlineRect(ctx, dx2, 58, 6, 9);
+    }
+
+    // SE: parts rack with shelved spares, a workbench and a coiled air hose
+    outlineRect(ctx, 50, 57, 19, 12);
+    P(ctx, 51, 58, 17, 10, '#4a4a44');
+    for (let sy = 61; sy < 68; sy += 3) P(ctx, 51, sy, 17, 1, '#63635a');
+    for (let i = 0; i < 4; i++) {                                // boxed spares
+      const bx2 = 52 + i * 4;
+      P(ctx, bx2, 59, 3, 2, i % 2 ? '#8a7444' : '#5c6a7a');
+      P(ctx, bx2, 59, 3, 1, i % 2 ? '#a89058' : '#7e8c9c');
+      P(ctx, bx2, 62, 3, 2, i % 2 ? '#5c6a7a' : '#7a5a28');
+      P(ctx, bx2, 65, 3, 2, i % 2 ? '#6a6a60' : '#8a7444');
+    }
+    P(ctx, 66, 59, 2, 8, pal.haz);                               // rack upright
+    ellipseFill(ctx, 46, 64, 4, 3, '#2a2a26');                    // hose coil
+    ellipseFill(ctx, 46, 64, 3, 2, '#3e3e38');
+    ellipseFill(ctx, 46, 64, 1, 1, '#5a5a52');
+
+    // a pair of hydraulic jacks stood ready at the pad's west lip
+    for (const jy of [26, 40]) {
+      P(ctx, 2, jy, 3, 5, STEEL_D);
+      P(ctx, 2, jy, 3, 1, STEEL_L);
+      P(ctx, 3, jy - 2, 1, 2, STEEL);
+      outlineRect(ctx, 2, jy - 2, 3, 7);
+    }
   }
 
   function drawGtwr(ctx, W, H, pal, f, side, rnd) { // 24x24 +14 — MG watchtower
-    // a guard tower should WATCH: raised deck on braced stilts, sandbag
-    // parapet, MG over the north rail, ladder down the east leg
-    roundPad(ctx, 12, 13, 11, rnd);
-    const SB = '#b3a06a', SBL = '#cfc088', SBD = '#7e6f45', SBD2 = '#5e5233';
-    ellipseFill(ctx, 13, 15, 8, 3, SH);            // deck shadow on the pad
-    // back stilts (peek behind the deck), then front stilts + cross brace
-    P(ctx, 7, 4, 2, 8, '#4c4c44'); P(ctx, 15, 4, 2, 8, '#4c4c44');
-    P(ctx, 7, 4, 1, 8, '#66665c'); P(ctx, 15, 4, 1, 8, '#66665c');
-    P(ctx, 5, 6, 2, 11, IRON); P(ctx, 17, 6, 2, 11, IRON);
-    P(ctx, 5, 6, 1, 11, IRON_L); P(ctx, 17, 6, 1, 11, IRON_L);
-    P(ctx, 5, 17, 2, 1, OUT); P(ctx, 17, 17, 2, 1, OUT);
-    for (let i = 0; i < 10; i++) {                 // X brace between front legs
-      P(ctx, 7 + i, 7 + i, 1, 1, '#3a3a32');
-      P(ctx, 16 - i, 7 + i, 1, 1, '#3a3a32');
+    // A guard tower has to read as a TOWER at a glance: a square concrete
+    // shaft standing on a footing, banded up its height so the eye counts
+    // storeys, with a railed observation deck cantilevered over the top and a
+    // gun under it. The old sandbag ring on stilts read as a bunker.
+    roundPad(ctx, 12, 15, 10, rnd);
+    ctx.fillStyle = SH;                            // shaft shadow onto the pad
+    ctx.fillRect(17, 4, 4, 14);
+    ctx.fillRect(9, 17, 9, 3);
+
+    // --- concrete shaft: south face, banded, with slit windows -------------
+    outlineRect(ctx, 6, -2, 12, 20);
+    P(ctx, 7, -1, 10, 18, CONC_D);                 // wall body
+    P(ctx, 7, -1, 1, 18, CONC);                    // west edge catches light
+    P(ctx, 15, -1, 2, 18, CONC_D2);                // east edge in shade
+    for (let y = 2; y < 17; y += 5) {              // storey bands
+      P(ctx, 7, y, 10, 1, CONC);
+      P(ctx, 7, y + 1, 10, 1, CONC_D2);
     }
-    // ladder down the east side
-    P(ctx, 21, 7, 1, 10, '#8a8a7e');
-    for (let y = 8; y < 17; y += 2) P(ctx, 20, y, 3, 1, '#6e6e62');
-    // elevated deck: slim dark underside, then the sandbag parapet ring
-    ellipseFill(ctx, 12, 3, 9, 3, OUT);
-    ellipseFill(ctx, 12, 2, 8, 2.5, '#26261f');
-    for (let dx = -9; dx <= 9; dx++) {             // south bag-course
-      const e = Math.round(5 * Math.sqrt(Math.max(0, 1 - dx * dx / 100)));
-      P(ctx, 12 + dx, -2 + e, 1, 3, dx > 5 ? SBD2 : SBD);
-      P(ctx, 12 + dx, -1 + e, 1, 1, dx > 5 ? '#463d24' : SBD2);
-      P(ctx, 12 + dx, 0 + e, 1, 1, OUT);
+    for (let y = 4; y < 16; y += 5) {              // narrow observation slits
+      P(ctx, 9, y, 2, 2, '#1a1a16');
+      P(ctx, 13, y, 2, 2, '#1a1a16');
+      P(ctx, 9, y, 2, 1, '#2e2e28');
+      P(ctx, 13, y, 2, 1, '#2e2e28');
     }
-    ellipseFill(ctx, 12, -2, 10, 5.5, OUT);
-    ellipseFill(ctx, 12, -2, 9, 4.5, SB);
-    for (let i = 0; i < 8; i++) {                  // bag seams on the ring
-      const a = i / 8 * Math.PI * 2 + 0.4;
-      P(ctx, Math.round(12 + Math.cos(a) * 7), Math.round(-2 + Math.sin(a) * 3.4), 1, 1, SBD);
+    // splayed footing where the shaft meets the ground
+    P(ctx, 5, 16, 14, 3, CONC_D2);
+    P(ctx, 5, 16, 14, 1, CONC_D);
+    outlineRect(ctx, 5, 16, 14, 4);
+    hazardH(ctx, 6, 19, 12, pal.haz);
+
+    // caged ladder climbing the east face
+    P(ctx, 18, 0, 1, 16, '#8a8a7e');
+    P(ctx, 20, 0, 1, 16, '#6e6e62');
+    for (let y = 1; y < 16; y += 2) P(ctx, 18, y, 3, 1, '#7e7e72');
+
+    // --- observation deck, cantilevered out over the shaft ------------------
+    ctx.fillStyle = SH; ctx.fillRect(21, -6, 2, 5); // deck's own shadow east
+    P(ctx, 3, -8, 18, 4, CONC_D);                  // deck slab underside
+    P(ctx, 3, -8, 18, 1, CONC);                    // lit top edge of the slab
+    P(ctx, 3, -5, 18, 1, OUT);
+    outlineRect(ctx, 3, -9, 18, 6);
+    P(ctx, 4, -9, 16, 2, pal.base);                // roof plate in faction paint
+    P(ctx, 4, -9, 16, 1, pal.light);
+    // corner posts and the rail running between them
+    for (const px2 of [3, 11, 20]) {
+      P(ctx, px2, -13, 1, 5, IRON_L);
+      P(ctx, px2, -13, 1, 1, '#c8c8bc');
     }
-    for (let a = 3.4; a < 5.2; a += 0.25)          // NW lit arc
-      P(ctx, Math.round(12 + Math.cos(a) * 8), Math.round(-2 + Math.sin(a) * 3.8), 2, 1, SBL);
-    // sunken nest + gunner helmet
-    ellipseFill(ctx, 12, -2, 5, 2.5, '#34342f');
-    P(ctx, 14, -3, 2, 2, '#5c6248'); P(ctx, 14, -3, 2, 1, '#767c5c');
-    // MG over the north rail with muzzle glint on alternate frames
-    P(ctx, 9, -5, 5, 3, IRON);
-    P(ctx, 9, -5, 5, 1, IRON_L);
-    P(ctx, 8, -6, 7, 1, OUT); P(ctx, 8, -6, 1, 5, OUT); P(ctx, 14, -6, 1, 5, OUT);
-    P(ctx, 10, -12, 2, 7, '#22222a');
-    P(ctx, 10, -12, 1, 7, '#5a5a64');
-    P(ctx, 9, -12, 4, 1, OUT);
-    if (f) { P(ctx, 10, -12, 2, 1, '#ffffff'); P(ctx, 11, -11, 1, 1, GLASS_HI); }
-    // ammo crate at the tower foot
-    P(ctx, 2, 15, 5, 3, '#8a7444');
-    P(ctx, 2, 15, 5, 1, '#a89058');
-    outlineRect(ctx, 2, 15, 5, 4);
-    P(ctx, 3, 16, 1, 1, pal.haz);
+    P(ctx, 3, -13, 18, 1, IRON);                   // top rail
+    P(ctx, 3, -11, 18, 1, IRON_D);                 // mid rail
+    // gunner behind the rail, helmet catching the light
+    P(ctx, 13, -12, 3, 4, '#4e5440');
+    P(ctx, 13, -12, 3, 1, '#6c7256');
+    P(ctx, 14, -13, 2, 2, '#5c6248');
+    P(ctx, 14, -13, 2, 1, '#767c5c');
+    // pintle MG on the north rail, muzzle flaring on alternate frames
+    P(ctx, 6, -12, 5, 3, IRON);
+    P(ctx, 6, -12, 5, 1, IRON_L);
+    outlineRect(ctx, 6, -12, 5, 3);
+    P(ctx, 7, -18, 2, 6, '#22222a');
+    P(ctx, 7, -18, 1, 6, '#5a5a64');
+    P(ctx, 6, -18, 4, 1, OUT);
+    if (f) {
+      P(ctx, 7, -19, 2, 1, '#ffffff');
+      P(ctx, 8, -18, 1, 1, GLASS_HI);
+      ctx.fillStyle = 'rgba(255,240,190,0.20)'; ctx.fillRect(5, -21, 6, 4);
+    }
+    // searchlight on the west corner, swinging with the frame
+    P(ctx, 2, -12, 3, 3, IRON);
+    P(ctx, 2, -12, 3, 1, IRON_L);
+    P(ctx, f ? 1 : 2, -11, 1, 2, f ? '#fff4c8' : '#8a8a7e');
+    // ammo crate tucked at the foot
+    P(ctx, 1, 13, 5, 3, '#8a7444');
+    P(ctx, 1, 13, 5, 1, '#a89058');
+    outlineRect(ctx, 1, 13, 5, 4);
+    P(ctx, 2, 14, 1, 1, pal.haz);
   }
 
   function missileBox(ctx, x, y, pal) { // 8x10 launcher: bright top + south face
@@ -1519,7 +1662,7 @@
   // extra pixels drawn ABOVE the footprint (render offsets by entry yOff):
   // tall structures rise over their anchor cells
   const YOFF = {
-    fact: 10, nuke: 12, nuk2: 12, proc: 6, silo: 6, pyle: 4, hand: 12,
+    fact: 10, nuke: 12, nuk2: 19, proc: 6, silo: 6, pyle: 4, hand: 12,
     weap: 6, afld: 8, hq: 8, eye: 12, tmpl: 12, atwr: 24, obli: 24, gtwr: 14,
   };
 
@@ -2249,19 +2392,27 @@
 (function () {
   if (typeof SPRITES === 'undefined' || typeof document === 'undefined') return;
 
+  // The 3rd and 4th armies recolor the two faction ramps. They have to be
+  // told apart at a glance WITHOUT fighting the muted gold-and-gunmetal
+  // register the rest of the game sits in — a saturated primary blue next to
+  // UDC gold, or an electric violet next to Brotherhood red, reads as UI
+  // chrome rather than as an army. Both are desaturated and darkened toward
+  // the same tonal range as the originals: UDC gold becomes weathered teal
+  // (same value, different hue), Brotherhood red becomes a dusty plum.
   const REMAP = {
     ud2: {
-      '#c8a84c': '#6088c0', '#8a7230': '#40608e', '#e8d088': '#9cbce4', '#5c4c20': '#2a3c5e',
+      '#c8a84c': '#5f9490', '#8a7230': '#3d635f', '#e8d088': '#a2c4bf', '#5c4c20': '#2b423f',
     },
     sr2: {
-      '#8a8a94': '#8c7c9e', '#54545e': '#564a66', '#b8b8c2': '#b6a8ce', '#36363e': '#382e46',
-      '#b02818': '#7c2cc0', '#e05038': '#ae66ec',
+      '#8a8a94': '#8a8090', '#54545e': '#544c5c', '#b8b8c2': '#b4acbc', '#36363e': '#363040',
+      '#b02818': '#84406e', '#e05038': '#b06a94',
     },
   };
   // Brotherhood art leans on many auxiliary gunmetal greys beyond the 4-color
-  // ramp — AMETHYST also tilts every near-grey pixel toward violet so the
-  // two Brotherhood armies never read as the same force
-  const GREY_TILT = { sr2: [7, -8, 14] };
+  // ramp — the plum army also tilts every near-grey pixel a little warm so
+  // the two Brotherhood forces never read as the same army. Kept gentle: a
+  // heavy tilt turned the whole base lilac.
+  const GREY_TILT = { sr2: [6, -3, 8] };
 
   function _lut(map) {
     const out = new Map();
