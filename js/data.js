@@ -102,7 +102,10 @@ DATA.buildings = {
   atwr: { name: 'Adv. Guard Tower', cost: 1000, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 60, side: 'udc', prereq: ['hq'], weapon: 'atwrMissile', needsPower: true, defense: true, threat: 0.9, podMuzzles: [[7, -22], [18, -22]] },
   gun:  { name: 'Gun Turret', cost: 600, hp: 400, w: 1, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 20, side: 'srp', prereq: ['hand'], weapon: 'gunTurret', turret: true, defense: true, threat: 0.5 },
   obli: { name: 'Beam Spire', cost: 1500, hp: 400, w: 1, h: 1, armor: 'concrete', sight: 5, power: 0, drain: 150, side: 'srp', prereq: ['hq'], weapon: 'obelisk', needsPower: true, defense: true, threat: 0.9 },
-  sam:  { name: 'SAM Site', cost: 550, hp: 300, w: 2, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 25, side: 'srp', prereq: ['hand'], weapon: 'samMissile', needsPower: true, defense: true, threat: 0.3 },
+  // deploys: ticks the launcher takes to clear the deck. It lies flat and
+  // hatched over until something is in the sky; turret: it tracks rather than
+  // snapping, so you can watch it come round onto the target.
+  sam:  { name: 'SAM Site', cost: 550, hp: 300, w: 2, h: 1, armor: 'heavy', sight: 5, power: 0, drain: 25, side: 'srp', prereq: ['hand'], weapon: 'samMissile', needsPower: true, defense: true, threat: 0.3, deploys: 16, turret: true },
   // neutral village structures — never buildable, owned by 'civ'.
   // `garrison`: armed infantry can occupy and fire from inside (capacity).
   vil1: { name: 'Farmhouse', cost: 0, hp: 250, w: 2, h: 2, armor: 'wood', sight: 1, power: 0, drain: 0, side: null, prereq: [], civ: true, garrison: 3 },

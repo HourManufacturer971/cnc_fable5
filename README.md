@@ -422,6 +422,16 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   where a suction hose couples to it for the transfer. A bay that is blocked
   or unreachable falls back to a kerbside transfer, so the manoeuvre can
   never be the thing that stalls an economy
+- **Air doctrine** — each wing hunts what its gun can actually hurt, read off
+  the warhead table rather than hardcoded per faction. The Brotherhood's
+  Gunship carries a machine gun, so it goes after infantry — and after
+  crowds of them, since a lone rifleman is never worth the sortie. The UDC
+  Kestrel carries AP rockets, so it goes after harvesters and structures and
+  leaves foot troops alone. Re-arm a unit and its shopping list follows
+- **Cut off** — shoot out every bridge and the AI notices that no ground route
+  to you exists at all, rather than mustering waves that park on the bank. It
+  builds an engineer and walks it into the control room on its own bank to
+  put a span back
 - **Power** — low power halves production speed, kills the radar, and disables
   the Beam Spire, Advanced Guard Tower, and SAM sites
 - **Construction** — the classic sidebar with clock-wipe cameos, adjacency
@@ -436,7 +446,11 @@ Temple charges the Orbital Lance / nuke proportionally faster.
   by cargo plane at the Airstrip. The Behemoth
   Tank is visibly bigger than the rest and fires twin cannon shots.
 - **Defenses** — Guard Tower, Advanced Guard Tower, Gun Turret, SAM Site, and
-  the Beam Spire with its charge-up laser; concrete walls place in
+  the Beam Spire with its charge-up laser. The **SAM Site** lies flat: an
+  armoured, hazard-striped deck with the silo hatched over, until something
+  enters the sky nearby. Then the leaves part, a six-cell box launcher rides
+  up out of the well, and it tracks the target round — it cannot fire on the
+  way up, and it stows again once the sky clears; concrete walls place in
   drag-runs, auto-connect, and block movement. **Wall Gates** are proper
   3-cell gatehouses that slot into a wall run — place one right on top of
   existing wall segments and they make way; the gate orients itself to the

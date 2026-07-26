@@ -58,6 +58,8 @@ const AI = (function () {
         airHitAt: -1e9,
         yardAt: null,         // where the construction yard stands (or stood)
         rebuildYard: false,   // yard is gone: the next MCV replaces it
+        bridgeHut: 0,         // control room to rebuild a cut crossing through
+        wantEngBridge: false, // that job wants an engineer off the next slot
       };
     }
   }
@@ -407,8 +409,8 @@ const AI = (function () {
   function _pickUnit(g, p, kind, st) {
     // elite duties preempt the regular mix: the lines of a rich AI never sit
     // empty, so the engineer/MCV would otherwise wait forever for a free slot
-    if (st && kind === 'infantry' && st.wantEng && p.credits > 600 &&
-        Production.prereqOk(p, 'e6')) return 'e6';
+    if (st && kind === 'infantry' && (st.wantEng || st.wantEngBridge) &&
+        p.credits > 600 && Production.prereqOk(p, 'e6')) return 'e6';
     if (st && kind === 'vehicle' && st.wantMcv && p.credits > 1500 &&
         Production.prereqOk(p, 'mcv')) return 'mcv';
     if (kind === 'vehicle') {
@@ -488,8 +490,25 @@ const AI = (function () {
   // aircraft pick PAYING targets — production, tech, harvesters — never the
   // nearest sandbag. Value over distance: a sortie crosses the map for a
   // refinery but not for a silo.
+  // What an air wing is good at is written in its WARHEAD, not its faction.
+  // The Seth Gunship carries a machine gun: small-arms does 1.00 against
+  // infantry and 0.18 against concrete. The UDC Kestrel carries AP rockets:
+  // 1.00 against heavy armour and 0.30 against infantry. Squaring the table
+  // entry turns that from a nudge into a preference — Seth's wing hunts foot
+  // troops and UDC's hunts armour and structures — without either faction
+  // needing to be named here. Change a unit's gun and its shopping list
+  // follows on its own.
+  function _airEdge(wh, armor) {
+    const t = DATA.warheads[wh];
+    const e = t && t[armor] !== undefined ? t[armor] : 0.5;
+    return e * e;
+  }
+
   function _airTarget(g, ep, from, maxCells) {
     const cap = maxCells ? maxCells * C.CELL : Infinity;
+    const fd = from && DATA.units[from.type];
+    const fw = fd && fd.weapon && DATA.weapons[fd.weapon];
+    const wh = (fw && fw.warhead) || 'he';
     let best = null, bestS = 0;
     for (const id of ep.buildingIds) {
       const b = g.buildings.get(id);
@@ -498,20 +517,132 @@ const AI = (function () {
       if (bd.wall || (bd.cost || 0) < 500) continue;   // not worth the fuel
       const d = dist(from.x, from.y, (b.cx + b.w / 2) * C.CELL, (b.cy + b.h / 2) * C.CELL);
       if (d > cap) continue;
-      const s = bd.cost / (1 + d / (30 * C.CELL));
+      const s = bd.cost * _airEdge(wh, bd.armor) / (1 + d / (30 * C.CELL));
       if (s > bestS) { bestS = s; best = b; }
     }
+    // infantry are valued by the CROWD they stand in, not their build cost:
+    // one rifleman is never worth a sortie, six in a huddle are exactly what
+    // a door gunner exists for. 260 a head is roughly what a burst is worth.
+    const foot = [];
     for (const id of ep.unitIds) {
       const u = g.units.get(id);
-      if (!u || u._dead) continue;
+      if (u && !u._dead && DATA.units[u.type].infantry && !u.cloaked) foot.push(u);
+    }
+    // Only harvesters and foot troops are on the menu. Opening it to every
+    // vehicle sounds more general but reads as a different game: with cost as
+    // the value term an AP wing goes straight for the 5000-credit MCV every
+    // time, which is not what "prefers armour to infantry" was meant to buy.
+    for (const id of ep.unitIds) {
+      const u = g.units.get(id);
+      if (!u || u._dead || u.cloaked) continue;
       const ud = DATA.units[u.type];
-      if (!ud.harvester) continue;   // eco strikes: the classic gunship errand
+      if (!ud.harvester && !ud.infantry) continue;
       const d = dist(from.x, from.y, u.x, u.y);
       if (d > cap) continue;
-      const s = (ud.cost || 1100) * 1.2 / (1 + d / (30 * C.CELL));
+      let val;
+      if (ud.infantry) {
+        let n = 0;
+        for (const o of foot) if (dist(o.x, o.y, u.x, u.y) <= C.CELL * 2.5) n++;
+        val = 260 * n;
+      } else {
+        val = (ud.cost || 1100) * 1.2;   // eco strikes: the classic errand
+      }
+      const s = val * _airEdge(wh, ud.armor) / (1 + d / (30 * C.CELL));
       if (s > bestS) { bestS = s; best = u; }
     }
     return best;
+  }
+
+  // Flood the map from a cell over TERRAIN only — not occupancy. The question
+  // is whether an attack wave could ever WALK there: buildings in the way can
+  // be shot out of it, a river cannot.
+  function _reachFrom(g, cx, cy) {
+    const seen = new Uint8Array(C.MAP_W * C.MAP_H);
+    if (!inMap(cx, cy)) return seen;
+    const q = [cellIdx(cx, cy)];
+    seen[q[0]] = 1;
+    for (let h = 0; h < q.length; h++) {
+      const i = q[h], x = i % C.MAP_W, y = (i / C.MAP_W) | 0;
+      for (let k = 0; k < 4; k++) {
+        const nx = x + (k === 0 ? 1 : k === 1 ? -1 : 0);
+        const ny = y + (k === 2 ? 1 : k === 3 ? -1 : 0);
+        if (!inMap(nx, ny)) continue;
+        const ni = cellIdx(nx, ny);
+        if (seen[ni] || !terrainPassable(g.terrain[ni])) continue;
+        seen[ni] = 1; q.push(ni);
+      }
+    }
+    return seen;
+  }
+
+  // CUT OFF: with every crossing shot out there is no ground route to the
+  // enemy at all, and an AI that keeps mustering waves just parks them on the
+  // bank forever. Build an engineer and put a span back.
+  //
+  // Two floods, run only when a bridge is actually down (otherwise this costs
+  // nothing): one from home, one from the enemy. A fallen bridge is worth
+  // fixing when its two ends land in DIFFERENT floods — that is what makes it
+  // the cut rather than an irrelevant crossing somewhere else — and when the
+  // control room on our own bank can be walked to.
+  function _bridgeDuty(g, p, st) {
+    const bridges = g.bridges || [];
+    let anyDown = false;
+    for (const br of bridges) if (br.down) { anyDown = true; break; }
+    if (!anyDown) { st.wantEngBridge = false; st.bridgeHut = 0; return; }
+
+    const cyd = _conyard(g, p);
+    const home = g.startPos[p.side] || g.startPos.ai;
+    const myC = cyd ? { cx: cyd.cx + 1, cy: cyd.cy + 1 } : home;
+    const foe = (st.enemy && g.startPos[st.enemy]) || g.startPos.human;
+    if (!myC || !foe) return;
+
+    const mine = _reachFrom(g, myC.cx, myC.cy);
+    if (mine[cellIdx(foe.cx, foe.cy)]) {          // the road is open after all
+      st.wantEngBridge = false; st.bridgeHut = 0; return;
+    }
+    const theirs = _reachFrom(g, foe.cx, foe.cy);
+
+    let pickHut = 0, pickD = Infinity;
+    for (const br of bridges) {
+      if (!br.down) continue;
+      let near = false, far = false;
+      for (let y = 0; y < br.rect.h; y++) {
+        for (let x = 0; x < br.rect.w; x++) {
+          const i = cellIdx(br.rect.cx + x, br.rect.cy + y);
+          if (!terrainPassable(g.terrain[i])) continue;
+          if (mine[i]) near = true;
+          if (theirs[i]) far = true;
+        }
+      }
+      if (!near || !far) continue;                // not the crossing that cut us
+      for (const hid of br.hutIds) {
+        const hut = g.buildings.get(hid);
+        if (!hut || hut._dead) continue;
+        // the hut's own cell carries a building; an engineer only needs to
+        // reach a cell TOUCHING it
+        let ok = mine[cellIdx(hut.cx, hut.cy)];
+        for (let k = 0; k < 4 && !ok; k++) {
+          const hx = hut.cx + (k === 0 ? 1 : k === 1 ? -1 : 0);
+          const hy = hut.cy + (k === 2 ? 1 : k === 3 ? -1 : 0);
+          if (inMap(hx, hy) && mine[cellIdx(hx, hy)]) ok = true;
+        }
+        if (!ok) continue;
+        const d = _cellDist(hut.cx, hut.cy, myC.cx, myC.cy);
+        if (d < pickD) { pickD = d; pickHut = hid; }
+      }
+    }
+    if (!pickHut) { st.wantEngBridge = false; st.bridgeHut = 0; return; }
+
+    st.bridgeHut = pickHut;
+    let eng = null;
+    for (const id of p.unitIds) {
+      const u = g.units.get(id);
+      if (u && !u._dead && DATA.units[u.type].engineer) { eng = u; break; }
+    }
+    st.wantEngBridge = !eng;
+    if (eng && !(eng.state === 'enter' && eng.targetId === pickHut)) {
+      orderEnter(eng, g.buildings.get(pickHut));
+    }
   }
 
   // nearest anchor to `at` where an MCV can actually unfold: a conyard-sized
@@ -846,6 +977,9 @@ const AI = (function () {
         }
       }
     }
+
+    // cut-off check: staggered per side so four AIs never flood on one tick
+    if (g.tick % 240 === (17 + g.sides.indexOf(p.side) * 7) % 240) _bridgeDuty(g, p, st);
 
     if (g.tick % 30 !== 7) return; // main cadence
 
@@ -1318,5 +1452,13 @@ const AI = (function () {
     return ST[side || (typeof game !== 'undefined' && game ? enemyOf(game.humanSide) : 'srp')] || null;
   }
 
-  return { init, tick, _peek };
+  // test hook: what an aircraft would pick as its mark. Exposed because the
+  // faction asymmetry it encodes (gunships hunt infantry, Kestrels hunt
+  // armour) is a rule worth pinning down, not an implementation detail.
+  function _markFor(g, unit, maxCells) {
+    const ep = g.players[enemyOf(unit.owner)];
+    return ep ? _airTarget(g, ep, unit, maxCells) : null;
+  }
+
+  return { init, tick, _peek, _markFor };
 })();

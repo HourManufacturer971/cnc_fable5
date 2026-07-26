@@ -658,6 +658,43 @@ const Render = (function () {
     }
   }
 
+  // A deploying mount raises its turret over the second half of its deploy
+  // timer — the first half is the hatch doors parting. `_turretRise` is how
+  // many world px it still has to climb, which the draw uses both as an offset
+  // and as the cue to clip: without the clip an emerging launcher looks like
+  // it is sliding down OVER the deck instead of up through it.
+  //
+  // turretDy is in WORLD px like every other offset here. The gun's old
+  // hardcoded -8 was screen px, so it sat half as high as intended at ZOOM 2;
+  // -4 world px reproduces exactly where it has always drawn.
+  function _turretUp(b) {
+    const bd = DATA.buildings[b.type];
+    return !bd.deploys || (b._deploy || 0) >= bd.deploys * 0.5;
+  }
+
+  function _turretRise(b) {
+    const bd = DATA.buildings[b.type];
+    if (!bd.deploys) return 0;
+    const t = clamp(((b._deploy || 0) / bd.deploys - 0.5) / 0.5, 0, 1);
+    return (1 - t) * 15;
+  }
+
+  function _drawTurret(g, b, set, x, y) {
+    const img = set.turret[b.turretFacing & 15];
+    const tdy = set.turretDy !== undefined ? set.turretDy : -4;
+    const rise = _turretRise(b);
+    const tx = x + (b.w * C.CELL * Z - img.width * sca(img)) / 2;
+    const ty = y + (tdy + rise) * Z;
+    if (rise <= 0) { drawSpr(img, tx, ty); return; }
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x - C.CELL * Z, y, (b.w * C.CELL + C.CELL * 2) * Z,
+             ((set.yOff || 0) + 16) * Z);
+    ctx.clip();
+    drawSpr(img, tx, ty);
+    ctx.restore();
+  }
+
   function _drawBuilding(g, b, X, Y) {
     const set = SPRITES.buildings[b.type] && SPRITES.buildings[b.type][b.owner];
     if (!set) return;
@@ -668,8 +705,16 @@ const Render = (function () {
     let frames = damaged && set.damaged ? set.damaged : set.normal;
     if (b.type === 'obli' && b.charging && set.charge) {
       frames = set.charge;
-    } else if (b.type === 'sam' && b.targetId && set.open) {
-      frames = set.open;
+    } else if (b.type === 'sam' && set.open) {
+      // First half of the deploy is the hatch leaves parting; the second half
+      // is the launcher climbing out of the open well, so the base switches to
+      // the well art at the halfway mark and the plate takes over from there.
+      const full = DATA.buildings.sam.deploys || 16;
+      const up = b._deploy || 0;
+      const half = full * 0.5;
+      if (up >= half && set.deck) frames = [set.deck];
+      else if (up > 0) frames = [set.open[Math.min(set.open.length - 1,
+        Math.floor((up / half) * set.open.length))]];
     }
     let frame;
     if (set.gateFrames) {
@@ -737,9 +782,7 @@ const Render = (function () {
       return;
     }
     drawSpr(frame, x, y);
-    if (b.type === 'gun' && set.turret) {
-      drawSpr(set.turret[b.turretFacing & 15], x, y - 8);
-    }
+    if (set.turret && _turretUp(b)) _drawTurret(g, b, set, x, y);
     // silos wear a live sight-glass: the owner's stored credits as a rising
     // crystal column on each drum (render-only, reads p.credits/p.storage)
     if (b.type === 'silo') {
@@ -761,7 +804,7 @@ const Render = (function () {
     if (b._hitT !== undefined && g.tick - b._hitT < 2) {
       _hitFlash(() => {
         drawSpr(frame, x, y);
-        if (b.type === 'gun' && set.turret) drawSpr(set.turret[b.turretFacing & 15], x, y - 8);
+        if (set.turret && _turretUp(b)) _drawTurret(g, b, set, x, y);
       });
     }
     if (b.repairing && (g.tick >> 3) & 1 && SPRITES.fx.wrench) {

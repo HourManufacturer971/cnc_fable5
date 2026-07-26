@@ -1799,68 +1799,118 @@
     }
   }
 
-  function drawSam(ctx, W, H, pal, f, side, rnd, open) { // 48x24 — dome launcher
+  // A SAM site spends most of its life shut: an armoured deck flush with the
+  // ground, hazard-striped, with two hatch leaves over the silo. `stage` runs
+  // 0 (stowed) -> 3 (leaves apart, launcher clearing the rim) -> 4 (open well
+  // with the turntable exposed, which is the base the rotating launcher in
+  // makeSamLauncher sits on).
+  function drawSam(ctx, W, H, pal, f, side, rnd, stage) {
     ovalPad(ctx, 24, 13, 23, 10, rnd);
-    // raised launcher deck: bright top + south lip face + SE shadow
-    ctx.fillStyle = SH; ctx.fillRect(44, 5, 2, 14); ctx.fillRect(7, 18, 37, 2);
-    outlineRect(ctx, 3, 2, 42, 16);
-    P(ctx, 4, 3, 40, 10, pal.base);
-    P(ctx, 4, 3, 40, 1, pal.light);
-    P(ctx, 4, 3, 1, 10, pal.light);
-    P(ctx, 42, 4, 2, 9, pal.dark);
-    P(ctx, 4, 12, 40, 1, pal.light);           // parapet lip
-    P(ctx, 4, 13, 40, 4, pal.dark);            // deck south face
-    P(ctx, 4, 16, 40, 1, pal.shadow);
-    hazardH(ctx, 6, 14, 6, pal.haz); hazardH(ctx, 36, 14, 6, pal.haz);
-    P(ctx, 6, 4, 2, 2, PAL.uiGold);
-    P(ctx, 40, 4, 2, 2, PAL.uiGold);
-    P(ctx, 10, 4, 1, 8, pal.dark); P(ctx, 38, 4, 1, 8, pal.dark); // deck seams
-    if (!open) {
-      dome3(ctx, 24, 12, 10, { top: pal.base, topL: pal.light, face: pal.dark, dark: pal.shadow });
-      // meridian panel lines
-      P(ctx, 24, 4, 1, 8, pal.dark);
-      P(ctx, 19, 6, 1, 6, pal.dark); P(ctx, 29, 6, 1, 6, pal.dark);
-      for (let dx = -7; dx <= 7; dx++) {          // latitude seam
-        const dy = Math.round(Math.sqrt(Math.max(0, 100 - dx * dx)) * 0.45);
-        P(ctx, 24 + dx, 12 - dy - 2, 1, 1, pal.dark);
-      }
-      P(ctx, 7, 9, 2, 2, f ? pal.trim2 : '#3a1410');
-    } else {
-      const gap = [0, 2, 5, 8][open];
-      // pit interior with rack
-      P(ctx, 24 - gap - 1, 3, (gap + 1) * 2, 10, '#15150f');
-      P(ctx, 24 - gap - 1, 3, (gap + 1) * 2, 1, '#060604');
-      if (open >= 1) { P(ctx, 24 - gap, 11, gap * 2, 1, '#3a3a32'); }
-      if (open >= 2) {
-        // rack rails + twin missiles, white with red noses
-        P(ctx, 24 - gap, 9, gap * 2, 1, '#4c4c44');
-        P(ctx, 20, 3, 2, 9, '#e2e2da'); P(ctx, 20, 3, 1, 9, '#ffffff');
-        P(ctx, 26, 3, 2, 9, '#e2e2da'); P(ctx, 26, 3, 1, 9, '#ffffff');
-        P(ctx, 20, 3, 2, 2, PAL.srpRedLight); P(ctx, 26, 3, 2, 2, PAL.srpRedLight);
-        P(ctx, 20, 10, 2, 1, '#8a8a84'); P(ctx, 26, 10, 2, 1, '#8a8a84');
-      }
-      if (open >= 3) {
-        // center missile raised on the elevator
-        P(ctx, 23, 0, 3, 12, '#f0f0e8');
-        P(ctx, 23, 0, 1, 12, '#ffffff');
-        P(ctx, 23, 0, 3, 2, PAL.srpRedLight);
-        P(ctx, 23, 1, 1, 1, '#ffe0d0');
-        P(ctx, 22, 11, 5, 1, '#6a6a62');
-      }
-      // dome halves slid apart (south face shading on the lower rows)
-      for (let dy = 0; dy <= 8; dy++) {
-        const hw = Math.floor(Math.sqrt(64 - dy * dy) * 1.1 + 0.5);
-        if (hw < 2) continue;
-        const y = 12 - dy;
-        const col = dy < 3 ? pal.dark : pal.base;
-        P(ctx, 24 - hw - gap, y, hw - 1, 1, col);
-        P(ctx, 24 - hw - gap, y, 2, 1, pal.light);
-        P(ctx, 24 + gap + 1, y, hw - 1, 1, col);
-        P(ctx, 24 + gap + hw - 2, y, 2, 1, pal.shadow);
-      }
-      P(ctx, 24 - gap - 1, 11, 2, 1, IRON_L); P(ctx, 24 + gap - 1, 11, 2, 1, IRON_L);
-      P(ctx, 7, 9, 2, 2, pal.trim2);
+    // --- armoured deck ---
+    ctx.fillStyle = SH; ctx.fillRect(44, 6, 2, 15); ctx.fillRect(8, 20, 36, 2);
+    outlineRect(ctx, 3, 2, 42, 19);
+    P(ctx, 4, 3, 40, 17, '#6f6f65');
+    P(ctx, 4, 3, 40, 1, '#8e8e83');
+    P(ctx, 4, 3, 1, 17, '#8e8e83');
+    P(ctx, 42, 4, 2, 16, '#54544c');
+    P(ctx, 4, 19, 40, 1, '#45453e');
+    hazardH(ctx, 5, 4, 38, pal.haz);              // chevron borders, both ends
+    hazardH(ctx, 5, 17, 38, pal.haz);
+    for (const bx of [6, 40]) {                   // corner bolts
+      for (const by of [8, 15]) { P(ctx, bx, by, 2, 2, '#3e3e38'); P(ctx, bx, by, 1, 1, '#909086'); }
     }
+    // --- the silo itself: hatch leaves that part on a centre seam ---
+    const gap = [0, 3, 6, 9, 9][stage];
+    const WELL_X = 12, WELL_W = 24;
+    if (stage >= 1) {                             // dark well behind the leaves
+      P(ctx, 24 - gap, 7, gap * 2, 9, '#121210');
+      P(ctx, 24 - gap, 7, gap * 2, 1, '#050504');
+      P(ctx, 24 - gap, 15, gap * 2, 1, '#2a2a26');
+    }
+    if (stage >= 4) {
+      // turntable ring the launcher stands on, and the blast well around it
+      ellipseFill(ctx, 24, 12, 8, 5, '#1b1b18');
+      ellipseFill(ctx, 24, 12, 7, 4, '#3c3c36');
+      ellipseFill(ctx, 24, 12, 5, 3, '#585850');
+      ellipseFill(ctx, 24, 11, 4, 2, '#6c6c62');
+      for (let i = 0; i < 8; i++) {               // ring teeth
+        const th = i * Math.PI / 4;
+        P(ctx, 24 + Math.round(Math.cos(th) * 6) - 1, 12 + Math.round(Math.sin(th) * 3.4), 2, 1, '#2a2a26');
+      }
+    }
+    for (const dir of [-1, 1]) {                  // the two leaves
+      const lw = (WELL_W / 2) - gap;
+      if (lw <= 0) continue;
+      const lx = dir < 0 ? WELL_X : 24 + gap;
+      P(ctx, lx, 6, lw, 11, '#5b5b53');
+      P(ctx, lx, 6, lw, 1, '#7e7e73');
+      P(ctx, lx, 16, lw, 1, '#3e3e38');
+      P(ctx, dir < 0 ? lx : lx + lw - 1, 6, 1, 11, '#3e3e38');
+      hazardV(ctx, dir < 0 ? lx + 1 : lx + lw - 3, 8, 7, pal.haz);
+      P(ctx, dir < 0 ? lx + lw - 3 : lx + 1, 10, 2, 3, '#37373f');   // grab handle
+    }
+    if (stage === 0) {
+      outlineRect(ctx, WELL_X - 1, 5, WELL_W + 2, 13);
+      P(ctx, 24, 6, 1, 11, '#2e2e2a');            // the closed seam
+    }
+    // status lamp: amber asleep, green once the launcher is clear of the rim
+    P(ctx, 7, 11, 2, 2, stage >= 3 ? PAL.uiGreen : (f ? '#b07018' : '#4a3410'));
+    P(ctx, 39, 11, 2, 2, stage >= 3 ? PAL.uiGreen : '#4a3410');
+  }
+
+  // The launcher that rises out of that deck: a six-cell box of tubes with the
+  // guidance pod bolted alongside, on a yoke. Authored pointing NORTH on a
+  // 40x40 plate; rot3D spins it about the plate's CENTRE, so the assembly is
+  // drawn straddling that centre rather than stacked north of it — a launcher
+  // whose mass sits off the pivot orbits the emplacement as it tracks instead
+  // of turning on it. The fixed pedestal stays in the deck sprite.
+  function makeSamLauncher(pal) {
+    const c = mkCanvas(40, 40);
+    const ctx = c.getContext('2d');
+    const CX = 20, PIV = 20;
+    // --- yoke arms and cradle, straddling the pivot ---
+    for (const ax of [CX - 10, CX + 6]) {
+      P(ctx, ax, PIV - 1, 3, 8, '#43434b');
+      P(ctx, ax, PIV - 1, 1, 8, '#676770');
+      P(ctx, ax + 2, PIV - 1, 1, 8, '#28282f');
+    }
+    P(ctx, CX - 8, PIV + 2, 16, 4, '#37373f');
+    P(ctx, CX - 8, PIV + 2, 16, 1, '#5a5a64');
+    outlineRect(ctx, CX - 9, PIV + 1, 18, 6);
+    P(ctx, CX - 5, PIV + 3, 4, 2, pal.dark);             // faction plate on the
+    P(ctx, CX + 2, PIV + 3, 4, 2, pal.dark);             // cradle cheeks
+    // --- guidance pod on the east flank ---
+    P(ctx, CX + 2, PIV - 9, 7, 11, '#22222a');
+    P(ctx, CX + 2, PIV - 9, 7, 1, '#3e3e48');
+    P(ctx, CX + 2, PIV - 9, 1, 11, '#33333c');
+    P(ctx, CX + 8, PIV - 8, 1, 10, '#121218');
+    outlineRect(ctx, CX + 1, PIV - 10, 9, 13);
+    for (let i = 0; i < 3; i++) P(ctx, CX + 3, PIV - 7 + i * 3, 5, 1, '#44444e');
+    P(ctx, CX + 3, PIV - 10, 5, 2, '#8e9098');           // sensor face, forward
+    P(ctx, CX + 4, PIV - 9, 3, 1, '#ccd0d8');
+    // --- tube block: 3 across, 2 deep, mouths at the north end ---
+    const BX = CX - 11, BY = PIV - 11, BW = 13, BH = 14;
+    P(ctx, BX, BY, BW, BH, '#b4b4ab');
+    P(ctx, BX, BY, BW, 1, '#d6d6cb');
+    P(ctx, BX, BY, 1, BH, '#d6d6cb');
+    P(ctx, BX + BW - 2, BY + 1, 2, BH - 1, '#83837c');
+    outlineRect(ctx, BX - 1, BY - 1, BW + 2, BH + 2);
+    for (let r = 0; r < 2; r++) {                        // six tube mouths
+      for (let k = 0; k < 3; k++) {
+        const mx = BX + 1 + k * 4, my = BY + 1 + r * 4;
+        P(ctx, mx, my, 3, 3, '#1e1e1a');
+        P(ctx, mx, my, 3, 1, '#43433c');
+        P(ctx, mx + 1, my + 1, 1, 1, PAL.srpRedLight);   // a nose in every tube
+      }
+    }
+    // A full hazard band across the casing turned into a yellow smear at the
+    // facings where the block is edge-on: a single warning stripe instead.
+    P(ctx, BX + 1, BY + 9, BW - 2, 1, PAL.uiGold);
+    P(ctx, BX + 1, BY + 10, BW - 2, 1, '#6a5410');
+    P(ctx, BX + 1, BY + 11, BW - 2, 3, pal.dark);        // faction-paint skirt
+    P(ctx, BX + 1, BY + 11, BW - 2, 1, pal.base);
+    P(ctx, BX + 1, BY + 13, BW - 2, 1, pal.shadow);
+    return rot3D(c, 16, { height: 2 });
   }
 
   // ---- builders table / frame counts / yOff -----------------------------------
@@ -1887,6 +1937,12 @@
     sam: (ctx, W, H, p, f, s, r) => drawSam(ctx, W, H, p, f, s, r, 0),
   };
 
+  // where the rotating launcher plate is blitted relative to the sprite's top
+  // edge: the plate is 40 tall and pivots about its own centre, so to land
+  // that pivot on the turntable drawn into the deck (footprint y=12, i.e.
+  // sprite row YOFF.sam + 12) it starts 20 rows above that.
+  const SAM_TDY = 18 + 12 - 20;
+
   // idle animation frame counts (default 2)
   const FRAME_COUNT = {
     fact: 4, nuke: 3, nuk2: 3, proc: 4, weap: 4, afld: 4,
@@ -1898,6 +1954,7 @@
   const YOFF = {
     fact: 16, nuke: 12, nuk2: 28, proc: 6, silo: 6, pyle: 4, hand: 12,
     weap: 6, afld: 8, hq: 8, eye: 12, tmpl: 12, atwr: 24, obli: 24, gtwr: 14,
+    sam: 18,   // headroom for the deployed launcher standing out of the deck
   };
 
   // ---- damage overlay (deterministic per key+side; fires flicker per frame) --
@@ -2026,11 +2083,14 @@
 
   function renderSamOpen(side, stage) {
     const d = DATA.buildings.sam;
-    const W = d.w * C.CELL, H = d.h * C.CELL;
-    const c = mkCanvas(W, H);
+    const W = d.w * C.CELL, H = d.h * C.CELL, over = YOFF.sam || 0;
+    const c = mkCanvas(W, over + H);
     const ctx = c.getContext('2d');
     const rnd = mulberry(hashStr('sam:' + side));
+    ctx.save();
+    ctx.translate(0, over);
     drawSam(ctx, W, H, sidePal(side), 0, side, rnd, stage);
+    ctx.restore();
     return c;
   }
 
@@ -2117,7 +2177,13 @@
       spr = t;
     }
     if (key === 'obli') spr = entry.charge[1]; // mid glow reads better
-    if (key === 'sam') spr = entry.open[1];    // cracked-open pose reads better
+    if (key === 'sam') {                       // deployed pose: deck + launcher
+      const t = mkCanvas(entry.deck.width, entry.deck.height);
+      const tc = t.getContext('2d');
+      tc.drawImage(entry.deck, 0, 0);
+      tc.drawImage(entry.turret[0], (entry.deck.width - entry.turret[0].width) / 2, SAM_TDY);
+      spr = t;
+    }
     const c = cameoCanvas();
     const ctx = c.getContext('2d');
     ctx.imageSmoothingEnabled = false;
@@ -2240,7 +2306,12 @@
       if (YOFF[key]) entry.yOff = YOFF[key];
       if (key === 'gun') entry.turret = makeGunTurret(sidePal(side));
       if (key === 'obli') entry.charge = [1, 2, 3].map(g => renderObliCharge(side, g));
-      if (key === 'sam') entry.open = [1, 2, 3].map(g => renderSamOpen(side, g));
+      if (key === 'sam') {
+        entry.open = [1, 2, 3].map(g => renderSamOpen(side, g));
+        entry.deck = renderSamOpen(side, 4);      // open well, launcher removed
+        entry.turret = makeSamLauncher(sidePal(side));
+        entry.turretDy = SAM_TDY;
+      }
       SPRITES.buildings[key][side] = entry;
     }
     SPRITES.cameo[key] = buildingCameo(key);

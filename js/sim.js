@@ -1581,6 +1581,21 @@ function _tickBuildingWeapon(b) {
       if (t) b.targetId = t.id;
     }
   }
+  // A deploying battery (the SAM site) lies flat behind hatch doors until
+  // there is something in the sky. It starts rising on a WIDER scan than its
+  // own range so the launcher is up by the time the aircraft is in it, and it
+  // stays up for a few seconds after the sky clears — a second pass should
+  // not find a closed hatch. It cannot fire on the way up.
+  if (bd.deploys) {
+    if (t) b._deployHold = g.tick + 150;
+    else if ((g.tick + b.id) % 8 === 0 &&
+             _nearestEnemy(b, w.range + 4, { antiAir: !!w.antiAir, airOnly: !!w.airOnly })) {
+      b._deployHold = g.tick + 150;
+    }
+    const up = (b._deployHold || 0) > g.tick;
+    b._deploy = Math.max(0, Math.min(bd.deploys, (b._deploy || 0) + (up ? 1 : -1)));
+  }
+
   if (!t) { b.charging = 0; return; }
 
   const tx = _entX(t), ty = _entY(t);
@@ -1606,6 +1621,7 @@ function _tickBuildingWeapon(b) {
   } else {
     b.turretFacing = want;
   }
+  if (bd.deploys && (b._deploy || 0) < bd.deploys) return;   // still rising
   if (b.cooldown <= 0) {
     _fireWeapon(b, w, t);
     b.cooldown = w.rof;
