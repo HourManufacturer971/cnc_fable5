@@ -160,6 +160,33 @@
     }
   }
 
+  // Radiation trefoil painted flat on a roof: central disc plus three blades
+  // at 120 degrees with a clear gap between them. Rasterised by angle so the
+  // blades stay crisp at this size, and squashed vertically so it lies on the
+  // roof plane instead of standing up like a badge.
+  function trefoil(ctx, cx, cy, r, sq) {
+    sq = sq || 0.62;
+    const r0 = r * 0.26, gap = 0.62;               // blade half-width, radians
+    for (let dy = -Math.ceil(r * sq); dy <= Math.ceil(r * sq); dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const uy = dy / sq;
+        const d = Math.sqrt(dx * dx + uy * uy);
+        if (d > r) continue;
+        let on = d <= r0 * 1.15;                   // hub
+        if (!on && d >= r0 * 1.95) {
+          const a = Math.atan2(uy, dx);
+          for (let k = 0; k < 3; k++) {
+            const ba = -Math.PI / 2 + k * (Math.PI * 2 / 3);
+            let da = Math.abs(a - ba);
+            if (da > Math.PI) da = Math.PI * 2 - da;
+            if (da <= gap) { on = true; break; }
+          }
+        }
+        if (on) P(ctx, cx + dx, cy + dy, 1, 1, '#0e0e0a');
+      }
+    }
+  }
+
   // full 3/4 box: bright roof rows y..y+rh, facade y+rh..y+rh+fh, parapet
   // line at the junction, outline, SE cast shadow
   function box3(ctx, x, y, w, rh, fh, m) {
@@ -597,70 +624,59 @@
       steamUp(ctx, 13, -6, f % 3);
       steamUp(ctx, 34, -6, (f + 1) % 3);
     } else {
-      // ADVANCED PLANT: a different silhouette, not the same plant with
-      // yellow paint. Two waisted concrete cooling towers — wide skirt,
-      // pinched middle, flared rim — flanking a glowing reactor drum. The
-      // hourglass profile is the giveaway from across the map.
-      for (const cx of [10, 38]) {
-        ctx.fillStyle = SH; ctx.fillRect(cx + 8, -10, 3, 24);
-        for (let y = -16; y <= 13; y++) {
-          const t = (y + 16) / 29;                    // 0 at rim, 1 at skirt
-          // waist: narrow at ~0.42 down, flaring to both ends
-          const r = Math.round(5 + Math.abs(t - 0.42) * 7);
+      // ADVANCED PLANT: two hyperbolic cooling towers. The profile is the
+      // whole point — a real one is WIDE at the ground, draws in to a waist
+      // about three quarters of the way up, then flares only slightly to the
+      // rim, so the base ends up roughly twice the radius of the mouth. The
+      // previous attempt pinched the middle of a cylinder and read as a pair
+      // of oil drums.
+      // The throat sits near the TOP — about a fifth of the way down — and the
+      // shell then sweeps out continuously to a base roughly twice its radius.
+      // Putting the narrow part low (as a pinched cylinder does) is what makes
+      // a tower read as a chimney or a flask instead.
+      const TOP_R = 6.5, WAIST_R = 5, BASE_R = 11.5, WAIST_T = 0.20;
+      for (const cx of [12, 36]) {
+        ctx.fillStyle = SH; ctx.fillRect(cx + BASE_R - 4, 4, 4, 9);
+        for (let y = -14; y <= 10; y++) {
+          const t = (y + 14) / 24;                    // 0 at the rim, 1 at the ground
+          const r = Math.round(t <= WAIST_T
+            ? TOP_R - (TOP_R - WAIST_R) * (t / WAIST_T)
+            : WAIST_R + (BASE_R - WAIST_R) * Math.pow((t - WAIST_T) / (1 - WAIST_T), 1.45));
           P(ctx, cx - r, y, r * 2, 1, wc[1]);
           P(ctx, cx - r, y, 2, 1, wc[0]);             // west edge lit
           P(ctx, cx + r - 3, y, 3, 1, wc[2]);         // east edge shaded
           P(ctx, cx + r - 1, y, 1, 1, wc[3]);
-          if ((y + 16) % 5 === 0) P(ctx, cx - r + 2, y, r * 2 - 4, 1, wc[2]);
+          P(ctx, cx - r - 1, y, 1, 1, OUT);           // silhouette both sides
+          P(ctx, cx + r, y, 1, 1, OUT);
+          if ((y + 14) % 6 === 0) P(ctx, cx - r + 2, y, r * 2 - 4, 1, wc[2]); // lift bands
         }
-
-        // flared rim + the dark throat inside it
-        ellipseFill(ctx, cx, -16, 8, 3, '#3a3a34');
-        ellipseFill(ctx, cx, -16, 6, 2, '#22221e');
-        ellipseFill(ctx, cx, -15, 4, 1, '#584c22');
-        P(ctx, cx - 8, -16, 16, 1, wc[0]);
-        // hot trim band around the waist
-        P(ctx, cx - 6, -3, 12, 1, pal.trim);
-        P(ctx, cx - 6, -2, 12, 1, '#8a6e18');
+        // splayed foot ring where the shell meets its plinth
+        P(ctx, cx - BASE_R - 1, 11, BASE_R * 2 + 2, 3, wc[2]);
+        P(ctx, cx - BASE_R - 1, 11, BASE_R * 2 + 2, 1, wc[1]);
+        outlineRect(ctx, cx - BASE_R - 1, 11, BASE_R * 2 + 2, 3);
+        // rim: bright lip over the dark throat
+        ellipseFill(ctx, cx, -14, TOP_R + 1, 2.5, OUT);
+        ellipseFill(ctx, cx, -14, TOP_R, 2, '#3a3a34');
+        ellipseFill(ctx, cx, -13, TOP_R - 2, 1.4, '#22221e');
+        P(ctx, cx - TOP_R, -15, TOP_R * 2, 1, wc[0]);
       }
-      // CONTAINMENT DOME between the towers — the single most recognisable
-      // thing about a nuclear station, and the reason this reads as one
-      // rather than as a bigger boiler house.
-      const hot = (f % 2) === 0;
-      ctx.fillStyle = SH; ctx.fillRect(32, 0, 4, 12);
-      // dome skirt: the cylindrical base the hemisphere sits on
-      P(ctx, 16, 2, 17, 9, '#8e8e86');
-      P(ctx, 16, 2, 1, 9, '#b4b4aa');
-      P(ctx, 31, 2, 2, 9, '#66665f');
-      P(ctx, 16, 10, 17, 1, '#4e4e48');
-      outlineRect(ctx, 16, 2, 17, 9);
-      dome3(ctx, 24, 2, 9, { top: '#c6c6bc', topL: '#eaeae0', face: '#95958c', dark: '#69695f' });
-      // ribs running over the crown, the way real containment shells are cast
-      for (const rx2 of [-6, -2, 2, 6]) {
-        P(ctx, 24 + rx2, -5 + Math.abs(rx2) / 3, 1, 7 - Math.abs(rx2) / 3, '#7e7e75');
-      }
-      // vent stack on the crown with a warning lamp
-      P(ctx, 23, -11, 3, 5, STEEL); P(ctx, 23, -11, 1, 5, STEEL_L);
-      outlineRect(ctx, 23, -11, 3, 5);
-      P(ctx, 23, -12, 3, 1, hot ? '#ff5030' : '#571b12');
-      // radiation trefoil painted on the south skirt
-      P(ctx, 23, 5, 3, 3, '#f0e060');
-      P(ctx, 24, 4, 1, 1, '#0e0e0a');
-      P(ctx, 22, 7, 1, 1, '#0e0e0a'); P(ctx, 26, 7, 1, 1, '#0e0e0a');
-      P(ctx, 24, 6, 1, 1, '#0e0e0a');
-      // coolant trunks running from each tower into the containment skirt
-      for (const [x0, x1] of [[17, 20], [29, 33]]) {
-        P(ctx, x0, 12, x1 - x0, 3, STEEL);
-        P(ctx, x0, 12, x1 - x0, 1, STEEL_L);
-        P(ctx, x0, 14, x1 - x0, 1, STEEL_D2);
-      }
-      steamUp(ctx, 10, -19, f % 3);
-      steamUp(ctx, 38, -19, (f + 1) % 3);
-      steamUp(ctx, 24, -14, (f + 2) % 3);
+      // the plume: heavier and higher than the basic plant's wisps
+      steamUp(ctx, 12, -18, f % 3);
+      steamUp(ctx, 36, -18, (f + 1) % 3);
+      steamUp(ctx, 12, -22, (f + 2) % 3);
+      steamUp(ctx, 36, -22, f % 3);
     }
     // turbine hall (south): roof + facade
     box3(ctx, 3, 16, 42, 14, 13, m);
     for (let y = 19; y < 28; y += 4) P(ctx, 5, y, 38, 1, pal.dark);
+    if (adv) {
+      // hazard roundel on the hall roof, painted OVER the panel seams — the
+      // label that says what this plant runs on, sized to read at 1x rather
+      // than being a decorative speck.
+      ellipseFill(ctx, 21, 23, 11, 6.5, '#0e0e0a');
+      ellipseFill(ctx, 21, 23, 10, 5.8, '#f0e060');
+      trefoil(ctx, 21, 23, 9, 0.60);
+    }
     P(ctx, 22, 17, 1, 12, pal.shadow);
     roofBox(ctx, 36, 19, 6, 3, 2, m);            // roof machinery
     // feed pipes stacks -> hall roof
