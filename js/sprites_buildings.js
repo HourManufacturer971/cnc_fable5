@@ -614,16 +614,18 @@
       // The height budget is spent DOWNWARD: the feet reach well into the
       // footprint (the containment hides them) rather than the rims climbing
       // two cells above it, which had the plant overhanging its neighbours.
-      // They are also SLIMMER than the first pass, and stand one to each side
-      // of the containment. Slimmer is what buys the compactness: a shell 18
-      // wide and 27 tall is half again as tall as it is broad, which is the
-      // proportion that reads as a cooling tower, where the old squat 28-wide
-      // pair only did so by climbing two cells above the footprint. It also
-      // leaves eight pixels of each flared base clear of the dome — tucked in
-      // any further and both towers read as plain chimneys.
+      // The height is FIXED — 27px of shell, tops at -14 and -11 — because
+      // anything above that has the plant looming over whatever is built north
+      // of it. So width is the only dial left, and the pair are drawn heavy:
+      // 24 across at the foot, 14 at the mouth. They are pulled inboard far
+      // enough that their splayed bases overlap behind the containment, which
+      // is free — the dome hides the join — while ten pixels of each flare
+      // still shows clear of it on the outside. Slimmer than this and they
+      // read as smokestacks; tucked in any further and the dome eats the
+      // flare and they read as smokestacks anyway.
       const SHELLS = [
-        { cx: 12, top: -14, TOP_R: 5, WAIST_R: 4, BASE_R: 9, bot: 13 },
-        { cx: 36, top: -11, TOP_R: 5, WAIST_R: 4, BASE_R: 9, bot: 16 },
+        { cx: 13, top: -14, TOP_R: 7, WAIST_R: 6, BASE_R: 12, bot: 13 },
+        { cx: 35, top: -11, TOP_R: 7, WAIST_R: 6, BASE_R: 12, bot: 16 },
       ];
       for (const sh of SHELLS) {
         const cx = sh.cx, span = sh.bot - sh.top;
@@ -662,8 +664,8 @@
       // neighbours, and steamUp already reaches six pixels above its anchor.
       for (const sh of SHELLS) {
         for (let k = 0; k < 2; k++) {
-          steamUp(ctx, sh.cx - 3 + k * 3, sh.top - 3 - k * 3, (f + k) % 3);
-          steamUp(ctx, sh.cx + 3 - k * 3, sh.top - 2 - k * 3, (f + k + 2) % 3);
+          steamUp(ctx, sh.cx - 4 + k * 4, sh.top - 3 - k * 3, (f + k) % 3);
+          steamUp(ctx, sh.cx + 4 - k * 4, sh.top - 2 - k * 3, (f + k + 2) % 3);
           steamUp(ctx, sh.cx, sh.top - 4 - k * 3, (f + k + 1) % 3);
         }
       }
