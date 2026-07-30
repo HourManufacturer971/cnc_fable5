@@ -947,21 +947,56 @@
 
   function drawSilo(ctx, W, H, pal, f, side, rnd) { // 48x24 +6 — twin tank domes
     baseSlab(ctx, W, H); slabNoise(ctx, W, H, rnd);
-    // connecting pipe behind console
+    // concrete ring beams the tanks are bedded into, so they stand ON something
+    for (const cx of [12, 35]) {
+      ellipseFill(ctx, cx, 16, 11, 5, OUT);
+      ellipseFill(ctx, cx, 16, 10, 4, CONC_D);
+      ellipseFill(ctx, cx - 1, 15, 10, 4, CONC);
+      ellipseFill(ctx, cx - 1, 15, 9, 3, CONC_L);
+    }
+    // cross-tie pipe between the tanks, on saddle stands
     P(ctx, 19, 9, 10, 1, OUT); P(ctx, 19, 10, 10, 2, STEEL); P(ctx, 19, 10, 10, 1, STEEL_L);
     P(ctx, 19, 12, 10, 1, OUT);
+    P(ctx, 20, 13, 1, 3, STEEL_D2); P(ctx, 27, 13, 1, 3, STEEL_D2);
     const wc = ['#e0e0e6', '#b4b4bc', '#8e8e96', '#6e6e76'];
     for (const cx of [12, 35]) {
       // drum wall + silver dome cap
       cyl3(ctx, cx, 2, 9, 3, 12, wc, ['#b4b4bc', '#d8d8de', '#74747c']);
       dome3(ctx, cx, 2, 9, { top: '#c6c6ce', topL: '#eef0f4', face: '#9a9aa4', dark: '#6e6e76' });
-      // fill-level gauge band on the south wall (+ moving gleam)
+      // pressure-relief cap and a hatch on the crown
+      P(ctx, cx - 1, -6, 3, 3, STEEL_D);
+      P(ctx, cx - 1, -6, 1, 3, STEEL_L);
+      P(ctx, cx - 2, -7, 5, 1, STEEL_L);
+      ellipseFill(ctx, cx + 4, -3, 2, 1, '#7c7c84');
+      // hoop bands round the shell, above and below the gauge window
+      for (const hy of [4, 13]) {
+        P(ctx, cx - 9, hy, 19, 1, '#7c7c84');
+        P(ctx, cx - 9, hy + 1, 19, 1, '#c8c8d0');
+      }
+      // fill-level gauge band on the south wall (+ moving gleam). render.js
+      // paints the live credit column over roughly this band, so it stays clear
       P(ctx, cx - 6, 8, 13, 1, PAL.tibDark);
       P(ctx, cx - 6, 9, 9, 1, PAL.tib2);
       P(ctx, cx - 6 + (f ? 5 : 2), 9, 2, 1, PAL.tib3);
       // seam rivets down the wall
       P(ctx, cx, 11, 1, 4, '#8e8e96');
+      // crystal dust spilled at the foot on the shaded side
+      P(ctx, cx + 7, 17, 2, 1, PAL.tibDark);
+      P(ctx, cx + 6, 18, 1, 1, PAL.tib1);
     }
+    // caged ladder up the west tank, dark against the bright shell
+    P(ctx, 2, 1, 2, 14, '#54545c');
+    P(ctx, 2, 1, 1, 14, '#7e7e88');
+    for (let ly = 2; ly < 15; ly += 3) P(ctx, 2, ly, 2, 1, '#2e2e34');
+    // discharge chute off the east tank into a hopper. Kept small and steel —
+    // a hazard-striped skirt out here just read as a yellow blob.
+    P(ctx, 43, 9, 3, 7, STEEL_D);
+    P(ctx, 43, 9, 1, 7, STEEL);
+    P(ctx, 42, 15, 5, 4, IRON);
+    P(ctx, 42, 15, 5, 1, IRON_L);
+    P(ctx, 46, 15, 1, 4, IRON_D);
+    outlineRect(ctx, 41, 14, 7, 6);
+    P(ctx, 43, 17, 3, 1, pal.haz);
     // console between domes: mini roof + face
     outlineRect(ctx, 20, 12, 8, 10);
     P(ctx, 21, 13, 6, 3, pal.base); P(ctx, 21, 13, 6, 1, pal.light);
@@ -1401,18 +1436,35 @@
     P(ctx, 4, 36, 40, 1, '#4a4a44');
     P(ctx, 4, 40, 40, 2, '#262622');
     hazardH(ctx, 17, 37, 14, pal.haz);
+    // deck plating: the surface is welded panels, not one flat sheet
+    for (let py = 8; py < 34; py += 6) P(ctx, 5, py, 38, 1, '#4c4c46');
+    P(ctx, 24, 4, 1, 32, '#4c4c46');
     outlineRect(ctx, 7, 7, 34, 26, '#8a8a80');
-    // corner hazard chevrons on the deck
-    hazardH(ctx, 8, 8, 8, pal.haz); hazardH(ctx, 32, 8, 8, pal.haz);
-    hazardH(ctx, 8, 29, 8, pal.haz); hazardH(ctx, 32, 29, 8, pal.haz);
-    // white H (foreshortened)
-    P(ctx, 17, 12, 4, 16, WHT);
-    P(ctx, 27, 12, 4, 16, WHT);
-    P(ctx, 21, 18, 6, 4, WHT);
-    P(ctx, 17, 12, 1, 16, '#ffffff'); P(ctx, 27, 12, 1, 16, '#ffffff');
-    P(ctx, 20, 12, 1, 16, WHT_D); P(ctx, 30, 12, 1, 16, WHT_D);
-    P(ctx, 17, 27, 4, 1, WHT_D); P(ctx, 27, 27, 4, 1, WHT_D);
-    P(ctx, 21, 21, 6, 1, WHT_D);
+    // --- touchdown circle, then a smaller H inside it. A bare H filling the
+    //     whole deck read as a letter painted on a slab; the ring is what says
+    //     helicopters land here.
+    for (let a = 0; a < 64; a++) {
+      const th = a / 64 * Math.PI * 2;
+      P(ctx, 24 + Math.round(Math.cos(th) * 14), 20 + Math.round(Math.sin(th) * 10), 2, 1, '#8e8e84');
+    }
+    P(ctx, 19, 14, 3, 12, WHT);
+    P(ctx, 27, 14, 3, 12, WHT);
+    P(ctx, 22, 18, 5, 3, WHT);
+    P(ctx, 19, 14, 1, 12, '#ffffff'); P(ctx, 27, 14, 1, 12, '#ffffff');
+    P(ctx, 21, 14, 1, 12, WHT_D); P(ctx, 29, 14, 1, 12, WHT_D);
+    P(ctx, 19, 25, 3, 1, WHT_D); P(ctx, 27, 25, 3, 1, WHT_D);
+    // rotor-wash scorch smeared round the circle
+    ctx.fillStyle = 'rgba(12,12,10,0.22)';
+    for (let a = 0; a < 10; a++) {
+      const th = a / 10 * Math.PI * 2 + 0.3;
+      ctx.fillRect(24 + Math.round(Math.cos(th) * 11) - 1, 20 + Math.round(Math.sin(th) * 7), 3, 2);
+    }
+    // tie-down rings sunk into the deck
+    for (const [tx, ty] of [[12, 12], [36, 12], [12, 28], [36, 28]]) {
+      P(ctx, tx - 1, ty, 3, 1, '#26262a');
+      P(ctx, tx, ty - 1, 1, 3, '#26262a');
+      P(ctx, tx, ty, 1, 1, '#6e6e66');
+    }
     // scuff marks
     ctx.fillStyle = 'rgba(12,12,10,0.30)';
     for (let i = 0; i < 5; i++) ctx.fillRect((10 + rnd() * 26) | 0, (10 + rnd() * 20) | 0, 3, 1);
@@ -1423,16 +1475,28 @@
       P(ctx, corners[i][0], corners[i][1], 3, 3, lit ? '#ffd860' : '#4a3a14');
       if (lit) { ctx.fillStyle = 'rgba(255,216,96,0.30)'; ctx.fillRect(corners[i][0] - 1, corners[i][1] - 1, 5, 5); }
     }
-    // fuel console: mini roof + face, on the deck NE
-    ctx.fillStyle = SH; ctx.fillRect(43, 9, 1, 7); ctx.fillRect(37, 15, 7, 1);
-    outlineRect(ctx, 35, 7, 9, 9);
-    P(ctx, 36, 8, 7, 3, pal.base); P(ctx, 36, 8, 7, 1, pal.light);
-    P(ctx, 36, 10, 7, 1, pal.light);
-    P(ctx, 36, 11, 7, 4, pal.dark);
-    P(ctx, 36, 14, 7, 1, pal.shadow);
-    P(ctx, 37, 12, 2, 2, pal.trim);
-    P(ctx, 40, 12, 2, 2, GLASS);
-    P(ctx, 39, 15, 1, 3, '#22221e'); P(ctx, 38, 17, 1, 2, '#22221e');
+    // --- refuelling point on the deck's north-east: bowser, coiled hose,
+    //     grounding reel. This is the only faction paint up here, which is
+    //     what stops the whole pad reading as one grey rectangle.
+    ctx.fillStyle = SH; ctx.fillRect(43, 9, 1, 9); ctx.fillRect(35, 17, 9, 1);
+    outlineRect(ctx, 33, 6, 11, 11);
+    P(ctx, 34, 7, 9, 4, pal.base); P(ctx, 34, 7, 9, 1, pal.light);
+    P(ctx, 34, 10, 9, 1, pal.light);
+    P(ctx, 34, 11, 9, 5, pal.dark);
+    P(ctx, 34, 15, 9, 1, pal.shadow);
+    P(ctx, 35, 12, 2, 2, pal.trim);
+    P(ctx, 38, 12, 3, 2, GLASS);
+    P(ctx, 38, 12, 3, 1, GLASS_L);
+    hazardH(ctx, 35, 8, 7, pal.haz);
+    // hose coiled off the bowser and flaked out across the deck
+    P(ctx, 32, 17, 1, 4, '#22221e'); P(ctx, 30, 20, 3, 1, '#22221e');
+    P(ctx, 29, 21, 1, 2, '#22221e'); P(ctx, 27, 22, 3, 1, '#22221e');
+    P(ctx, 26, 22, 1, 1, '#4a4a42');
+    // fire bottle on a trolley, deck south-west
+    P(ctx, 7, 26, 3, 6, '#a02418');
+    P(ctx, 7, 26, 1, 6, '#d0503c');
+    P(ctx, 7, 25, 3, 1, '#2e2e2a');
+    outlineRect(ctx, 6, 24, 5, 9);
     // rotating beacon mast (west edge)
     P(ctx, 8, 11, 2, 4, '#2e2e2a');
     const bdir = [[0, -2], [2, 0], [0, 2], [-2, 0]][f % 4];
@@ -1669,7 +1733,7 @@
     ctx.fillStyle = SH;                       // tower shadow east + SE on pad
     ctx.fillRect(18, -6, 2, 22);
     ellipseFill(ctx, 16, 18, 5, 2, SH);
-    // base plinth: bright top + hazard face
+    // base plinth: bright top + hazard face, with a cable trench cut into it
     outlineRect(ctx, 2, 11, 20, 11);
     P(ctx, 3, 12, 18, 3, CONC);
     P(ctx, 3, 12, 18, 1, CONC_L);
@@ -1677,50 +1741,132 @@
     P(ctx, 3, 15, 18, 6, CONC_D);
     hazardH(ctx, 5, 16, 14, pal.haz);
     P(ctx, 3, 20, 18, 1, CONC_D2);
-    // concrete shaft, west-lit / east-dark
+    P(ctx, 4, 12, 5, 2, '#3a3a34');           // cable trench and its cover plates
+    P(ctx, 4, 12, 5, 1, '#54544c');
+    P(ctx, 5, 13, 1, 1, IRON_D); P(ctx, 7, 13, 1, 1, IRON_D);
+    // concrete shaft, west-lit / east-dark, splayed where it meets the plinth
     P(ctx, 7, -10, 10, 23, CONC);
     P(ctx, 7, -10, 2, 23, CONC_L);
     P(ctx, 15, -10, 2, 23, CONC_D);
     P(ctx, 16, -10, 1, 23, CONC_D2);
-    outlineRect(ctx, 6, -11, 12, 25);
-    P(ctx, 8, -4, 8, 1, CONC_D); P(ctx, 8, 4, 8, 1, CONC_D);
-    // lit window slit + gold band
-    P(ctx, 9, -2, 6, 3, GLASS);
-    P(ctx, 9, -2, 6, 1, GLASS_L);
-    P(ctx, 10 + (f ? 2 : 0), -1, 1, 1, WIN_LIT);
-    P(ctx, 8, 8, 8, 2, pal.trim);
-    P(ctx, 8, 10, 8, 1, pal.shadow);
+    P(ctx, 6, 8, 12, 5, CONC);                // splayed foot
+    P(ctx, 6, 8, 2, 5, CONC_L);
+    P(ctx, 15, 8, 3, 5, CONC_D);
+    P(ctx, 17, 8, 1, 5, CONC_D2);
+    outlineRect(ctx, 5, 7, 14, 7);
+    outlineRect(ctx, 6, -11, 12, 20);
+    // formwork lift lines: this is poured concrete, not a smooth extrusion
+    for (const ly of [-6, -1, 4]) { P(ctx, 8, ly, 8, 1, CONC_D); P(ctx, 8, ly + 1, 8, 1, CONC_L); }
+    // Caged access ladder, hard against the east edge. A conduit down the west
+    // flank as well left only three columns of plain concrete between them and
+    // the whole shaft read as vertical stripes, so the cable run stops at the
+    // plinth and the west face stays clean.
+    P(ctx, 14, -9, 2, 17, '#3e3e38');
+    P(ctx, 14, -9, 1, 17, '#5e5e56');
+    for (let ly = -8; ly < 8; ly += 3) P(ctx, 14, ly, 2, 1, '#22221f');
+    // lit sighting slit: the tower's one eye, so it gets to be big
+    P(ctx, 8, -4, 6, 4, GLASS);
+    P(ctx, 8, -4, 6, 1, GLASS_L);
+    P(ctx, 8, -4, 1, 4, GLASS_L);
+    outlineRect(ctx, 7, -5, 8, 6);
+    P(ctx, 9 + (f ? 3 : 0), -3, 2, 2, WIN_LIT);
+    P(ctx, 8, 5, 8, 2, pal.trim);
+    P(ctx, 8, 7, 8, 1, pal.shadow);
+    // rust and rain streaks below the launcher deck
+    ctx.fillStyle = 'rgba(60,48,30,0.30)';
+    ctx.fillRect(9, -9, 1, 6); ctx.fillRect(14, -9, 1, 9); ctx.fillRect(11, -9, 1, 4);
     // launcher platform: bright top slab + south lip + struts
     P(ctx, 5, -13, 2, 3, CONC_D2); P(ctx, 17, -13, 2, 3, CONC_D2);
     outlineRect(ctx, 2, -16, 20, 6);
     P(ctx, 3, -15, 18, 2, CONC_L);
     P(ctx, 3, -13, 18, 1, CONC);
     P(ctx, 3, -12, 18, 2, CONC_D);
+    // handrail stanchions round the deck edge
+    for (const sx of [3, 7, 16, 20]) { P(ctx, sx, -18, 1, 3, '#54544c'); P(ctx, sx, -18, 1, 1, '#7c7c72'); }
+    P(ctx, 3, -18, 18, 1, '#4a4a44');
     // twin missile boxes on the platform
     missileBox(ctx, 3, -24, pal);
     missileBox(ctx, 14, -24, pal);
+    // fire-control drum between them, and a floodlight on the west corner
+    P(ctx, 10, -21, 4, 5, STEEL_D);
+    P(ctx, 10, -21, 4, 1, STEEL_L);
+    P(ctx, 10, -21, 1, 5, STEEL);
+    P(ctx, 11, -20, 2, 2, GLASS);
+    P(ctx, 11, -20, 2, 1, GLASS_L);
+    outlineRect(ctx, 9, -22, 6, 7);
+    P(ctx, 2, -20, 3, 2, IRON);
+    P(ctx, 2, -20, 3, 1, f ? '#f8f0c0' : '#5a5642');
     // beacon
     P(ctx, 11, -24, 2, 2, f ? pal.trim2 : '#4a1810');
     if (f) { ctx.fillStyle = 'rgba(244,220,128,0.25)'; ctx.fillRect(9, -24, 6, 4); }
   }
 
-  function drawGun(ctx, W, H, pal, f, side, rnd) { // 24x24 — turret drum base
+  function drawGun(ctx, W, H, pal, f, side, rnd) { // 24x24 — casemate + race
     roundPad(ctx, 12, 13, 11, rnd);
-    // ammo boxes on the pad corners (tiny top + face)
-    P(ctx, 1, 17, 5, 2, '#8f7c30'); P(ctx, 1, 19, 5, 2, '#554712');
-    outlineRect(ctx, 1, 17, 5, 5); P(ctx, 2, 18, 1, 1, pal.haz);
-    P(ctx, 18, 1, 4, 2, '#8f7c30'); P(ctx, 18, 3, 4, 2, '#554712');
-    outlineRect(ctx, 18, 1, 4, 5);
-    // raised drum: curved south wall + bright cap where the turret seats
-    cyl3(ctx, 12, 9, 8, 3, 6, [pal.light, pal.base, pal.dark, pal.shadow],
-         [pal.base, pal.light, pal.shadow]);
-    ellipseFill(ctx, 12, 9, 5, 2, pal.shadow);
-    ellipseFill(ctx, 12, 9, 4, 2, '#26262a');
-    for (let i = 0; i < 8; i++) {   // cap bolts
-      const a = i / 8 * Math.PI * 2 + 0.39;
-      P(ctx, Math.round(12 + Math.cos(a) * 6.5), Math.round(9 + Math.sin(a) * 2.6), 1, 1, '#2e2e2a');
+    // The rotating turret plate covers the middle of this cell, so the base is
+    // judged almost entirely on its rim and its corners. Everything below is
+    // placed to still be visible with a gun sitting on it.
+    // --- revetment ring the casemate is sunk into ---
+    ellipseFill(ctx, 12, 15, 11, 7, OUT);
+    ellipseFill(ctx, 12, 15, 10, 6, CONC_D);
+    ellipseFill(ctx, 11, 14, 10, 6, CONC);
+    ellipseFill(ctx, 11, 13, 9, 5, CONC_L);
+    ellipseFill(ctx, 12, 15, 8, 4, CONC_D2);
+    // --- hexagonal casemate. Faceted concrete rather than the smooth drum the
+    //     other emplacements sit on, and left UNPAINTED so the faction colour
+    //     stays on the gun itself instead of two golds fighting each other.
+    const HEX = [4, 7, 9, 9, 9, 9, 8, 6];          // half-widths, y 5..12
+    for (let i = 0; i < HEX.length; i++) {
+      const y = 5 + i, hw = HEX[i];
+      P(ctx, 12 - hw - 1, y, 1, 1, OUT);
+      P(ctx, 12 + hw, y, 1, 1, OUT);
+      P(ctx, 12 - hw, y, hw * 2, 1, CONC);
+      P(ctx, 12 - hw, y, 3, 1, CONC_L);            // west facets take the light
+      P(ctx, 12 + hw - 3, y, 3, 1, CONC_D);
+      P(ctx, 12 + hw - 1, y, 1, 1, CONC_D2);
     }
-    P(ctx, 11, 19, 2, 2, f ? pal.trim2 : '#3a1410');
+    P(ctx, 6, 13, 12, 3, CONC_D);                  // south wall of the casemate
+    P(ctx, 6, 13, 12, 1, CONC);
+    P(ctx, 6, 15, 12, 1, CONC_D2);
+    outlineRect(ctx, 5, 12, 14, 5);
+    P(ctx, 7, 5, 1, 8, CONC_L); P(ctx, 16, 5, 1, 8, CONC_D2);   // facet seams
+    // armoured crew door and a vision slit in the south wall
+    P(ctx, 9, 13, 4, 3, '#26262a');
+    P(ctx, 9, 13, 4, 1, '#3c3c42');
+    P(ctx, 12, 14, 1, 2, '#15151a');
+    P(ctx, 14, 14, 3, 1, '#15151a');
+    hazardH(ctx, 6, 17, 12, pal.haz);              // painted skirt at ground level
+    // --- ammunition locker, south-west, lid up ---
+    P(ctx, 3, 16, 6, 4, IRON);
+    P(ctx, 3, 16, 6, 1, IRON_L);
+    P(ctx, 8, 16, 1, 4, IRON_D);
+    outlineRect(ctx, 2, 15, 8, 6);
+    P(ctx, 4, 17, 4, 1, pal.haz);
+    P(ctx, 4, 19, 3, 2, '#8f7c30');
+    P(ctx, 4, 19, 3, 1, '#c0a742');
+    // --- spent brass thrown clear to the south-east ---
+    for (const [bx, by] of [[18, 20], [20, 21], [17, 22], [21, 19], [19, 23]]) {
+      P(ctx, bx, by, 1, 1, '#b8912c');
+      P(ctx, bx, by + 1, 1, 1, '#6e551a');
+    }
+    // --- power feed: conduit from a junction box into the casemate wall ---
+    P(ctx, 5, 11, 4, 2, STEEL_D);
+    P(ctx, 5, 11, 4, 1, STEEL);
+    P(ctx, 2, 8, 4, 6, IRON);
+    P(ctx, 2, 8, 4, 1, IRON_L);
+    P(ctx, 5, 8, 1, 6, IRON_D);
+    outlineRect(ctx, 1, 7, 6, 8);
+    P(ctx, 3, 10, 2, 1, pal.trim2);
+    // --- the turret race: a bare steel ring bolted to the casemate roof ---
+    ellipseFill(ctx, 12, 8, 7, 4, STEEL_D2);
+    ellipseFill(ctx, 12, 8, 6, 3, STEEL);
+    ellipseFill(ctx, 11, 7, 5, 2, STEEL_L);
+    ellipseFill(ctx, 12, 8, 4, 2, '#26262a');
+    for (let i = 0; i < 8; i++) {
+      const a = i / 8 * Math.PI * 2 + 0.39;
+      P(ctx, Math.round(12 + Math.cos(a) * 6), Math.round(8 + Math.sin(a) * 3), 1, 1, '#2e2e2a');
+    }
+    P(ctx, 11, 21, 2, 2, f ? pal.trim2 : '#3a1410');   // ready lamp on the rim
   }
 
   function makeGunTurret(pal) { // 16 pseudo-3D rotation frames, canonical north
@@ -1753,12 +1899,19 @@
     roundPad(ctx, 12, 12, 11, rnd);
     ctx.fillStyle = SH;                        // spike shadow SE on the pad
     ellipseFill(ctx, 16, 19, 5, 2, SH);
-    // plinth with vents: bright top edge + dark face
+    // --- plinth: a vented capacitor bank the shaft grows out of ---
     P(ctx, 6, 18, 16, 4, SH);
     P(ctx, 4, 16, 16, 5, '#26262d');
     P(ctx, 4, 16, 16, 1, '#3a3a46');
     outlineRect(ctx, 3, 15, 18, 7);
     P(ctx, 6, 18, 3, 1, '#15151a'); P(ctx, 11, 18, 3, 1, '#15151a'); P(ctx, 16, 18, 3, 1, '#15151a');
+    // transformer stub on the west corner, cable running up the shaft
+    P(ctx, 1, 13, 4, 7, IRON);
+    P(ctx, 1, 13, 4, 1, IRON_L);
+    P(ctx, 4, 13, 1, 7, IRON_D);
+    outlineRect(ctx, 0, 12, 6, 9);
+    for (let i = 0; i < 3; i++) P(ctx, 2, 15 + i * 2, 2, 1, '#15151a');
+    P(ctx, 1, 10, 1, 3, '#b8ac84'); P(ctx, 3, 10, 1, 3, '#b8ac84');   // insulators
     // slim tapered shaft rising to the crown (narrow at top, wider at base)
     for (let y = -14; y < 17; y++) {
       const t = (y + 14) / 31;
@@ -1769,6 +1922,26 @@
       P(ctx, 12 - hw, y, 1, 1, '#34343f');       // lit west edge
       P(ctx, 12 + hw - 1, y, 1, 1, '#0e0e13');   // dark east edge
       if (y > -8) { ctx.fillStyle = SH; ctx.fillRect(12 + hw + 1, y + 2, 1, 1); }
+    }
+    // --- coolant fins down the west flank: fine ribs that catch the light ---
+    for (let y = -10; y < 12; y += 2) {
+      const hw = Math.max(2, Math.round(2 + ((y + 14) / 31) * 3));
+      P(ctx, 12 - hw - 1, y, 2, 1, '#3e3e4c');
+    }
+    // --- charge cable trunking clipped to the east flank ---
+    for (let y = -8; y < 15; y++) {
+      const hw = Math.max(2, Math.round(2 + ((y + 14) / 31) * 3));
+      P(ctx, 12 + hw - 2, y, 1, 1, '#0a0a0e');
+    }
+    // --- capacitor rings: three collars round the shaft that light up as the
+    //     weapon charges, so the spire visibly winds itself before it fires ---
+    const ringLit = ['#2a2a34', '#5a2418', '#a03418', '#e05828'][glow];
+    for (const ry of [-9, -3, 4]) {
+      const hw = Math.max(2, Math.round(2 + ((ry + 14) / 31) * 3)) + 1;
+      P(ctx, 12 - hw - 1, ry, hw * 2 + 2, 2, OUT);
+      P(ctx, 12 - hw, ry, hw * 2, 2, '#2e2e39');
+      P(ctx, 12 - hw, ry, hw * 2, 1, '#43434f');
+      P(ctx, 12 - hw + 1, ry + 1, hw * 2 - 2, 1, ringLit);
     }
     // THE CROWN: an angular head clearly wider than the shaft, jutting out
     // over the front — the obelisk's identity. Bright north edge, flared
@@ -1783,6 +1956,8 @@
       P(ctx, 12 + hw - 1, y, 1, 1, '#101016');   // dark east cheek
     }
     P(ctx, 5, -24, 14, 1, OUT);                  // crown top outline
+    P(ctx, 8, -23, 1, 6, '#33333f');             // facet seams down the head
+    P(ctx, 15, -23, 1, 6, '#101017');
     P(ctx, 6, -16, 12, 1, '#0a0a0e');            // dark underside lip
     P(ctx, 9, -15, 6, 1, 'rgba(0,0,0,0.35)');                   // overhang shadow on the shaft
     // EMITTER: blazing band across the crown's slanted face
@@ -1792,6 +1967,9 @@
     P(ctx, 7, -20, 10, 2, band);
     P(ctx, 9, -20, 6, 1, glow > 0 ? '#ffe8d8' : '#d04030');   // hot core line
     P(ctx, 6, -20, 1, 2, '#4a1008'); P(ctx, 17, -20, 1, 2, '#4a1008');
+    // warning strobes at the crown corners
+    P(ctx, 5, -22, 1, 1, (f || glow) ? '#ff8848' : '#3a1008');
+    P(ctx, 18, -22, 1, 1, (f || glow) ? '#ff8848' : '#3a1008');
     if (glow > 0) {
       ctx.fillStyle = 'rgba(255,80,44,' + (0.14 * glow).toFixed(2) + ')';
       ctx.fillRect(4, -25, 16, 12 + glow * 3);
