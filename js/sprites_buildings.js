@@ -1034,15 +1034,29 @@
     if (f) { P(ctx, 41, 9, 5, 3, pal.trim); P(ctx, 41, 12, 3, 1, pal.trim); P(ctx, 45, 10, 1, 1, pal.trim2); }
     else { P(ctx, 41, 10, 4, 3, pal.trim); P(ctx, 44, 11, 2, 1, pal.trim2); }
     ctx.fillStyle = SH; ctx.fillRect(41, 21, 3, 1);
-    // sandbags + crates in the yard
+    // --- PARADE SQUARE. The yard between the huts was bare slab; a swept
+    //     apron with painted muster marks is what makes this read as a place
+    //     men are formed up and marched out of, rather than two sheds.
+    P(ctx, 3, 14, 42, 8, '#6e6e64');
+    P(ctx, 3, 14, 42, 1, '#83837a');
+    P(ctx, 3, 21, 42, 1, '#54544d');
+    for (let mx = 6; mx < 40; mx += 6) { P(ctx, mx, 16, 1, 4, '#9c9c92'); }
+    P(ctx, 3, 18, 42, 1, '#9c9c92');
+    // squad boot-scuff worn into the paint on the muster line
+    ctx.fillStyle = 'rgba(30,28,20,0.22)';
+    for (let i = 0; i < 6; i++) ctx.fillRect((6 + rnd() * 32) | 0, (16 + rnd() * 4) | 0, 3, 1);
+    // sandbag revetment along the west end of the square
     const SB = '#b3a06a', SBD = '#7e6f45';
-    P(ctx, 4, 17, 10, 2, SB); P(ctx, 4, 17, 10, 1, '#cbbc85');
-    P(ctx, 7, 16, 4, 1, SB);
-    P(ctx, 6, 18, 1, 1, SBD); P(ctx, 10, 17, 1, 2, SBD);
-    outlineRect(ctx, 3, 16, 12, 4);
+    P(ctx, 4, 16, 9, 2, SB); P(ctx, 4, 16, 9, 1, '#cbbc85');
+    P(ctx, 6, 15, 5, 1, SB);
+    P(ctx, 6, 17, 1, 1, SBD); P(ctx, 10, 16, 1, 2, SBD);
+    outlineRect(ctx, 3, 15, 11, 4);
+    // ammunition crates and a kit rack stacked ready by the front hut
     P(ctx, 25, 15, 6, 5, '#8a7444'); outlineRect(ctx, 25, 15, 6, 5);
     P(ctx, 26, 16, 4, 1, '#a89058'); P(ctx, 28, 16, 1, 3, '#6e5c30');
     P(ctx, 32, 17, 4, 3, '#7c6838'); outlineRect(ctx, 32, 17, 4, 3);
+    P(ctx, 17, 16, 6, 1, '#4e4e46');                 // rifle rack rail
+    for (let rx = 17; rx < 23; rx += 2) P(ctx, rx, 14, 1, 2, '#33332c');
   }
 
   const HAND_EMBLEM = [
@@ -1077,15 +1091,50 @@
     // facade: red trim band under the parapet + emblem panel + door
     P(ctx, 5, 21, 38, 2, pal.trim);
     P(ctx, 5, 23, 38, 1, '#601812');
-    P(ctx, 17, 25, 15, 14, '#121217');
-    outlineRect(ctx, 16, 24, 17, 16, '#000000');
+    // emblem panel sits ABOVE the portal, not behind it — the door was eating
+    // the bottom half of the hand
+    P(ctx, 17, 25, 15, 9, '#121217');
+    outlineRect(ctx, 16, 24, 17, 11, '#000000');
     P(ctx, 17, 25, 15, 1, '#2a2a34');
-    blit(ctx, 21, 27, HAND_EMBLEM, { r: pal.trim2, R: '#ff8a70' });
-    // buttress grooves
-    for (const bx of [10, 38]) P(ctx, bx, 24, 1, 16, '#1c1c22');
-    // door with red hazard + slit windows
-    hazardH(ctx, 6, 31, 9, pal.haz);
-    pDoor(ctx, 7, 34, 7, 8);
+    blit(ctx, 21, 25, HAND_EMBLEM, { r: pal.trim2, R: '#ff8a70' });
+    // --- Full-height buttresses, not scratched-in grooves. The UDC barracks
+    //     opposite is prefab huts round a parade square; this one has to read
+    //     as something poured, heavy and hand-built.
+    for (const bx of [8, 37]) {
+      P(ctx, bx, 20, 4, 22, pal.blackA);
+      P(ctx, bx, 20, 1, 22, '#4e4e5c');
+      P(ctx, bx + 3, 20, 1, 22, '#131318');
+      P(ctx, bx, 19, 4, 1, '#5a5a6a');
+      outlineRect(ctx, bx - 1, 19, 6, 24);
+    }
+    // --- banners hung from the trim band, stirring between the two frames
+    for (const nx of [13, 32]) {
+      const sway = f ? 1 : 0;
+      P(ctx, nx, 24, 4, 9, pal.trim);
+      P(ctx, nx, 24, 4, 1, pal.trim2);
+      P(ctx, nx + 3, 25, 1, 8, '#601812');
+      P(ctx, nx + sway, 33, 4, 2, pal.trim);
+      P(ctx, nx + sway, 35, 3, 1, '#601812');
+    }
+    // --- braziers either side of the portal, burning on both frames
+    for (const bx of [4, 41]) {
+      P(ctx, bx, 38, 4, 4, '#26262e');
+      P(ctx, bx, 38, 4, 1, '#3e3e4a');
+      outlineRect(ctx, bx - 1, 37, 6, 6);
+      P(ctx, bx + 1, 41, 2, 3, '#1a1a20');            // tripod leg
+      const fh = f ? 4 : 3;
+      P(ctx, bx + 1, 37 - fh, 2, fh, '#e07028');
+      P(ctx, bx + 1, 37 - fh, 2, 1, '#f8c060');
+      P(ctx, bx + (f ? 0 : 3), 38 - fh, 1, 2, '#c04018');
+      ctx.fillStyle = 'rgba(240,140,60,0.20)';
+      ctx.fillRect(bx - 2, 34 - fh, 8, fh + 6);
+    }
+    // door with red hazard + slit windows, on a stepped threshold
+    hazardH(ctx, 20, 35, 9, pal.haz);
+    pDoor(ctx, 21, 37, 7, 7);
+    P(ctx, 19, 44, 11, 2, '#3a3a44');
+    P(ctx, 19, 44, 11, 1, '#55556a');
+    P(ctx, 17, 46, 15, 1, '#2a2a34');
     P(ctx, 36, 30, 2, 3, f ? '#c83422' : '#5c1812');
     P(ctx, 40, 30, 2, 3, f ? '#5c1812' : '#c83422');
     // beacon at the roof's south edge
@@ -1250,20 +1299,51 @@
     P(ctx, 28, 8, 9, 4, GLASS); P(ctx, 28, 8, 9, 1, GLASS_L);
     outlineRect(ctx, 27, 7, 11, 6);
     P(ctx, 30, 20, 5, 4, pal.dark); outlineRect(ctx, 29, 19, 7, 6);
+    // --- rooftop plant. The dish is the hero and stays untouched; what this
+    //     building lacked was any sign that something runs UNDER it.
+    // cable tray from the dish pedestal east to the equipment bank
+    P(ctx, 22, 13, 16, 2, IRON);
+    P(ctx, 22, 13, 16, 1, IRON_L);
+    for (let tx = 24; tx < 38; tx += 4) P(ctx, tx, 15, 1, 2, IRON_D);
+    // air-handling cabinets, louvred, casting east
+    for (const cx2 of [24, 32]) {
+      ctx.fillStyle = SH; ctx.fillRect(cx2 + 6, 17, 2, 5);
+      P(ctx, cx2, 16, 6, 6, STEEL_D);
+      P(ctx, cx2, 16, 6, 1, STEEL_L);
+      P(ctx, cx2, 16, 1, 6, STEEL);
+      for (let ly = 18; ly < 22; ly += 2) P(ctx, cx2 + 1, ly, 4, 1, '#3a3a34');
+      outlineRect(ctx, cx2 - 1, 15, 8, 8);
+    }
+    // standby generator with a stub exhaust, roof north-west
+    P(ctx, 5, 6, 7, 5, IRON);
+    P(ctx, 5, 6, 7, 1, IRON_L);
+    P(ctx, 11, 6, 1, 5, IRON_D);
+    outlineRect(ctx, 4, 5, 9, 7);
+    P(ctx, 6, 3, 2, 3, STEEL_D2); P(ctx, 6, 3, 1, 3, STEEL_D);
+    P(ctx, 9, 8, 2, 1, pal.trim2);
     // dish pedestal on the roof (own face + shadow) + rotating dish above
     roofBox(ctx, 10, 8, 12, 6, 5, m);
     P(ctx, 12, 15, 2, 2, pal.light);
     ellipseFill(ctx, 19, 9, 7, 2, SH);                       // dish shadow
     P(ctx, 15, 4, 2, 4, IRON); P(ctx, 15, 4, 1, 4, IRON_L); // mast
     drawDish(ctx, 16, 0, (f % 16) / 16);
-    // antenna mast (east roof) + blink
+    // antenna mast (east roof) + blink, with a pair of whips beside it
     P(ctx, 39, -4, 1, 11, '#262622');
     P(ctx, 37, -1, 5, 1, '#262622');
     P(ctx, 38, -6, 3, 2, (f % 2) ? PAL.srpRedLight : '#5c2014');
-    // facade: hazard door + windows + comms panel
+    P(ctx, 43, 0, 1, 8, '#3a3a34'); P(ctx, 35, 2, 1, 6, '#3a3a34');
+    // --- facade: hazard door, windows, and the services that feed the roof
     hazardH(ctx, 7, 30, 12, pal.haz);
     pDoor(ctx, 9, 33, 8, 9);
+    P(ctx, 7, 42, 12, 2, CONC);                              // entry step
+    P(ctx, 7, 42, 12, 1, CONC_L);
     faceWin(ctx, 25, 32, 3, 6, f % 3);
+    // cable gallery running down the wall into a ground box
+    P(ctx, 21, 30, 2, 10, IRON_D);
+    P(ctx, 21, 30, 1, 10, IRON);
+    P(ctx, 20, 40, 4, 3, IRON);
+    P(ctx, 20, 40, 4, 1, IRON_L);
+    outlineRect(ctx, 19, 39, 6, 5);
     P(ctx, 38, 32, 4, 6, IRON); P(ctx, 38, 32, 4, 1, IRON_L);
     outlineRect(ctx, 37, 31, 6, 8);
     P(ctx, 39, 34, 2, 1, (f % 2) ? PAL.uiGreen : '#1e4a22');
@@ -1276,9 +1356,27 @@
     // roof seams + machinery
     for (let y = 18; y < 26; y += 4) P(ctx, 5, y, 38, 1, pal.dark);
     roofBox(ctx, 34, 17, 7, 3, 3, m);
+    // --- plant that would actually be needed to run a radome this size:
+    //     chillers on the roof and a coolant tank, all in bare steel so the
+    //     white ball stays the only bright thing up here.
+    for (const cx2 of [5, 12]) {
+      ctx.fillStyle = SH; ctx.fillRect(cx2 + 5, 20, 2, 5);
+      P(ctx, cx2, 19, 5, 6, STEEL_D);
+      P(ctx, cx2, 19, 5, 1, STEEL_L);
+      P(ctx, cx2, 19, 1, 6, STEEL);
+      for (let ly = 21; ly < 25; ly += 2) P(ctx, cx2 + 1, ly, 3, 1, '#3a3a34');
+      outlineRect(ctx, cx2 - 1, 18, 7, 8);
+    }
+    cyl3(ctx, 28, 20, 3, 2, 5, [STEEL_L, STEEL, STEEL_D, STEEL_D2],
+         [STEEL, STEEL_L, STEEL_D2]);
+    P(ctx, 26, 25, 5, 1, '#3a3a34');
     // support drum + geodesic ball rising over the roof
     cyl3(ctx, 18, 12, 8, 3, 4, [pal.light, pal.base, pal.dark, pal.shadow],
          [pal.base, pal.light, pal.shadow]);
+    // service catwalk round the drum, with a stair down to the roof
+    P(ctx, 9, 14, 18, 1, '#8a8a80');
+    P(ctx, 9, 15, 18, 1, '#4e4e46');
+    for (const sx2 of [10, 15, 20, 25]) P(ctx, sx2, 11, 1, 3, '#5e5e56');
     ellipseFill(ctx, 21, 16, 10, 3, SH);            // ball shadow on the roof
     circleFill(ctx, 18, 3, 11, OUT);
     circleFill(ctx, 18, 3, 10, '#dededa');
@@ -1309,10 +1407,17 @@
     P(ctx, 38, 1, 5, 1, '#2a2a26');
     P(ctx, 39, -4, 3, 2, (f % 2) ? PAL.ion : '#28506c');
     if (f % 2) { ctx.fillStyle = 'rgba(168,216,248,0.25)'; ctx.fillRect(37, -6, 7, 5); }
-    // facade: door + hazard + windows
+    // --- facade: door + hazard + windows + the cable gallery off the plant
     hazardH(ctx, 28, 30, 12, pal.haz);
     pDoor(ctx, 30, 33, 8, 8);
+    P(ctx, 28, 41, 12, 2, CONC);
+    P(ctx, 28, 41, 12, 1, CONC_L);
     faceWin(ctx, 7, 32, 2, 7, f % 2);
+    P(ctx, 24, 30, 2, 9, IRON_D);
+    P(ctx, 24, 30, 1, 9, IRON);
+    P(ctx, 23, 39, 4, 3, IRON);
+    P(ctx, 23, 39, 4, 1, IRON_L);
+    outlineRect(ctx, 22, 38, 6, 5);
     P(ctx, 20, 33, 2, 2, (f % 2) ? PAL.ion : '#28506c');
   }
 
